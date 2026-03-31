@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Marjan Bijouterie — Gestion</title>
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+
+<div class="app">
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <div class="logo">
+      <div class="logo-icon">💎</div>
+      <div>
+        <div class="logo-title">Marjan Bijouterie</div>
+        <div class="logo-sub">Système de gestion</div>
+      </div>
+    </div>
+    <nav class="nav">
+      <button class="nav-item active" data-section="dashboard">
+        <span class="nav-icon">◈</span> Tableau de bord
+      </button>
+      <button class="nav-item" data-section="stocks">
+        <span class="nav-icon">◻</span> Stocks &amp; Inventaire
+      </button>
+      <button class="nav-item" data-section="ventes">
+        <span class="nav-icon">◈</span> Ventes &amp; Caisse
+      </button>
+      <button class="nav-item" data-section="clients">
+        <span class="nav-icon">◎</span> Clients &amp; Fidélité
+      </button>
+    </nav>
+    <div class="sidebar-footer">
+      <div class="user-info">
+        <div class="user-avatar">MB</div>
+        <div>
+          <div class="user-name">Administrateur</div>
+          <div class="user-role">Gérant</div>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- MAIN CONTENT -->
+  <main class="main">
+
+    <!-- ===== DASHBOARD ===== -->
+    <section class="section active" id="dashboard">
+      <div class="page-header">
+        <div>
+          <h1 class="page-title">Tableau de bord</h1>
+          <p class="page-sub" id="dashboard-date"></p>
+        </div>
+        <button class="btn btn-secondary" onclick="exporterRapport()">⬇ Exporter rapport</button>
+      </div>
+
+      <div class="metrics-grid" id="dashboard-metrics">
+        <div class="metric-card">
+          <div class="metric-label">Chiffre d'affaires (mois)</div>
+          <div class="metric-value" id="metric-ca">4 820 000 F</div>
+          <span class="metric-badge badge-success">+12% ce mois</span>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">Ventes du jour</div>
+          <div class="metric-value" id="metric-ventes-jour">312 500 F</div>
+          <span class="metric-badge badge-success" id="metric-nb-ventes">8 ventes</span>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">Articles en stock</div>
+          <div class="metric-value" id="metric-stock">—</div>
+          <span class="metric-badge badge-warn" id="metric-stock-bas">—</span>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">Clients actifs</div>
+          <div class="metric-value" id="metric-clients">—</div>
+          <span class="metric-badge badge-success">+3 ce mois</span>
+        </div>
+      </div>
+
+      <div class="two-col">
+        <div class="card">
+          <div class="card-header"><span class="card-title">Ventes — 7 derniers jours</span></div>
+          <div class="card-body">
+            <div class="sparkline" id="sparkline"></div>
+            <div class="spark-labels" id="spark-labels"></div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header"><span class="card-title">Top produits ce mois</span></div>
+          <div class="card-body">
+            <div class="top-products" id="top-products"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header"><span class="card-title">Ventes par catégorie</span></div>
+        <div class="card-body">
+          <div class="bar-chart" id="bar-categories"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== STOCKS ===== -->
+    <section class="section" id="stocks">
+      <div class="page-header">
+        <div>
+          <h1 class="page-title">Stocks &amp; Inventaire</h1>
+          <p class="page-sub" id="stock-count-label">Chargement...</p>
+        </div>
+        <button class="btn btn-primary" onclick="openModal('modal-add-produit')">+ Ajouter un article</button>
+      </div>
+
+      <input class="search-bar" type="text" placeholder="Rechercher par nom, référence, catégorie..." id="stock-search" />
+
+      <div class="card">
+        <table>
+          <thead>
+            <tr>
+              <th>Référence</th>
+              <th>Désignation</th>
+              <th>Catégorie</th>
+              <th>Qté</th>
+              <th>Prix unitaire</th>
+              <th>Valeur stock</th>
+              <th>Statut</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="stock-body"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ===== VENTES ===== -->
+    <section class="section" id="ventes">
+      <div class="page-header">
+        <div>
+          <h1 class="page-title">Ventes &amp; Caisse</h1>
+          <p class="page-sub">Enregistrement et suivi des ventes</p>
+        </div>
+        <button class="btn btn-primary" onclick="openModal('modal-nouvelle-vente')">+ Nouvelle vente</button>
+      </div>
+
+      <div class="metrics-grid three-col">
+        <div class="metric-card">
+          <div class="metric-label">Total aujourd'hui</div>
+          <div class="metric-value" id="vente-total-jour">0 F</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">Nombre de ventes</div>
+          <div class="metric-value" id="vente-nb-jour">0</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">Panier moyen</div>
+          <div class="metric-value" id="vente-panier-moyen">0 F</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">Historique des ventes</span>
+          <button class="btn btn-secondary small" onclick="exporterVentes()">⬇ Exporter CSV</button>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>N° Vente</th>
+              <th>Article</th>
+              <th>Client</th>
+              <th>Montant</th>
+              <th>Paiement</th>
+              <th>Date &amp; Heure</th>
+            </tr>
+          </thead>
+          <tbody id="ventes-body"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ===== CLIENTS ===== -->
+    <section class="section" id="clients">
+      <div class="page-header">
+        <div>
+          <h1 class="page-title">Clients &amp; Fidélité</h1>
+          <p class="page-sub" id="clients-count-label">Chargement...</p>
+        </div>
+        <button class="btn btn-primary" onclick="openModal('modal-add-client')">+ Nouveau client</button>
+      </div>
+
+      <input class="search-bar" type="text" placeholder="Rechercher un client..." id="client-search" />
+
+      <div class="card">
+        <table>
+          <thead>
+            <tr>
+              <th>Client</th>
+              <th>Téléphone</th>
+              <th>Total achats</th>
+              <th>Nb visites</th>
+              <th>Niveau</th>
+              <th>Dernière visite</th>
+            </tr>
+          </thead>
+          <tbody id="clients-body"></tbody>
+        </table>
+      </div>
+
+      <div class="card">
+        <div class="card-header"><span class="card-title">Répartition par niveau de fidélité</span></div>
+        <div class="card-body">
+          <div class="bar-chart" id="bar-fidelite"></div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<!-- ===== MODALS ===== -->
+
+<!-- Ajouter produit -->
+<div class="modal-backdrop" id="modal-add-produit">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">Ajouter un article au stock</div>
+      <button class="modal-close" onclick="closeModal('modal-add-produit')">✕</button>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Référence *</label>
+        <input class="form-input" placeholder="ex: BJX-0248" id="p-ref" />
+      </div>
+      <div class="form-group">
+        <label class="form-label">Désignation *</label>
+        <input class="form-input" placeholder="ex: Collier or 18k" id="p-nom" />
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Catégorie</label>
+        <select class="form-input" id="p-cat">
+          <option>Or</option>
+          <option>Argent</option>
+          <option>Diamants</option>
+          <option>Montres</option>
+          <option>Accessoires</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Quantité</label>
+        <input class="form-input" type="number" min="0" placeholder="0" id="p-qty" />
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Prix unitaire (F CFA)</label>
+        <input class="form-input" type="number" min="0" placeholder="0" id="p-prix" />
+      </div>
+      <div class="form-group">
+        <label class="form-label">Seuil d'alerte stock</label>
+        <input class="form-input" type="number" min="0" placeholder="5" id="p-seuil" />
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeModal('modal-add-produit')">Annuler</button>
+      <button class="btn btn-primary" onclick="ajouterProduit()">Enregistrer</button>
+    </div>
+  </div>
+</div>
+
+<!-- Nouvelle vente -->
+<div class="modal-backdrop" id="modal-nouvelle-vente">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">Enregistrer une vente</div>
+      <button class="modal-close" onclick="closeModal('modal-nouvelle-vente')">✕</button>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Article *</label>
+        <select class="form-input" id="v-article"></select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Quantité</label>
+        <input class="form-input" type="number" min="1" value="1" id="v-qty" />
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Client</label>
+        <select class="form-input" id="v-client"></select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Mode de paiement</label>
+        <select class="form-input" id="v-paiement">
+          <option>Espèces</option>
+          <option>Wave</option>
+          <option>Orange Money</option>
+          <option>Carte bancaire</option>
+          <option>Virement</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Montant total (F CFA) *</label>
+      <input class="form-input" type="number" min="0" placeholder="0" id="v-montant" />
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeModal('modal-nouvelle-vente')">Annuler</button>
+      <button class="btn btn-primary" onclick="enregistrerVente()">Valider la vente</button>
+    </div>
+  </div>
+</div>
+
+<!-- Ajouter client -->
+<div class="modal-backdrop" id="modal-add-client">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">Nouveau client</div>
+      <button class="modal-close" onclick="closeModal('modal-add-client')">✕</button>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Prénom &amp; Nom *</label>
+        <input class="form-input" placeholder="ex: Aminata Diallo" id="c-nom" />
+      </div>
+      <div class="form-group">
+        <label class="form-label">Téléphone *</label>
+        <input class="form-input" placeholder="77 XXX XX XX" id="c-tel" />
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Email (optionnel)</label>
+        <input class="form-input" type="email" placeholder="email@exemple.com" id="c-email" />
+      </div>
+      <div class="form-group">
+        <label class="form-label">Adresse (optionnel)</label>
+        <input class="form-input" placeholder="Quartier, ville" id="c-adresse" />
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeModal('modal-add-client')">Annuler</button>
+      <button class="btn btn-primary" onclick="ajouterClient()">Enregistrer</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast notification -->
+<div class="toast" id="toast"></div>
+
+<script src="js/data.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
