@@ -8,10 +8,8 @@
   <link rel="stylesheet" href="css/style.css" />
 </head>
 <body>
-
 <div class="app">
 
-  <!-- SIDEBAR -->
   <aside class="sidebar">
     <div class="logo">
       <div class="logo-icon">💎</div>
@@ -21,114 +19,128 @@
       </div>
     </div>
     <nav class="nav">
-      <button class="nav-item active" data-section="dashboard">
-        <span class="nav-icon">◈</span> Tableau de bord
-      </button>
-      <button class="nav-item" data-section="stocks">
-        <span class="nav-icon">◻</span> Stocks &amp; Inventaire
-      </button>
-      <button class="nav-item" data-section="ventes">
-        <span class="nav-icon">◈</span> Ventes &amp; Caisse
-      </button>
-      <button class="nav-item" data-section="clients">
-        <span class="nav-icon">◎</span> Clients &amp; Fidélité
-      </button>
+      <button class="nav-item active" data-section="dashboard"><span class="nav-icon">◈</span> Tableau de bord</button>
+      <button class="nav-item" data-section="journal"><span class="nav-icon">◉</span> Journal des ventes</button>
+      <button class="nav-item" data-section="stocks"><span class="nav-icon">◻</span> Stocks &amp; Inventaire</button>
+      <button class="nav-item" data-section="clients"><span class="nav-icon">◎</span> Clients &amp; Fidélité</button>
     </nav>
     <div class="sidebar-footer">
       <div class="user-info">
         <div class="user-avatar">MB</div>
-        <div>
-          <div class="user-name">Administrateur</div>
-          <div class="user-role">Gérant</div>
-        </div>
+        <div><div class="user-name">Administrateur</div><div class="user-role">Gérant</div></div>
       </div>
     </div>
   </aside>
 
-  <!-- MAIN CONTENT -->
   <main class="main">
 
-    <!-- ===== DASHBOARD ===== -->
+    <!-- DASHBOARD -->
     <section class="section active" id="dashboard">
       <div class="page-header">
-        <div>
-          <h1 class="page-title">Tableau de bord</h1>
-          <p class="page-sub" id="dashboard-date"></p>
-        </div>
-        <button class="btn btn-secondary" onclick="exporterRapport()">⬇ Exporter rapport</button>
+        <div><h1 class="page-title">Tableau de bord</h1><p class="page-sub" id="dashboard-date"></p></div>
+        <button class="btn btn-secondary" onclick="exporterRapport()">⬇ Rapport</button>
       </div>
-
-      <div class="metrics-grid" id="dashboard-metrics">
-        <div class="metric-card">
-          <div class="metric-label">Chiffre d'affaires (mois)</div>
-          <div class="metric-value" id="metric-ca">4 820 000 F</div>
-          <span class="metric-badge badge-success">+12% ce mois</span>
-        </div>
-        <div class="metric-card">
-          <div class="metric-label">Ventes du jour</div>
-          <div class="metric-value" id="metric-ventes-jour">312 500 F</div>
-          <span class="metric-badge badge-success" id="metric-nb-ventes">8 ventes</span>
-        </div>
-        <div class="metric-card">
-          <div class="metric-label">Articles en stock</div>
-          <div class="metric-value" id="metric-stock">—</div>
-          <span class="metric-badge badge-warn" id="metric-stock-bas">—</span>
-        </div>
-        <div class="metric-card">
-          <div class="metric-label">Clients actifs</div>
-          <div class="metric-value" id="metric-clients">—</div>
-          <span class="metric-badge badge-success">+3 ce mois</span>
-        </div>
+      <div class="metrics-grid">
+        <div class="metric-card"><div class="metric-label">CA du mois</div><div class="metric-value" id="metric-ca">—</div><span class="metric-badge badge-info" id="metric-ca-nb">—</span></div>
+        <div class="metric-card"><div class="metric-label">Ventes du jour</div><div class="metric-value" id="metric-ventes-jour">—</div><span class="metric-badge badge-success" id="metric-nb-ventes">—</span></div>
+        <div class="metric-card"><div class="metric-label">Restants dus</div><div class="metric-value" id="metric-restants">—</div><span class="metric-badge badge-warn" id="metric-nb-restants">—</span></div>
+        <div class="metric-card"><div class="metric-label">Clients</div><div class="metric-value" id="metric-clients">—</div><span class="metric-badge badge-success">enregistrés</span></div>
       </div>
-
       <div class="two-col">
         <div class="card">
           <div class="card-header"><span class="card-title">Ventes — 7 derniers jours</span></div>
-          <div class="card-body">
-            <div class="sparkline" id="sparkline"></div>
-            <div class="spark-labels" id="spark-labels"></div>
-          </div>
+          <div class="card-body"><div class="sparkline" id="sparkline"></div><div class="spark-labels" id="spark-labels"></div></div>
         </div>
         <div class="card">
-          <div class="card-header"><span class="card-title">Top produits ce mois</span></div>
-          <div class="card-body">
-            <div class="top-products" id="top-products"></div>
-          </div>
+          <div class="card-header"><span class="card-title">Répartition par carat</span></div>
+          <div class="card-body"><div class="bar-chart" id="bar-carats"></div></div>
         </div>
       </div>
-
-      <div class="card">
-        <div class="card-header"><span class="card-title">Ventes par catégorie</span></div>
-        <div class="card-body">
-          <div class="bar-chart" id="bar-categories"></div>
+      <div class="two-col">
+        <div class="card">
+          <div class="card-header"><span class="card-title">Local vs Importé (poids g)</span></div>
+          <div class="card-body"><div class="bar-chart" id="bar-origine"></div></div>
+        </div>
+        <div class="card">
+          <div class="card-header"><span class="card-title">Ventes récentes</span></div>
+          <div style="padding:0" id="dash-ventes-recentes"></div>
         </div>
       </div>
     </section>
 
-    <!-- ===== STOCKS ===== -->
-    <section class="section" id="stocks">
+    <!-- JOURNAL DES VENTES -->
+    <section class="section" id="journal">
       <div class="page-header">
-        <div>
-          <h1 class="page-title">Stocks &amp; Inventaire</h1>
-          <p class="page-sub" id="stock-count-label">Chargement...</p>
+        <div><h1 class="page-title">Journal des ventes</h1><p class="page-sub" id="journal-count-label">Chargement...</p></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-secondary" onclick="exporterJournalCSV()">⬇ CSV</button>
+          <button class="btn btn-primary" onclick="openModal('modal-nouvelle-vente')">+ Nouvelle vente</button>
         </div>
-        <button class="btn btn-primary" onclick="openModal('modal-add-produit')">+ Ajouter un article</button>
       </div>
 
-      <input class="search-bar" type="text" placeholder="Rechercher par nom, référence, catégorie..." id="stock-search" />
+      <div class="filters-bar">
+        <input class="form-input" style="flex:1;min-width:180px" type="text" placeholder="Rechercher client, description..." id="journal-search" />
+        <select class="form-input filter-select" id="filtre-carat"><option value="">Tous les carats</option></select>
+        <select class="form-input filter-select" id="filtre-type">
+          <option value="">Tout type</option>
+          <option value="local">Or local</option>
+          <option value="importe">Or importé</option>
+        </select>
+        <select class="form-input filter-select" id="filtre-restant">
+          <option value="">Tous statuts</option>
+          <option value="solde">Soldé</option>
+          <option value="en-cours">Restant dû</option>
+        </select>
+      </div>
 
-      <div class="card">
+      <div class="cumul-bar">
+        <span class="cumul-label">Montant cumulé :</span>
+        <span class="cumul-value" id="montant-cumul">—</span>
+        <span class="cumul-sep">|</span>
+        <span class="cumul-label">Total restants :</span>
+        <span class="cumul-warn" id="total-restants">—</span>
+        <span class="cumul-sep">|</span>
+        <span class="cumul-label">Poids total local :</span>
+        <span class="cumul-value" id="poids-local-total">—</span>
+        <span class="cumul-label" style="margin-left:16px">Poids total importé :</span>
+        <span class="cumul-value" id="poids-importe-total">—</span>
+      </div>
+
+      <div class="card" style="overflow-x:auto">
+        <table class="journal-table">
+          <thead>
+            <tr>
+              <th style="min-width:90px">Date</th>
+              <th style="min-width:140px">Client</th>
+              <th style="min-width:180px">Description</th>
+              <th style="min-width:80px">Local (g)</th>
+              <th style="min-width:80px">Importé (g)</th>
+              <th style="min-width:90px">Carat</th>
+              <th style="min-width:100px">Montant</th>
+              <th style="min-width:100px">Acompte</th>
+              <th style="min-width:100px">Restant</th>
+              <th style="min-width:110px">Cumul</th>
+              <th style="min-width:80px">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="journal-body"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- STOCKS -->
+    <section class="section" id="stocks">
+      <div class="page-header">
+        <div><h1 class="page-title">Stocks &amp; Inventaire</h1><p class="page-sub" id="stock-count-label">Chargement...</p></div>
+        <button class="btn btn-primary" onclick="openModal('modal-add-produit')">+ Ajouter un article</button>
+      </div>
+      <input class="search-bar" type="text" placeholder="Rechercher par nom, référence, carat..." id="stock-search" />
+      <div class="card" style="overflow-x:auto">
         <table>
           <thead>
             <tr>
-              <th>Référence</th>
-              <th>Désignation</th>
-              <th>Catégorie</th>
-              <th>Qté</th>
-              <th>Prix unitaire</th>
-              <th>Valeur stock</th>
-              <th>Statut</th>
-              <th>Actions</th>
+              <th>Référence</th><th>Désignation</th><th>Carat</th><th>Type</th><th>Poids (g)</th>
+              <th>Qté</th><th>Prix unitaire</th><th>Valeur stock</th><th>Statut</th><th>Actions</th>
             </tr>
           </thead>
           <tbody id="stock-body"></tbody>
@@ -136,94 +148,120 @@
       </div>
     </section>
 
-    <!-- ===== VENTES ===== -->
-    <section class="section" id="ventes">
-      <div class="page-header">
-        <div>
-          <h1 class="page-title">Ventes &amp; Caisse</h1>
-          <p class="page-sub">Enregistrement et suivi des ventes</p>
-        </div>
-        <button class="btn btn-primary" onclick="openModal('modal-nouvelle-vente')">+ Nouvelle vente</button>
-      </div>
-
-      <div class="metrics-grid three-col">
-        <div class="metric-card">
-          <div class="metric-label">Total aujourd'hui</div>
-          <div class="metric-value" id="vente-total-jour">0 F</div>
-        </div>
-        <div class="metric-card">
-          <div class="metric-label">Nombre de ventes</div>
-          <div class="metric-value" id="vente-nb-jour">0</div>
-        </div>
-        <div class="metric-card">
-          <div class="metric-label">Panier moyen</div>
-          <div class="metric-value" id="vente-panier-moyen">0 F</div>
-        </div>
-      </div>
-
-      <div class="card">
-        <div class="card-header">
-          <span class="card-title">Historique des ventes</span>
-          <button class="btn btn-secondary small" onclick="exporterVentes()">⬇ Exporter CSV</button>
-        </div>
-        <table>
-          <thead>
-            <tr>
-              <th>N° Vente</th>
-              <th>Article</th>
-              <th>Client</th>
-              <th>Montant</th>
-              <th>Paiement</th>
-              <th>Date &amp; Heure</th>
-            </tr>
-          </thead>
-          <tbody id="ventes-body"></tbody>
-        </table>
-      </div>
-    </section>
-
-    <!-- ===== CLIENTS ===== -->
+    <!-- CLIENTS -->
     <section class="section" id="clients">
       <div class="page-header">
-        <div>
-          <h1 class="page-title">Clients &amp; Fidélité</h1>
-          <p class="page-sub" id="clients-count-label">Chargement...</p>
-        </div>
+        <div><h1 class="page-title">Clients &amp; Fidélité</h1><p class="page-sub" id="clients-count-label">Chargement...</p></div>
         <button class="btn btn-primary" onclick="openModal('modal-add-client')">+ Nouveau client</button>
       </div>
-
       <input class="search-bar" type="text" placeholder="Rechercher un client..." id="client-search" />
-
-      <div class="card">
+      <div class="card" style="overflow-x:auto">
         <table>
           <thead>
-            <tr>
-              <th>Client</th>
-              <th>Téléphone</th>
-              <th>Total achats</th>
-              <th>Nb visites</th>
-              <th>Niveau</th>
-              <th>Dernière visite</th>
-            </tr>
+            <tr><th>Client</th><th>Téléphone</th><th>Total achats</th><th>Restant dû</th><th>Nb ventes</th><th>Niveau</th><th>Dernière visite</th></tr>
           </thead>
           <tbody id="clients-body"></tbody>
         </table>
       </div>
-
       <div class="card">
-        <div class="card-header"><span class="card-title">Répartition par niveau de fidélité</span></div>
-        <div class="card-body">
-          <div class="bar-chart" id="bar-fidelite"></div>
-        </div>
+        <div class="card-header"><span class="card-title">Répartition fidélité</span></div>
+        <div class="card-body"><div class="bar-chart" id="bar-fidelite"></div></div>
       </div>
     </section>
 
   </main>
 </div>
 
-<!-- ===== MODALS ===== -->
+<!-- MODAL NOUVELLE VENTE -->
+<div class="modal-backdrop" id="modal-nouvelle-vente">
+  <div class="modal modal-large">
+    <div class="modal-header">
+      <div class="modal-title">Nouvelle vente</div>
+      <button class="modal-close" onclick="closeModal('modal-nouvelle-vente')">✕</button>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Date *</label><input class="form-input" type="date" id="v-date" /></div>
+      <div class="form-group"><label class="form-label">Client *</label>
+        <select class="form-input" id="v-client"><option value="">— Sélectionner un client —</option></select>
+      </div>
+    </div>
+    <div class="form-group" style="margin-bottom:12px">
+      <label class="form-label">Description *</label>
+      <input class="form-input" type="text" placeholder="ex: Achat collier, Réparation bague, Reprise or vice..." id="v-description" />
+    </div>
+    <div class="form-row-3">
+      <div class="form-group">
+        <label class="form-label">Local (g)</label>
+        <input class="form-input" type="number" step="0.01" min="0" placeholder="0,00" id="v-local" />
+        <span class="form-hint">Poids or fabriqué localement</span>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Importé (g)</label>
+        <input class="form-input" type="number" step="0.01" min="0" placeholder="0,00" id="v-importe" />
+        <span class="form-hint">Poids or importé</span>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Carat *</label>
+        <select class="form-input" id="v-carat" onchange="afficherInfoCarat('v-carat','carat-info-badge')"><option value="">— Choisir —</option></select>
+      </div>
+    </div>
+    <div id="carat-info-badge" class="carat-badge" style="display:none;margin-bottom:12px"></div>
+    <div class="form-row-3">
+      <div class="form-group">
+        <label class="form-label">Montant (F CFA) *</label>
+        <input class="form-input" type="number" min="0" placeholder="0" id="v-montant" oninput="calculerRestant('v-montant','v-acompte','v-restant-display')" />
+      </div>
+      <div class="form-group">
+        <label class="form-label">Acompte (F CFA)</label>
+        <input class="form-input" type="number" min="0" placeholder="0" id="v-acompte" oninput="calculerRestant('v-montant','v-acompte','v-restant-display')" />
+      </div>
+      <div class="form-group">
+        <label class="form-label">Restant dû</label>
+        <input class="form-input restant-display" type="text" id="v-restant-display" readonly placeholder="—" />
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeModal('modal-nouvelle-vente')">Annuler</button>
+      <button class="btn btn-primary" onclick="enregistrerVente()">Enregistrer</button>
+    </div>
+  </div>
+</div>
 
-<!-- Ajouter produit -->
+<!-- MODAL MODIFIER VENTE -->
+<div class="modal-backdrop" id="modal-edit-vente">
+  <div class="modal modal-large">
+    <div class="modal-header">
+      <div class="modal-title">Modifier la vente <span id="edit-v-id-label" style="font-weight:400;color:var(--text-secondary)"></span></div>
+      <button class="modal-close" onclick="closeModal('modal-edit-vente')">✕</button>
+    </div>
+    <input type="hidden" id="edit-v-id" />
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Date *</label><input class="form-input" type="date" id="edit-v-date" /></div>
+      <div class="form-group"><label class="form-label">Client *</label><select class="form-input" id="edit-v-client"></select></div>
+    </div>
+    <div class="form-group" style="margin-bottom:12px">
+      <label class="form-label">Description *</label>
+      <input class="form-input" type="text" id="edit-v-description" />
+    </div>
+    <div class="form-row-3">
+      <div class="form-group"><label class="form-label">Local (g)</label><input class="form-input" type="number" step="0.01" min="0" id="edit-v-local" /></div>
+      <div class="form-group"><label class="form-label">Importé (g)</label><input class="form-input" type="number" step="0.01" min="0" id="edit-v-importe" /></div>
+      <div class="form-group"><label class="form-label">Carat *</label><select class="form-input" id="edit-v-carat" onchange="afficherInfoCarat('edit-v-carat','edit-carat-badge')"></select></div>
+    </div>
+    <div id="edit-carat-badge" class="carat-badge" style="display:none;margin-bottom:12px"></div>
+    <div class="form-row-3">
+      <div class="form-group"><label class="form-label">Montant (F CFA) *</label><input class="form-input" type="number" min="0" id="edit-v-montant" oninput="calculerRestant('edit-v-montant','edit-v-acompte','edit-v-restant-display')" /></div>
+      <div class="form-group"><label class="form-label">Acompte (F CFA)</label><input class="form-input" type="number" min="0" id="edit-v-acompte" oninput="calculerRestant('edit-v-montant','edit-v-acompte','edit-v-restant-display')" /></div>
+      <div class="form-group"><label class="form-label">Restant dû</label><input class="form-input restant-display" type="text" id="edit-v-restant-display" readonly /></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeModal('modal-edit-vente')">Annuler</button>
+      <button class="btn btn-primary" onclick="sauvegarderModifVente()">Sauvegarder</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL AJOUTER PRODUIT -->
 <div class="modal-backdrop" id="modal-add-produit">
   <div class="modal">
     <div class="modal-header">
@@ -231,41 +269,24 @@
       <button class="modal-close" onclick="closeModal('modal-add-produit')">✕</button>
     </div>
     <div class="form-row">
-      <div class="form-group">
-        <label class="form-label">Référence *</label>
-        <input class="form-input" placeholder="ex: BJX-0248" id="p-ref" />
-      </div>
-      <div class="form-group">
-        <label class="form-label">Désignation *</label>
-        <input class="form-input" placeholder="ex: Collier or 18k" id="p-nom" />
-      </div>
+      <div class="form-group"><label class="form-label">Référence *</label><input class="form-input" placeholder="ex: BJX-0248" id="p-ref" /></div>
+      <div class="form-group"><label class="form-label">Désignation *</label><input class="form-input" placeholder="ex: Collier or 18k" id="p-nom" /></div>
     </div>
-    <div class="form-row">
-      <div class="form-group">
-        <label class="form-label">Catégorie</label>
-        <select class="form-input" id="p-cat">
-          <option>Or</option>
-          <option>Argent</option>
-          <option>Diamants</option>
-          <option>Montres</option>
-          <option>Accessoires</option>
+    <div class="form-row-3">
+      <div class="form-group"><label class="form-label">Carat</label><select class="form-input" id="p-carat"></select></div>
+      <div class="form-group"><label class="form-label">Type d'or</label>
+        <select class="form-input" id="p-type">
+          <option value="local">Local</option><option value="importe">Importé</option>
+          <option value="mixte">Mixte</option><option value="argent">Argent</option><option value="autre">Autre</option>
         </select>
       </div>
-      <div class="form-group">
-        <label class="form-label">Quantité</label>
-        <input class="form-input" type="number" min="0" placeholder="0" id="p-qty" />
-      </div>
+      <div class="form-group"><label class="form-label">Poids (g)</label><input class="form-input" type="number" step="0.01" placeholder="0,00" id="p-poids" /></div>
     </div>
     <div class="form-row">
-      <div class="form-group">
-        <label class="form-label">Prix unitaire (F CFA)</label>
-        <input class="form-input" type="number" min="0" placeholder="0" id="p-prix" />
-      </div>
-      <div class="form-group">
-        <label class="form-label">Seuil d'alerte stock</label>
-        <input class="form-input" type="number" min="0" placeholder="5" id="p-seuil" />
-      </div>
+      <div class="form-group"><label class="form-label">Quantité</label><input class="form-input" type="number" min="0" placeholder="0" id="p-qty" /></div>
+      <div class="form-group"><label class="form-label">Prix unitaire (F CFA)</label><input class="form-input" type="number" min="0" placeholder="0" id="p-prix" /></div>
     </div>
+    <div class="form-group" style="margin-bottom:12px"><label class="form-label">Seuil d'alerte stock</label><input class="form-input" type="number" min="0" placeholder="5" id="p-seuil" /></div>
     <div class="modal-actions">
       <button class="btn btn-secondary" onclick="closeModal('modal-add-produit')">Annuler</button>
       <button class="btn btn-primary" onclick="ajouterProduit()">Enregistrer</button>
@@ -273,51 +294,7 @@
   </div>
 </div>
 
-<!-- Nouvelle vente -->
-<div class="modal-backdrop" id="modal-nouvelle-vente">
-  <div class="modal">
-    <div class="modal-header">
-      <div class="modal-title">Enregistrer une vente</div>
-      <button class="modal-close" onclick="closeModal('modal-nouvelle-vente')">✕</button>
-    </div>
-    <div class="form-row">
-      <div class="form-group">
-        <label class="form-label">Article *</label>
-        <select class="form-input" id="v-article"></select>
-      </div>
-      <div class="form-group">
-        <label class="form-label">Quantité</label>
-        <input class="form-input" type="number" min="1" value="1" id="v-qty" />
-      </div>
-    </div>
-    <div class="form-row">
-      <div class="form-group">
-        <label class="form-label">Client</label>
-        <select class="form-input" id="v-client"></select>
-      </div>
-      <div class="form-group">
-        <label class="form-label">Mode de paiement</label>
-        <select class="form-input" id="v-paiement">
-          <option>Espèces</option>
-          <option>Wave</option>
-          <option>Orange Money</option>
-          <option>Carte bancaire</option>
-          <option>Virement</option>
-        </select>
-      </div>
-    </div>
-    <div class="form-group">
-      <label class="form-label">Montant total (F CFA) *</label>
-      <input class="form-input" type="number" min="0" placeholder="0" id="v-montant" />
-    </div>
-    <div class="modal-actions">
-      <button class="btn btn-secondary" onclick="closeModal('modal-nouvelle-vente')">Annuler</button>
-      <button class="btn btn-primary" onclick="enregistrerVente()">Valider la vente</button>
-    </div>
-  </div>
-</div>
-
-<!-- Ajouter client -->
+<!-- MODAL AJOUTER CLIENT -->
 <div class="modal-backdrop" id="modal-add-client">
   <div class="modal">
     <div class="modal-header">
@@ -325,24 +302,12 @@
       <button class="modal-close" onclick="closeModal('modal-add-client')">✕</button>
     </div>
     <div class="form-row">
-      <div class="form-group">
-        <label class="form-label">Prénom &amp; Nom *</label>
-        <input class="form-input" placeholder="ex: Aminata Diallo" id="c-nom" />
-      </div>
-      <div class="form-group">
-        <label class="form-label">Téléphone *</label>
-        <input class="form-input" placeholder="77 XXX XX XX" id="c-tel" />
-      </div>
+      <div class="form-group"><label class="form-label">Prénom &amp; Nom *</label><input class="form-input" placeholder="ex: Aminata Diallo" id="c-nom" /></div>
+      <div class="form-group"><label class="form-label">Téléphone *</label><input class="form-input" placeholder="77 XXX XX XX" id="c-tel" /></div>
     </div>
     <div class="form-row">
-      <div class="form-group">
-        <label class="form-label">Email (optionnel)</label>
-        <input class="form-input" type="email" placeholder="email@exemple.com" id="c-email" />
-      </div>
-      <div class="form-group">
-        <label class="form-label">Adresse (optionnel)</label>
-        <input class="form-input" placeholder="Quartier, ville" id="c-adresse" />
-      </div>
+      <div class="form-group"><label class="form-label">Email (optionnel)</label><input class="form-input" type="email" placeholder="email@exemple.com" id="c-email" /></div>
+      <div class="form-group"><label class="form-label">Adresse (optionnel)</label><input class="form-input" placeholder="Quartier, ville" id="c-adresse" /></div>
     </div>
     <div class="modal-actions">
       <button class="btn btn-secondary" onclick="closeModal('modal-add-client')">Annuler</button>
@@ -351,9 +316,7 @@
   </div>
 </div>
 
-<!-- Toast notification -->
 <div class="toast" id="toast"></div>
-
 <script src="js/data.js"></script>
 <script src="js/app.js"></script>
 </body>
