@@ -894,99 +894,6 @@ Généré le ${now.toLocaleString('fr-FR')} par ${STATE.currentUser?.nom||'—'}
   showToast('✓ Rapport exporté.');
 }
 
-// ============================================
-// TICKET DE VENTE — Impression PDF
-// ============================================
-function afficherFacture(id) {
-  calculerCumuls();
-  const v = STATE.ventes.find(x => x.id === id);
-  if (!v) return;
-  const c = getCarat(v.carat);
-  const caratLabel = c ? `${v.carat.toUpperCase()} — ${c.purete}` : (v.carat || '—').toUpperCase();
-  const restant = v.restant || 0;
-  const now = new Date();
-
-  document.getElementById('ticket-content').innerHTML = `
-    <div class="ticket-body">
-      <div class="ticket-header">
-        <div class="ticket-logo">💎</div>
-        <div class="ticket-shop">MARJAN BIJOUTERIE</div>
-        <div class="ticket-shop-sub">Vente de bijoux — Dakar, Sénégal</div>
-        <div class="ticket-divider"></div>
-      </div>
-
-      <div class="ticket-meta">
-        <div class="ticket-meta-row"><span>N° Vente</span><span class="ticket-id">${v.id}</span></div>
-        <div class="ticket-meta-row"><span>Date</span><span>${fmtDate(v.date)}</span></div>
-        <div class="ticket-meta-row"><span>Imprimé le</span><span>${now.toLocaleDateString('fr-FR')} à ${now.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})}</span></div>
-        <div class="ticket-meta-row"><span>Vendeur</span><span>${STATE.currentUser?.nom || '—'}</span></div>
-      </div>
-
-      <div class="ticket-divider"></div>
-
-      <div class="ticket-section-title">CLIENT</div>
-      <div class="ticket-client">${v.client}</div>
-
-      <div class="ticket-divider"></div>
-
-      <div class="ticket-section-title">DÉTAIL DE LA VENTE</div>
-      <div class="ticket-detail-row"><span>Description</span><span>${v.description}</span></div>
-      <div class="ticket-detail-row"><span>Carat</span><span>${caratLabel}</span></div>
-      ${(parseFloat(v.local)||0) > 0 ? `<div class="ticket-detail-row"><span>Or local</span><span>${fmtG(v.local)}</span></div>` : ''}
-      ${(parseFloat(v.importe)||0) > 0 ? `<div class="ticket-detail-row"><span>Or importé</span><span>${fmtG(v.importe)}</span></div>` : ''}
-
-      <div class="ticket-divider"></div>
-
-      <div class="ticket-section-title">RÈGLEMENT</div>
-      <div class="ticket-montant-row"><span>Montant total</span><strong>${fmt(v.montant)}</strong></div>
-      <div class="ticket-montant-row"><span>Acompte versé</span><span>${fmt(v.acompte || 0)}</span></div>
-      <div class="ticket-montant-row ${restant > 0 ? 'ticket-restant-due' : 'ticket-solde'}">
-        <span>${restant > 0 ? 'Restant dû' : 'Statut'}</span>
-        <strong>${restant > 0 ? fmt(restant) : '✓ SOLDÉ'}</strong>
-      </div>
-
-      <div class="ticket-divider"></div>
-
-      <div class="ticket-footer">
-        <div>Merci pour votre confiance</div>
-        <div class="ticket-footer-sub">Conservez ce ticket comme preuve d'achat</div>
-        <div class="ticket-footer-sub">Marjan Bijouterie — ${now.getFullYear()}</div>
-      </div>
-    </div>
-  `;
-  document.getElementById('modal-ticket').classList.add('show');
-}
-
-function imprimerTicket() {
-  const contenu = document.getElementById('ticket-content').innerHTML;
-  const win = window.open('', '_blank', 'width=400,height=700');
-  win.document.write(`<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8">
-  <title>Ticket Marjan Bijouterie</title>
-  <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: 'Courier New', monospace; font-size: 13px; color: #111; background: #fff; padding: 16px; max-width: 320px; margin: 0 auto; }
-    .ticket-body { padding: 8px; }
-    .ticket-header { text-align: center; margin-bottom: 12px; }
-    .ticket-logo { font-size: 28px; margin-bottom: 4px; }
-    .ticket-shop { font-size: 16px; font-weight: bold; letter-spacing: 1px; }
-    .ticket-shop-sub { font-size: 11px; color: #555; margin-top: 2px; }
-    .ticket-divider { border-top: 1px dashed #999; margin: 10px 0; }
-    .ticket-meta { margin-bottom: 4px; }
-    .ticket-meta-row { display: flex; justify-content: space-between; font-size: 12px; padding: 2px 0; }
-    .ticket-id { font-weight: bold; }
-    .ticket-section-title { font-size: 11px; font-weight: bold; letter-spacing: 0.8px; color: #555; text-transform: uppercase; margin-bottom: 6px; }
-    .ticket-client { font-size: 15px; font-weight: bold; margin-bottom: 8px; }
-    .ticket-detail-row { display: flex; justify-content: space-between; font-size: 12px; padding: 3px 0; border-bottom: 1px dotted #eee; }
-    .ticket-montant-row { display: flex; justify-content: space-between; font-size: 13px; padding: 4px 0; }
-    .ticket-restant-due { color: #a32d2d; }
-    .ticket-solde { color: #3b6d11; }
-    .ticket-footer { text-align: center; font-size: 12px; color: #555; margin-top: 8px; }
-    .ticket-footer-sub { font-size: 11px; color: #888; margin-top: 3px; }
-    @media print { body { padding: 0; } }
-  </style></head><body>${contenu}</body></html>`);
-  win.document.close();
-  setTimeout(() => { win.focus(); win.print(); win.close(); }, 400);
-}
 
 // ============================================
 // HISTORIQUE DES CONNEXIONS
@@ -1216,6 +1123,10 @@ function supprimerUser(id) {
 // ============================================
 // FACTURE PDF
 // ============================================
+
+
+function fmtDateLong(d){ if(!d)return'—'; return new Date(d+'T00:00:00').toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long',year:'numeric'}); }
+function genNumFacture(ventId){ return 'FAC-'+ventId; }
 function afficherFacture(id) {
   calculerCumuls();
   const v=STATE.ventes.find(x=>x.id===id); if(!v)return;
@@ -1325,36 +1236,81 @@ function imprimerFacture() {
 // ============================================
 function renderRapportJour(){ renderRapportJournalier(); }
 function renderRapportJournalier() {
-  const date=document.getElementById('rapport-date')?.value||today();
-  document.getElementById('rapport-date-label').textContent=fmtDateLong(date);
-  const ventesJ=STATE.ventes.filter(v=>v.date===date);
-  const achatsJ=STATE.achatsClients.filter(a=>a.date===date);
-  const decaissJ=STATE.decaissements.filter(d=>d.date===date);
-  const sortiesJ=STATE.sorties.filter(s=>s.date===date);
-  const connJ=STATE.connexions.filter(c=>c.date===date);
-  const tV=ventesJ.reduce((s,v)=>s+(v.montant||0),0);
-  const tE=ventesJ.reduce((s,v)=>s+(v.acompte||0),0);
-  const tR=ventesJ.reduce((s,v)=>s+(v.restant||0),0);
-  const tA=achatsJ.reduce((s,a)=>s+(a.prixPropose||0),0);
-  const tD=decaissJ.reduce((s,d)=>s+(d.montant||0),0);
-  const sNet=tE-tD;
-  const el=document.getElementById('rapport-journalier-content');
-  if(!ventesJ.length&&!achatsJ.length&&!decaissJ.length&&!sortiesJ.length&&!connJ.length){
-    el.innerHTML='<div style="padding:48px;text-align:center;color:var(--text-tertiary);font-size:14px">Aucune activité pour cette date</div>';return;
-  }
-  el.innerHTML=`
-<div class="metrics-grid" style="margin-bottom:18px">
-  <div class="metric-card"><div class="metric-label">Ventes du jour</div><div class="metric-value">${fmt(tV)}</div><span class="metric-badge badge-info">${ventesJ.length} opération${ventesJ.length>1?'s':''}</span></div>
-  <div class="metric-card"><div class="metric-label">Encaissé</div><div class="metric-value">${fmt(tE)}</div><span class="metric-badge badge-success">Acomptes reçus</span></div>
-  <div class="metric-card"><div class="metric-label">Restants dus</div><div class="metric-value">${fmt(tR)}</div><span class="metric-badge badge-warn">${ventesJ.filter(v=>(v.restant||0)>0).length} client${ventesJ.filter(v=>(v.restant||0)>0).length>1?'s':''}</span></div>
-  <div class="metric-card"><div class="metric-label">Solde net du jour</div><div class="metric-value">${fmt(sNet)}</div><span class="metric-badge ${sNet>=0?'badge-success':'badge-danger'}">${sNet>=0?'Positif':'Négatif'}</span></div>
-</div>
-${ventesJ.length?`<div class="card"><div class="card-header"><span class="card-title">Ventes (${ventesJ.length})</span></div><div style="overflow-x:auto"><table><thead><tr><th>N° Facture</th><th>Client</th><th>Description</th><th>Carat</th><th>Montant</th><th>Acompte</th><th>Restant</th></tr></thead><tbody>${ventesJ.map(v=>`<tr><td><span class="ref-code">${genNumFacture(v.id)}</span></td><td>${v.client}</td><td style="font-size:12px;color:var(--text-secondary)">${v.description}</td><td><span class="carat-pill">${(v.carat||'—').toUpperCase()}</span></td><td style="font-weight:500">${fmt(v.montant)}</td><td>${fmt(v.acompte||0)}</td><td>${(v.restant||0)>0?`<span class="stock-badge stock-low">${fmt(v.restant)}</span>`:'<span class="stock-badge stock-ok">Soldé</span>'}</td></tr>`).join('')}</tbody></table></div></div>`:''}
-${achatsJ.length?`<div class="card"><div class="card-header"><span class="card-title">Rachats clients (${achatsJ.length}) — ${fmt(tA)}</span></div><div style="overflow-x:auto"><table><thead><tr><th>Client</th><th>Description</th><th>Carat</th><th>Poids (g)</th><th>Prix proposé</th></tr></thead><tbody>${achatsJ.map(a=>`<tr><td>${a.client}</td><td style="font-size:12px;color:var(--text-secondary)">${a.description}</td><td><span class="carat-pill">${(a.carat||'—').toUpperCase()}</span></td><td style="text-align:center">${a.poids}g</td><td style="font-weight:500;color:var(--success-text)">${fmt(a.prixPropose)}</td></tr>`).join('')}</tbody></table></div></div>`:''}
-${decaissJ.length?`<div class="card"><div class="card-header"><span class="card-title">Décaissements (${decaissJ.length}) — ${fmt(tD)}</span></div><div style="overflow-x:auto"><table><thead><tr><th>Catégorie</th><th>Description</th><th>Montant</th><th>Par</th></tr></thead><tbody>${decaissJ.map(d=>`<tr><td><span class="cat-badge">${d.categorie}</span></td><td>${d.description}</td><td style="font-weight:500;color:var(--danger-text)">${fmt(d.montant)}</td><td><span class="role-pill role-${d.saisiPar}">${d.saisiPar}</span></td></tr>`).join('')}</tbody></table></div></div>`:''}
-${sortiesJ.length?`<div class="card"><div class="card-header"><span class="card-title">Sorties de stock (${sortiesJ.length})</span></div><div style="overflow-x:auto"><table><thead><tr><th>Article</th><th>Réf.</th><th>Qté</th><th>Motif</th></tr></thead><tbody>${sortiesJ.map(s=>`<tr><td>${s.article}</td><td><span class="ref-code">${s.ref}</span></td><td style="text-align:center"><strong>${s.qty}</strong></td><td>${s.motif}</td></tr>`).join('')}</tbody></table></div></div>`:''}
-${connJ.length?`<div class="card"><div class="card-header"><span class="card-title">Connexions (${connJ.length})</span></div><div style="overflow-x:auto"><table><thead><tr><th>Heure</th><th>Utilisateur</th><th>Rôle</th><th>Action</th></tr></thead><tbody>${connJ.map(c=>`<tr><td style="font-size:12px;font-weight:500">${c.heure}</td><td>${c.nom}</td><td><span class="role-pill role-${c.role}">${ROLES[c.role]?.label||c.role}</span></td><td><span class="stock-badge ${c.action==='connexion'?'stock-ok':'stock-low'}">${c.action}</span></td></tr>`).join('')}</tbody></table></div></div>`:''}
-`;
+  const date = document.getElementById('rapport-date-picker')?.value || today();
+  const dLabel = fmtDateLong(date);
+  document.getElementById('rapport-date-label').textContent = dLabel;
+
+  const ventesJ   = STATE.ventes.filter(v=>v.date===date);
+  const achatsJ   = STATE.achatsClients.filter(a=>a.date===date);
+  const decaissJ  = STATE.decaissements.filter(d=>d.date===date);
+  const sortiesJ  = STATE.sorties.filter(s=>s.date===date);
+  const connJ     = STATE.connexions.filter(c=>c.date===date);
+
+  const tV = ventesJ.reduce((s,v)=>s+(v.montant||0),0);
+  const tE = ventesJ.reduce((s,v)=>s+(v.acompte||0),0);
+  const tD = decaissJ.reduce((s,d)=>s+(d.montant||0),0);
+  const sNet = tE - tD;
+
+  // Métriques
+  document.getElementById('rj-ventes').textContent   = fmt(tV);
+  document.getElementById('rj-ventes-nb').textContent= ventesJ.length+' vente'+(ventesJ.length>1?'s':'');
+  document.getElementById('rj-encaisse').textContent  = fmt(tE);
+  document.getElementById('rj-decaiss').textContent   = fmt(tD);
+  document.getElementById('rj-decaiss-nb').textContent= decaissJ.length+' op.'+(decaissJ.length>1?'s':'');
+  document.getElementById('rj-solde').textContent     = fmt(sNet);
+  const sb = document.getElementById('rj-solde-badge');
+  if(sb){ sb.textContent = sNet>=0?'Positif':'Négatif'; sb.className='metric-badge '+(sNet>=0?'badge-success':'badge-danger'); }
+
+  const empty = '<div style="padding:14px 16px;color:var(--text-tertiary);font-size:13px;text-align:center">Aucune opération ce jour</div>';
+  const rowSt = 'display:flex;justify-content:space-between;align-items:center;padding:10px 16px;border-bottom:0.5px solid var(--border-light);font-size:13px';
+
+  // Ventes
+  document.getElementById('rj-detail-ventes').innerHTML = ventesJ.length===0 ? empty :
+    ventesJ.map(v=>`<div style="${rowSt}">
+      <div>
+        <div style="font-weight:500">${v.client} <span class="carat-pill" style="font-size:10px">${(v.carat||'').toUpperCase()}</span></div>
+        <div style="font-size:11px;color:var(--text-secondary)">${v.description} · <span class="ref-code">${genNumFacture(v.id)}</span></div>
+      </div>
+      <div style="text-align:right">
+        <div style="font-weight:600">${fmt(v.montant)}</div>
+        <span class="stock-badge ${(v.restant||0)>0?'stock-low':'stock-ok'}" style="font-size:10px">${(v.restant||0)>0?'Restant: '+fmt(v.restant):'Soldé'}</span>
+      </div>
+    </div>`).join('');
+
+  // Décaissements
+  document.getElementById('rj-detail-decaiss').innerHTML = decaissJ.length===0 ? empty :
+    decaissJ.map(d=>`<div style="${rowSt}">
+      <div>
+        <div style="font-weight:500">${d.description}</div>
+        <div style="font-size:11px;color:var(--text-secondary)">${d.categorie}</div>
+      </div>
+      <div style="font-weight:600;color:var(--danger-text)">-${fmt(d.montant)}</div>
+    </div>`).join('');
+
+  // Rachats
+  const elR = document.getElementById('rj-detail-rachats');
+  if(elR) elR.innerHTML = achatsJ.length===0 ? empty :
+    achatsJ.map(a=>`<div style="${rowSt}">
+      <div>
+        <div style="font-weight:500">${a.client}</div>
+        <div style="font-size:11px;color:var(--text-secondary)">${a.description} — ${(a.carat||'').toUpperCase()} — ${a.poids}g</div>
+      </div>
+      <div style="font-weight:600;color:var(--success-text)">${fmt(a.prixPropose)}</div>
+    </div>`).join('');
+
+  // Connexions
+  const elC = document.getElementById('rj-detail-connexions');
+  if(elC) elC.innerHTML = connJ.length===0 ? empty :
+    connJ.map(c=>`<div style="${rowSt}">
+      <div style="display:flex;align-items:center;gap:8px">
+        <div style="width:26px;height:26px;border-radius:50%;background:${ROLES[c.role]?.bg||'#eee'};color:${ROLES[c.role]?.color||'#888'};display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:600">${ini(c.nom)}</div>
+        <div><div style="font-weight:500">${c.nom}</div><div style="font-size:11px;color:var(--text-secondary)">${ROLES[c.role]?.label||c.role}</div></div>
+      </div>
+      <div style="text-align:right">
+        <div style="font-weight:500">${c.heure}</div>
+        <span class="stock-badge ${c.action==='connexion'?'stock-ok':'stock-low'}" style="font-size:10px">${c.action}</span>
+      </div>
+    </div>`).join('');
 }
 
 function genererRapportJournalier() {
@@ -1362,12 +1318,12 @@ function genererRapportJournalier() {
   document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));
   document.querySelector('.nav-item[data-section="rapport_journalier"]')?.classList.add('active');
   document.getElementById('rapport_journalier')?.classList.add('active');
-  document.getElementById('rapport-date').value=today();
+  const rdp=document.getElementById('rapport-date-picker'); if(rdp)rdp.value=today();
   renderRapportJournalier();
 }
 
 function imprimerRapportJournalier() {
-  const date=document.getElementById('rapport-date')?.value||today();
+  const date=document.getElementById('rapport-date-picker')?.value||today();
   const content=document.getElementById('rapport-journalier-content')?.innerHTML||'';
   const win=window.open('','_blank','width=900,height=1100');
   win.document.write(`<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><title>Rapport journalier ${fmtDate(date)}</title>
