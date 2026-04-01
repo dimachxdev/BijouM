@@ -30,6 +30,11 @@
     <div class="login-hint">
       <span>admin / admin123</span><span>stock / stock123</span><span>vendeur / vendeur123</span>
     </div>
+    <div style="text-align:center;margin-top:16px">
+      <button onclick="resetAppData()" style="background:none;border:none;font-size:11px;color:var(--text-tertiary);cursor:pointer;text-decoration:underline">
+        Problème de connexion ? Réinitialiser les données
+      </button>
+    </div>
   </div>
 </div>
 
@@ -340,7 +345,7 @@
         <div><h1 class="page-title">Rapport journalier</h1><p class="page-sub" id="rapport-date-label"></p></div>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
           <input type="date" class="form-input" id="rapport-date-picker" style="width:auto" onchange="renderRapportJour()" />
-          <button class="btn btn-primary" onclick="exporterRapportJourPDF()">🖨 Exporter PDF</button>
+          <button class="btn btn-primary" onclick="imprimerRapportJournalier()">🖨 Exporter PDF</button>
         </div>
       </div>
       <div class="metrics-grid">
