@@ -311,7 +311,7 @@ function renderDashboard(){
   // Comptes clients
   const ccActive=STATE.comptesClients.filter(c=>c.actif);
   document.getElementById('dash-comptes').innerHTML=ccActive.length===0?'<p style="color:var(--text-tertiary);font-size:13px">Aucun compte actif</p>':
-  ccActive.map(cc=>{const pct=Math.min(100,Math.round((cc.solde/cc.objectif)*100));return`<div style="margin-bottom:12px"><div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px"><span style="font-weight:500">${cc.client}</span><span style="color:var(--text-secondary)">${fmt(cc.solde)} / ${fmt(cc.objectif)}</span></div><div class="bar-track" style="height:10px"><div class="bar-fill" style="width:${pct}%"></div></div><div style="font-size:11px;color:var(--text-tertiary);margin-top:3px">${cc.objetCible} — ${pct}% atteint</div></div>`;}).join('');
+  ccActive.map(cc=>`<div style="margin-bottom:10px"><div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:3px"><span style="font-weight:500">${cc.client}</span><span style="font-weight:600;color:var(--success-text)">${fmt(cc.solde)}</span></div><div style="font-size:11px;color:var(--text-tertiary)">Ouvert le ${fmtDate(cc.dateOuverture)} · ${cc.mouvements.length} dépôt${cc.mouvements.length>1?'s':''}</div></div>`).join('');
 
   // Alertes
   const alertes=[];
@@ -650,6 +650,7 @@ function renderClients(f=''){
   document.getElementById('clients-body').innerHTML=data.map(c=>{const s=stats[c.nom]||{total:0,restant:0,nb:0,derniere:''};const t=tier(s.total);const d=s.derniere===today()?"Aujourd'hui":s.derniere?fmtDate(s.derniere):'—';return`<tr><td><div style="display:flex;align-items:center;gap:10px"><div style="width:32px;height:32px;border-radius:50%;background:var(--info-bg);color:var(--info-text);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:600;flex-shrink:0">${ini(c.nom)}</div><div><div style="font-size:13px;font-weight:500">${c.nom}</div><div style="font-size:11px;color:var(--text-tertiary)">${c.tel}</div></div></div></td><td>${c.tel}</td><td><strong>${fmt(s.total)}</strong></td><td>${s.restant>0?`<span class="stock-badge stock-low">${fmt(s.restant)}</span>`:'<span style="color:var(--success-text);font-size:12px">Soldé</span>'}</td><td>${s.nb}</td><td><span class="tier-badge ${t.cls}">${t.label}</span></td><td style="font-size:12px;color:var(--text-secondary)">${d}</td></tr>`;}).join('');
 }
 document.getElementById('client-search')?.addEventListener('input',function(){renderClients(this.value);});
+document.getElementById('cc-search')?.addEventListener('input',function(){renderComptesClients(this.value);});
 function ajouterClient(){
   const nom=document.getElementById('c-nom').value.trim(),tel=document.getElementById('c-tel').value.trim(),email=document.getElementById('c-email').value.trim(),adresse=document.getElementById('c-adresse').value.trim();
   if(!nom||!tel){showToast('⚠ Nom et téléphone obligatoires.');return;}
@@ -660,42 +661,43 @@ function ajouterClient(){
 // ============================================
 // COMPTES CLIENTS (épargne)
 // ============================================
-function renderComptesClients(){
-  document.getElementById('cc-count-label').textContent=`${STATE.comptesClients.length} compte${STATE.comptesClients.length>1?'s':`'`} — épargne bijoux`;
-  document.getElementById('cc-list').innerHTML=STATE.comptesClients.length===0?'<div style="padding:24px;text-align:center;color:var(--text-tertiary);font-size:13px">Aucun compte ouvert</div>':
-  STATE.comptesClients.map(cc=>{
-    const pct=Math.min(100,Math.round((cc.solde/cc.objectif)*100));
-    const restePct=100-pct;
+function renderComptesClients(filtre=''){
+  const q = filtre.toLowerCase();
+  document.getElementById('cc-count-label').textContent=`${STATE.comptesClients.length} compte${STATE.comptesClients.length>1?'s':''} — épargne bijoux`;
+  const ccFiltres = STATE.comptesClients.filter(cc => !q || cc.client.toLowerCase().includes(q));
+  document.getElementById('cc-list').innerHTML = ccFiltres.length===0
+    ? '<div style="padding:24px;text-align:center;color:var(--text-tertiary);font-size:13px">Aucun compte ouvert</div>'
+    : ccFiltres.map(cc=>{
     return`<div style="padding:16px 20px;border-bottom:0.5px solid var(--border-light)">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
         <div style="display:flex;align-items:center;gap:10px">
-          <div style="width:36px;height:36px;border-radius:50%;background:var(--info-bg);color:var(--info-text);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600">${ini(cc.client)}</div>
-          <div><div style="font-size:14px;font-weight:500">${cc.client}</div><div style="font-size:12px;color:var(--text-secondary)">${cc.objetCible}</div></div>
+          <div style="width:38px;height:38px;border-radius:50%;background:var(--info-bg);color:var(--info-text);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;flex-shrink:0">${ini(cc.client)}</div>
+          <div>
+            <div style="font-size:14px;font-weight:600">${cc.client}</div>
+            <div style="font-size:12px;color:var(--text-secondary)">Ouvert le ${fmtDate(cc.dateOuverture)} · ${cc.mouvements.length} dépôt${cc.mouvements.length>1?'s':''}</div>
+          </div>
         </div>
         <div style="text-align:right">
-          <div style="font-size:16px;font-weight:600">${fmt(cc.solde)}</div>
-          <div style="font-size:12px;color:var(--text-secondary)">sur ${fmt(cc.objectif)}</div>
+          <div style="font-size:20px;font-weight:700;color:var(--success-text)">${fmt(cc.solde)}</div>
+          <div style="font-size:11px;color:var(--text-tertiary)">solde disponible</div>
         </div>
       </div>
-      <div class="bar-track" style="height:10px;margin-bottom:6px"><div class="bar-fill" style="width:${pct}%"></div></div>
-      <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text-tertiary);margin-bottom:12px"><span>${pct}% atteint — ouvert le ${fmtDate(cc.dateOuverture)}</span><span>Reste : ${fmt(cc.objectif-cc.solde)}</span></div>
-      <div style="margin-bottom:10px">
-        ${cc.mouvements.map(m=>`<div style="display:flex;justify-content:space-between;font-size:12px;padding:4px 0;border-bottom:0.5px solid var(--border-light)"><span style="color:var(--text-secondary)">${fmtDate(m.date)} — ${m.note}</span><span style="color:var(--success-text);font-weight:500">+${fmt(m.montant)}</span></div>`).join('')}
+      <div style="margin-bottom:12px;background:var(--bg-secondary);border-radius:var(--radius-md);padding:10px 12px">
+        ${cc.mouvements.slice().reverse().slice(0,5).map(m=>`<div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0;border-bottom:0.5px solid var(--border-light)"><span style="color:var(--text-secondary)">${fmtDate(m.date)} — ${m.note}</span><span style="color:var(--success-text);font-weight:500">+${fmt(m.montant)}</span></div>`).join('')}
       </div>
-      <div style="display:flex;gap:8px">
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button class="btn small btn-primary" onclick="openDepotCC('${cc.id}')">+ Dépôt</button>
-        ${pct>=100?`<button class="btn small" onclick="cloturerCC('${cc.id}')">Clôturer & convertir en vente</button>`:''}
+        <button class="btn small" style="background:var(--success-bg);color:var(--success-text);border-color:transparent" onclick="cloturerCC('${cc.id}')">✓ Clôturer &amp; convertir</button>
         <button class="btn small btn-danger" onclick="supprimerCC('${cc.id}')">Supprimer</button>
       </div>
     </div>`;
   }).join('');
 }
 function creerCompteClient(){
-  const client=document.getElementById('cc-client').value,date=document.getElementById('cc-date').value,objectifNom=document.getElementById('cc-objectif-nom').value.trim(),objectif=parseInt(document.getElementById('cc-objectif').value)||0,depot=parseInt(document.getElementById('cc-depot-init').value)||0;
-  if(!client||!date||!objectifNom||objectif<=0||depot<=0){showToast('⚠ Tous les champs sont obligatoires.');return;}
-  if(depot>objectif){showToast('⚠ Le dépôt initial ne peut pas dépasser l\'objectif.');return;}
+  const client=document.getElementById('cc-client').value,date=document.getElementById('cc-date').value,depot=parseInt(document.getElementById('cc-depot-init').value)||0;
+  if(!client||!date||depot<=0){showToast('⚠ Client, date et dépôt initial sont obligatoires.');return;}
   const id=nextId('CC','cc');
-  STATE.comptesClients.push({id,client,dateOuverture:date,solde:depot,objectif,objetCible:objectifNom,actif:true,mouvements:[{date,type:'depot',montant:depot,note:'Ouverture compte'}]});
+  STATE.comptesClients.push({id,client,dateOuverture:date,solde:depot,actif:true,mouvements:[{date,type:'depot',montant:depot,note:'Ouverture compte'}]});
   save();closeModal('modal-add-compte-client');renderComptesClients();renderDashboard();showToast(`✓ Compte ${id} créé pour ${client}.`);
 }
 function openDepotCC(id){document.getElementById('depot-cc-id').value=id;document.getElementById('depot-cc-date').value=today();document.getElementById('depot-cc-montant').value='';document.getElementById('depot-cc-note').value='';document.getElementById('modal-depot-cc').classList.add('show');}
@@ -710,7 +712,7 @@ function cloturerCC(id){
   const cc=STATE.comptesClients.find(c=>c.id===id);if(!cc)return;
   if(!confirm(`Clôturer le compte de ${cc.client} et créer une vente de ${fmt(cc.solde)} ?`))return;
   const vid=nextId('V','v');
-  STATE.ventes.unshift({id:vid,date:today(),client:cc.client,description:'Achat bijou — solde compte épargne : '+cc.objetCible,local:0,importe:0,carat:'18k',montant:cc.solde,acompte:cc.solde,restant:0});
+  STATE.ventes.unshift({id:vid,date:today(),client:cc.client,description:'Clôture compte épargne — solde encaissé',local:0,importe:0,carat:'18k',montant:cc.solde,acompte:cc.solde,restant:0});
   cc.actif=false;save();renderComptesClients();renderJournal();showToast(`✓ Compte clôturé — vente ${vid} créée.`);
 }
 function supprimerCC(id){if(!confirm('Supprimer ce compte ?'))return;STATE.comptesClients=STATE.comptesClients.filter(c=>c.id!==id);save();renderComptesClients();showToast('Compte supprimé.');}
@@ -980,6 +982,55 @@ function viderHistorique() {
 (function(){
   // Application prête — attente de connexion
 })();
+
+// ============================================
+// MINI CLIENT RAPIDE (depuis modals)
+// ============================================
+function ouvrirMiniClient(targetSelectId) {
+  document.getElementById('mini-client-target').value = targetSelectId;
+  document.getElementById('mini-c-nom').value     = '';
+  document.getElementById('mini-c-tel').value     = '';
+  document.getElementById('mini-c-adresse').value = '';
+  document.getElementById('modal-mini-client').classList.add('show');
+  setTimeout(() => document.getElementById('mini-c-nom').focus(), 100);
+}
+
+function closeMiniClient() {
+  document.getElementById('modal-mini-client').classList.remove('show');
+}
+
+function enregistrerMiniClient() {
+  const nom     = document.getElementById('mini-c-nom').value.trim();
+  const tel     = document.getElementById('mini-c-tel').value.trim();
+  const adresse = document.getElementById('mini-c-adresse').value.trim();
+  const targetId= document.getElementById('mini-client-target').value;
+
+  if (!nom || !tel) { showToast('⚠ Nom et téléphone obligatoires.'); return; }
+  if (STATE.clients.find(c => c.tel === tel)) { showToast('⚠ Ce numéro existe déjà.'); return; }
+
+  STATE.counters.cl = (STATE.counters.cl || 9) + 1;
+  const newClient = {
+    id: 'CL-' + String(STATE.counters.cl).padStart(3,'0'),
+    nom, tel, email: '', adresse
+  };
+  STATE.clients.unshift(newClient);
+  save();
+
+  // Mettre à jour tous les selects clients ouverts
+  ['v-client','edit-v-client','cc-client','ba-client','ac-client'].forEach(selId => {
+    const sel = document.getElementById(selId);
+    if (!sel) return;
+    const opt = document.createElement('option');
+    opt.value = nom; opt.textContent = nom;
+    // Insérer après la première option vide
+    sel.insertBefore(opt, sel.options[1] || null);
+    if (sel.id === targetId) { sel.value = nom; }
+  });
+
+  closeMiniClient();
+  showToast(`✓ Client "${nom}" créé et sélectionné.`);
+}
+
 
 // ============================================
 // DRAWER MOBILE

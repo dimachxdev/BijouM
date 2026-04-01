@@ -288,7 +288,8 @@
         <div><h1 class="page-title">Comptes clients — Épargne bijoux</h1><p class="page-sub" id="cc-count-label"></p></div>
         <button class="btn btn-primary" onclick="openModal('modal-add-compte-client')">+ Nouveau compte</button>
       </div>
-      <div class="card" style="overflow-x:auto" id="cc-list"></div>
+      <input class="search-bar" type="text" placeholder="Rechercher un compte client..." id="cc-search" />
+      <div id="cc-list"></div>
     </section>
 
     <!-- BIJOUX EN ARRHES -->
@@ -416,7 +417,9 @@
     <div class="modal-header"><div class="modal-title">Nouvelle vente</div><button class="modal-close" onclick="closeModal('modal-nouvelle-vente')">✕</button></div>
     <div class="form-row">
       <div class="form-group"><label class="form-label">Date *</label><input class="form-input" type="date" id="v-date" /></div>
-      <div class="form-group"><label class="form-label">Client *</label><select class="form-input" id="v-client"><option value="">— Sélectionner —</option></select></div>
+      <div class="form-group"><label class="form-label">Client *</label><select class="form-input" id="v-client"><option value="">— Sélectionner —</option></select>
+        <button type="button" class="btn-add-client-inline" onclick="ouvrirMiniClient('v-client')">+ Nouveau client</button>
+      </div>
     </div>
     <div class="form-group" style="margin-bottom:12px"><label class="form-label">Description *</label><input class="form-input" type="text" placeholder="ex: Achat collier, Réparation bague..." id="v-description" /></div>
     <div class="form-row-3">
@@ -595,13 +598,14 @@
   <div class="modal modal-large">
     <div class="modal-header"><div class="modal-title">Nouveau compte épargne bijoux</div><button class="modal-close" onclick="closeModal('modal-add-compte-client')">✕</button></div>
     <div class="form-row">
-      <div class="form-group"><label class="form-label">Client *</label><select class="form-input" id="cc-client"><option value="">— Sélectionner —</option></select></div>
+      <div class="form-group"><label class="form-label">Client *</label><select class="form-input" id="cc-client"><option value="">— Sélectionner —</option></select>
+        <button type="button" class="btn-add-client-inline" onclick="ouvrirMiniClient('cc-client')">+ Nouveau client</button>
+      </div>
       <div class="form-group"><label class="form-label">Date d'ouverture *</label><input class="form-input" type="date" id="cc-date" /></div>
     </div>
-    <div class="form-group" style="margin-bottom:12px"><label class="form-label">Bijou / objectif visé *</label><input class="form-input" type="text" placeholder="ex: Collier or 22k — BJX-0001" id="cc-objectif-nom" /></div>
-    <div class="form-row">
-      <div class="form-group"><label class="form-label">Montant objectif (F CFA) *</label><input class="form-input" type="number" min="0" placeholder="0" id="cc-objectif" /></div>
-      <div class="form-group"><label class="form-label">Premier dépôt (F CFA) *</label><input class="form-input" type="number" min="0" placeholder="0" id="cc-depot-init" /></div>
+    <div class="form-group" style="margin-bottom:12px">
+      <label class="form-label">Premier dépôt (F CFA) *</label>
+      <input class="form-input" type="number" min="0" placeholder="0" id="cc-depot-init" />
     </div>
     <div class="modal-actions">
       <button class="btn btn-secondary" onclick="closeModal('modal-add-compte-client')">Annuler</button>
@@ -633,7 +637,9 @@
     <div class="modal-header"><div class="modal-title">Nouvelle réservation — Bijou en arrhes</div><button class="modal-close" onclick="closeModal('modal-add-bijou-arr')">✕</button></div>
     <div class="form-row">
       <div class="form-group"><label class="form-label">Date *</label><input class="form-input" type="date" id="ba-date" /></div>
-      <div class="form-group"><label class="form-label">Client *</label><select class="form-input" id="ba-client"><option value="">— Sélectionner —</option></select></div>
+      <div class="form-group"><label class="form-label">Client *</label><select class="form-input" id="ba-client"><option value="">— Sélectionner —</option></select>
+        <button type="button" class="btn-add-client-inline" onclick="ouvrirMiniClient('ba-client')">+ Nouveau client</button>
+      </div>
     </div>
     <div class="form-group" style="margin-bottom:12px"><label class="form-label">Bijou réservé *</label>
       <select class="form-input" id="ba-article" onchange="remplirPrixBijouArr()"><option value="">— Choisir un article en stock —</option></select>
@@ -735,6 +741,29 @@
       </div>
     </div>
     <div id="facture-content" style="background:#fff;border-radius:8px;padding:0"></div>
+  </div>
+</div>
+
+<!-- MINI MODAL NOUVEAU CLIENT RAPIDE -->
+<div class="modal-backdrop" id="modal-mini-client">
+  <div class="modal" style="width:420px">
+    <div class="modal-header">
+      <div class="modal-title">Nouveau client</div>
+      <button class="modal-close" onclick="closeMiniClient()">✕</button>
+    </div>
+    <input type="hidden" id="mini-client-target" />
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Prénom &amp; Nom *</label><input class="form-input" placeholder="Aminata Diallo" id="mini-c-nom" /></div>
+      <div class="form-group"><label class="form-label">Téléphone *</label><input class="form-input" placeholder="77 XXX XX XX" id="mini-c-tel" /></div>
+    </div>
+    <div class="form-group" style="margin-bottom:12px">
+      <label class="form-label">Adresse (optionnel)</label>
+      <input class="form-input" placeholder="Quartier, ville" id="mini-c-adresse" />
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeMiniClient()">Annuler</button>
+      <button class="btn btn-primary" onclick="enregistrerMiniClient()">Créer &amp; sélectionner</button>
+    </div>
   </div>
 </div>
 
