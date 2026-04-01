@@ -224,9 +224,97 @@ function peuplerSelect(id, selected='') {
 }
 
 function peuplerClientSelect(id, selected='') {
-  const sel=document.getElementById(id); if(!sel)return;
-  sel.innerHTML='<option value="">— Sélectionner un client —</option>';
-  STATE.clients.forEach(c=>{const o=document.createElement('option');o.value=c.nom;o.textContent=c.nom;if(c.nom===selected)o.selected=true;sel.appendChild(o);});
+  // Compatibilité : si c'est un picker, initialiser proprement
+  initClientPicker(id, selected);
+}
+
+// ============================================
+// CLIENT PICKER — recherche nom + téléphone
+// ============================================
+const _pickerTimers = {};
+
+function initClientPicker(fieldId, selected='') {
+  const searchEl = document.getElementById(fieldId+'-search');
+  const hiddenEl = document.getElementById(fieldId);
+  if (!searchEl || !hiddenEl) {
+    // Fallback : select classique
+    const sel = document.getElementById(fieldId); if(!sel)return;
+    sel.innerHTML='<option value="">— Sélectionner —</option>';
+    STATE.clients.forEach(c=>{const o=document.createElement('option');o.value=c.nom;o.textContent=c.nom;if(c.nom===selected)o.selected=true;sel.appendChild(o);});
+    return;
+  }
+  hiddenEl.value = selected || '';
+  if (selected) {
+    const cl = STATE.clients.find(c=>c.nom===selected);
+    searchEl.value = cl ? cl.nom + (cl.tel ? ' — ' + cl.tel : '') : selected;
+    document.getElementById('picker-'+fieldId)?.classList.add('client-picker-selected');
+  } else {
+    searchEl.value = '';
+    document.getElementById('picker-'+fieldId)?.classList.remove('client-picker-selected');
+  }
+  document.getElementById('picker-drop-'+fieldId).style.display = 'none';
+}
+
+function filtrerClientPicker(fieldId) {
+  const q = (document.getElementById(fieldId+'-search')?.value||'').toLowerCase();
+  // Si le champ est vidé, effacer la sélection
+  if (!q) {
+    document.getElementById(fieldId).value = '';
+    document.getElementById('picker-'+fieldId)?.classList.remove('client-picker-selected');
+  }
+  renderClientPickerDrop(fieldId, q);
+}
+
+function ouvrirClientPicker(fieldId) {
+  const q = (document.getElementById(fieldId+'-search')?.value||'').toLowerCase();
+  renderClientPickerDrop(fieldId, q);
+}
+
+function fermerClientPicker(fieldId, delai=200) {
+  _pickerTimers[fieldId] = setTimeout(() => {
+    const drop = document.getElementById('picker-drop-'+fieldId);
+    if (drop) drop.style.display = 'none';
+  }, delai);
+}
+
+function renderClientPickerDrop(fieldId, q='') {
+  const drop = document.getElementById('picker-drop-'+fieldId);
+  if (!drop) return;
+  const filtres = STATE.clients.filter(c =>
+    !q || c.nom.toLowerCase().includes(q) || (c.tel||'').includes(q)
+  ).slice(0, 30);
+
+  if (filtres.length === 0) {
+    drop.innerHTML = '<div class="client-picker-empty">Aucun client trouvé</div>';
+  } else {
+    drop.innerHTML = filtres.map(c => `
+      <div class="client-picker-item" onmousedown="selectionnerClientPicker('${fieldId}','${c.nom.replace(/'/g,"\'")}')">
+        <div class="client-picker-avatar">${ini(c.nom)}</div>
+        <div>
+          <div class="client-picker-nom">${c.nom}</div>
+          <div class="client-picker-tel">${c.tel||''}</div>
+        </div>
+      </div>`).join('');
+  }
+  drop.style.display = 'block';
+}
+
+function selectionnerClientPicker(fieldId, nom) {
+  // Annuler le timer de fermeture
+  clearTimeout(_pickerTimers[fieldId]);
+  const cl = STATE.clients.find(c=>c.nom===nom);
+  const searchEl = document.getElementById(fieldId+'-search');
+  const hiddenEl = document.getElementById(fieldId);
+  if (!searchEl || !hiddenEl) return;
+  hiddenEl.value = nom;
+  searchEl.value  = cl ? cl.nom + (cl.tel ? ' — ' + cl.tel : '') : nom;
+  document.getElementById('picker-'+fieldId)?.classList.add('client-picker-selected');
+  document.getElementById('picker-drop-'+fieldId).style.display = 'none';
+}
+
+function valeurClientPicker(fieldId) {
+  // Retourne la valeur sélectionnée (depuis hidden input)
+  return document.getElementById(fieldId)?.value || '';
 }
 
 function peuplerArticleSelect(id) {
@@ -1046,15 +1134,21 @@ function enregistrerMiniClient() {
   STATE.clients.unshift(newClient);
   save();
 
-  // Mettre à jour tous les selects clients ouverts
+  // Mettre à jour tous les pickers clients ouverts
   ['v-client','edit-v-client','cc-client','ba-client','ac-client'].forEach(selId => {
-    const sel = document.getElementById(selId);
-    if (!sel) return;
+    // Picker style
+    const searchEl = document.getElementById(selId+'-search');
+    const hiddenEl = document.getElementById(selId);
+    if (searchEl && hiddenEl) {
+      if (selId === targetId) { selectionnerClientPicker(selId, nom); }
+      return;
+    }
+    // Fallback select classique
+    const sel = document.getElementById(selId); if(!sel)return;
     const opt = document.createElement('option');
-    opt.value = nom; opt.textContent = nom;
-    // Insérer après la première option vide
-    sel.insertBefore(opt, sel.options[1] || null);
-    if (sel.id === targetId) { sel.value = nom; }
+    opt.value=nom; opt.textContent=nom;
+    sel.insertBefore(opt, sel.options[1]||null);
+    if (selId===targetId) sel.value=nom;
   });
 
   closeMiniClient();

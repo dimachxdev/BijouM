@@ -417,7 +417,19 @@
     <div class="modal-header"><div class="modal-title">Nouvelle vente</div><button class="modal-close" onclick="closeModal('modal-nouvelle-vente')">✕</button></div>
     <div class="form-row">
       <div class="form-group"><label class="form-label">Date *</label><input class="form-input" type="date" id="v-date" /></div>
-      <div class="form-group"><label class="form-label">Client *</label><select class="form-input" id="v-client"><option value="">— Sélectionner —</option></select>
+      <div class="form-group client-picker-group">
+        <label class="form-label">Client *</label>
+        <div class="client-picker" id="picker-v-client">
+          <input class="form-input client-picker-input" type="text"
+            placeholder="Nom ou téléphone..."
+            id="v-client-search"
+            autocomplete="off"
+            oninput="filtrerClientPicker('v-client')"
+            onfocus="ouvrirClientPicker('v-client')"
+            onblur="fermerClientPicker('v-client', 300)" />
+          <input type="hidden" id="v-client" />
+          <div class="client-picker-dropdown" id="picker-drop-v-client" style="display:none"></div>
+        </div>
         <button type="button" class="btn-add-client-inline" onclick="ouvrirMiniClient('v-client')">+ Nouveau client</button>
       </div>
     </div>
@@ -447,7 +459,20 @@
     <input type="hidden" id="edit-v-id" />
     <div class="form-row">
       <div class="form-group"><label class="form-label">Date *</label><input class="form-input" type="date" id="edit-v-date" /></div>
-      <div class="form-group"><label class="form-label">Client *</label><select class="form-input" id="edit-v-client"></select></div>
+      <div class="form-group client-picker-group">
+        <label class="form-label">Client *</label>
+        <div class="client-picker" id="picker-edit-v-client">
+          <input class="form-input client-picker-input" type="text"
+            placeholder="Nom ou téléphone..."
+            id="edit-v-client-search"
+            autocomplete="off"
+            oninput="filtrerClientPicker('edit-v-client')"
+            onfocus="ouvrirClientPicker('edit-v-client')"
+            onblur="fermerClientPicker('edit-v-client', 300)" />
+          <input type="hidden" id="edit-v-client" />
+          <div class="client-picker-dropdown" id="picker-drop-edit-v-client" style="display:none"></div>
+        </div>
+      </div>
     </div>
     <div class="form-group" style="margin-bottom:12px"><label class="form-label">Description *</label><input class="form-input" type="text" id="edit-v-description" /></div>
     <div class="form-row-3">
@@ -598,7 +623,19 @@
   <div class="modal modal-large">
     <div class="modal-header"><div class="modal-title">Nouveau compte épargne bijoux</div><button class="modal-close" onclick="closeModal('modal-add-compte-client')">✕</button></div>
     <div class="form-row">
-      <div class="form-group"><label class="form-label">Client *</label><select class="form-input" id="cc-client"><option value="">— Sélectionner —</option></select>
+      <div class="form-group client-picker-group">
+        <label class="form-label">Client *</label>
+        <div class="client-picker" id="picker-cc-client">
+          <input class="form-input client-picker-input" type="text"
+            placeholder="Nom ou téléphone..."
+            id="cc-client-search"
+            autocomplete="off"
+            oninput="filtrerClientPicker('cc-client')"
+            onfocus="ouvrirClientPicker('cc-client')"
+            onblur="fermerClientPicker('cc-client', 300)" />
+          <input type="hidden" id="cc-client" />
+          <div class="client-picker-dropdown" id="picker-drop-cc-client" style="display:none"></div>
+        </div>
         <button type="button" class="btn-add-client-inline" onclick="ouvrirMiniClient('cc-client')">+ Nouveau client</button>
       </div>
       <div class="form-group"><label class="form-label">Date d'ouverture *</label><input class="form-input" type="date" id="cc-date" /></div>
@@ -637,7 +674,19 @@
     <div class="modal-header"><div class="modal-title">Nouvelle réservation — Bijou en arrhes</div><button class="modal-close" onclick="closeModal('modal-add-bijou-arr')">✕</button></div>
     <div class="form-row">
       <div class="form-group"><label class="form-label">Date *</label><input class="form-input" type="date" id="ba-date" /></div>
-      <div class="form-group"><label class="form-label">Client *</label><select class="form-input" id="ba-client"><option value="">— Sélectionner —</option></select>
+      <div class="form-group client-picker-group">
+        <label class="form-label">Client *</label>
+        <div class="client-picker" id="picker-ba-client">
+          <input class="form-input client-picker-input" type="text"
+            placeholder="Nom ou téléphone..."
+            id="ba-client-search"
+            autocomplete="off"
+            oninput="filtrerClientPicker('ba-client')"
+            onfocus="ouvrirClientPicker('ba-client')"
+            onblur="fermerClientPicker('ba-client', 300)" />
+          <input type="hidden" id="ba-client" />
+          <div class="client-picker-dropdown" id="picker-drop-ba-client" style="display:none"></div>
+        </div>
         <button type="button" class="btn-add-client-inline" onclick="ouvrirMiniClient('ba-client')">+ Nouveau client</button>
       </div>
     </div>
@@ -781,8 +830,20 @@
       </div>
       <div class="form-group">
         <label class="form-label">Client *</label>
-        <select class="form-input" id="ac-client"><option value="">— Sélectionner un client —</option></select>
+        <label class="form-label">Client *</label>
+        <div class="client-picker" id="picker-ac-client">
+          <input class="form-input client-picker-input" type="text"
+            placeholder="Nom ou téléphone..."
+            id="ac-client-search"
+            autocomplete="off"
+            oninput="filtrerClientPicker('ac-client')"
+            onfocus="ouvrirClientPicker('ac-client')"
+            onblur="fermerClientPicker('ac-client', 300)" />
+          <input type="hidden" id="ac-client" />
+          <div class="client-picker-dropdown" id="picker-drop-ac-client" style="display:none">
+        </div>
         <button type="button" class="btn-add-client-inline" onclick="ouvrirMiniClient('ac-client')">+ Nouveau client</button>
+      </div>
       </div>
     </div>
     <div class="form-group" style="margin-bottom:12px">
