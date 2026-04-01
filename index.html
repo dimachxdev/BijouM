@@ -438,6 +438,7 @@
       <div class="form-group"><label class="form-label">Local (g)</label><input class="form-input" type="number" step="0.01" min="0" placeholder="0,00" id="v-local" /><span class="form-hint">Or fabriqué localement</span></div>
       <div class="form-group"><label class="form-label">Importé (g)</label><input class="form-input" type="number" step="0.01" min="0" placeholder="0,00" id="v-importe" /><span class="form-hint">Or importé</span></div>
       <div class="form-group"><label class="form-label">Carat *</label><select class="form-input" id="v-carat" onchange="afficherInfoCarat('v-carat','v-carat-badge')"><option value="">— Choisir —</option></select></div>
+      <div class="form-group"><label class="form-label">Type de bijou</label><select class="form-input" id="v-type-bijou"><option value="">— Type —</option></select></div>
     </div>
     <div id="v-carat-badge" class="carat-badge" style="display:none;margin-bottom:12px"></div>
     <div class="form-row-3">
@@ -479,6 +480,7 @@
       <div class="form-group"><label class="form-label">Local (g)</label><input class="form-input" type="number" step="0.01" id="edit-v-local" /></div>
       <div class="form-group"><label class="form-label">Importé (g)</label><input class="form-input" type="number" step="0.01" id="edit-v-importe" /></div>
       <div class="form-group"><label class="form-label">Carat *</label><select class="form-input" id="edit-v-carat" onchange="afficherInfoCarat('edit-v-carat','edit-v-carat-badge')"></select></div>
+      <div class="form-group"><label class="form-label">Type de bijou</label><select class="form-input" id="edit-v-type-bijou"><option value="">— Type —</option></select></div>
     </div>
     <div id="edit-v-carat-badge" class="carat-badge" style="display:none;margin-bottom:12px"></div>
     <div class="form-row-3">
@@ -856,6 +858,10 @@
         <select class="form-input" id="ac-carat" onchange="afficherInfoCarat('ac-carat','ac-carat-badge')">
           <option value="">— Choisir —</option>
         </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Type de bijou</label>
+        <select class="form-input" id="ac-type-bijou"><option value="">— Type —</option></select>
       </div>
       <div class="form-group">
         <label class="form-label">Poids (g) *</label>
