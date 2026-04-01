@@ -42,29 +42,28 @@ const INITIAL_CONNEXIONS = [
 // CARATS
 // ============================================
 const CARATS_LIST = [
-  // Or local
-  { code:'14k-local',    label:'14 carats — Local',    purete:'585/1000', couleur:'#FF9500', type:'local',    origine:'local',    desc:'Or 14 carats fabriqué localement.' },
-  { code:'18k-local',    label:'18 carats — Local',    purete:'750/1000', couleur:'#FFB347', type:'local',    origine:'local',    desc:'Or 18 carats fabriqué localement.' },
-  // Or importé
-  { code:'14k-importe',  label:'14 carats — Importé',  purete:'585/1000', couleur:'#E8943A', type:'importe',  origine:'importe',  desc:'Or 14 carats importé.' },
-  { code:'18k-importe',  label:'18 carats — Importé',  purete:'750/1000', couleur:'#FFC800', type:'importe',  origine:'importe',  desc:'Or 18 carats importé.' },
-  { code:'21k-importe',  label:'21 carats — Importé',  purete:'875/1000', couleur:'#FFD700', type:'importe',  origine:'importe',  desc:'Or 21 carats importé.' },
+  { code:'14k-local',   label:'14 carats - Local',   purete:'585/1000', couleur:'#FF9500', origine:'local'   },
+  { code:'18k-local',   label:'18 carats - Local',   purete:'750/1000', couleur:'#FFB347', origine:'local'   },
+  { code:'14k-importe', label:'14 carats - Importe',  purete:'585/1000', couleur:'#E8943A', origine:'importe' },
+  { code:'18k-importe', label:'18 carats - Importe',  purete:'750/1000', couleur:'#FFC800', origine:'importe' },
+  { code:'21k-importe', label:'21 carats - Importe',  purete:'875/1000', couleur:'#FFD700', origine:'importe' },
 ];
 
 // ============================================
 // TYPES DE BIJOUX
 // ============================================
-const TYPES_BIJOUX = [
-  { code:'raika',          label:'Raika',           couleur:'#FFB347' },
-  { code:'extra',          label:'Extra',           couleur:'#FFD700' },
-  { code:'argent',         label:'Argent',          couleur:'#B0C0C8' },
-  { code:'ndiakhass',      label:'Ndiakhass',       couleur:'#FFC800' },
-  { code:'argent-or',      label:'Argent Or',       couleur:'#D4AF37' },
-  { code:'pierre',         label:'Pierre précieuse',couleur:'#7F77DD' },
-  { code:'argent-dore',    label:'Argent doré',     couleur:'#C8A84B' },
-  { code:'marcasite',      label:'Marcasite',       couleur:'#888780' },
-];
 
+
+const TYPES_BIJOUX = [
+  { code:'raika',       label:'Raika' },
+  { code:'extra',       label:'Extra' },
+  { code:'argent',      label:'Argent' },
+  { code:'ndiakhass',   label:'Ndiakhass' },
+  { code:'argent-or',   label:'Argent Or' },
+  { code:'pierre',      label:'Pierre precieuse' },
+  { code:'argent-dore', label:'Argent dore' },
+  { code:'marcasite',   label:'Marcasite' },
+];
 
 // ============================================
 // CLIENTS

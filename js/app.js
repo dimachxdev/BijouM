@@ -7,6 +7,8 @@
 // ============================================
 // STATE
 // ============================================
+function loadLS(k, fb) { try { const s=localStorage.getItem(k); return s?JSON.parse(s):fb; } catch { return fb; } }
+
 const STATE = {
   currentUser: null,
   users:         loadLS('marjan_users',      INITIAL_USERS),
@@ -22,7 +24,11 @@ const STATE = {
   counters: loadLS('marjan_counters', { v:16, s:3, d:6, a:5, ac:3, cc:3, ba:3, cl:10, u:4, cn:8 }),
 };
 
-function loadLS(k, fb) { try { const s=localStorage.getItem(k); return s?JSON.parse(s):fb; } catch { return fb; } }
+const PAIEMENT_LABELS = {
+  'especes':'Especes', 'wave':'Wave', 'orange-money':'Orange Money',
+  'carte':'Carte', 'livraison':'Livraison', 'compte':'Compte'
+};
+
 function save() {
   const keyMap = {
     users:'users', ventes:'ventes', clients:'clients', stock:'stock',
@@ -501,6 +507,7 @@ function renderJournal(){
       <td style="text-align:center">${(parseFloat(v.importe)||0)>0?`<span class="badge-importe">${fmtG(v.importe)}</span>`:'<span style="color:var(--text-tertiary)">—</span>'}</td>
       <td><span class="carat-pill">${dot}${(v.carat||'—').toUpperCase()}</span></td>
       <td style="font-weight:500;white-space:nowrap">${fmt(v.montant)}</td>
+      <td><span class="paiement-pill paiement-${v.paiement||'especes'}">${PAIEMENT_LABELS[v.paiement||'especes']||''}</span></td>
       <td>${rb}</td>
       <td><div style="display:flex;gap:4px;align-items:center">${btnModif}${btnSuppr}</div></td>
       <td><div style="display:flex;gap:4px">${btnAcompte}</div></td>
@@ -510,15 +517,48 @@ function renderJournal(){
 }
 ['journal-search','filtre-carat','filtre-type','filtre-restant'].forEach(id=>{document.getElementById(id)?.addEventListener('input',renderJournal);});
 
-function prepNouvelleVente(){peuplerSelect('v-carat');peuplerTypeBijou('v-type-bijou');peuplerClientSelect('v-client');document.getElementById('v-date').value=today();['v-description','v-local','v-importe','v-montant','v-acompte'].forEach(id=>document.getElementById(id).value='');document.getElementById('v-restant-disp').value='—';document.getElementById('v-carat-badge').style.display='none';}
+function prepNouvelleVente(){
+  peuplerSelect('v-carat');
+  peuplerTypeBijou('v-type-bijou');
+  peuplerClientSelect('v-client');
+  document.getElementById('v-date').value=today();
+  ['v-description','v-local','v-importe','v-montant','v-acompte'].forEach(id=>document.getElementById(id).value='');
+  var vp=document.getElementById('v-paiement'); if(vp) vp.value='especes';
+  var cb=document.getElementById('v-compte-bloc'); if(cb) cb.style.display='none';
+  document.getElementById('v-restant-disp').value='—';
+  document.getElementById('v-carat-badge').style.display='none';
+}
 
 function enregistrerVente(){
-  const date=document.getElementById('v-date').value,client=document.getElementById('v-client').value,desc=document.getElementById('v-description').value.trim(),local=parseFloat(document.getElementById('v-local').value)||0,importe=parseFloat(document.getElementById('v-importe').value)||0,carat=document.getElementById('v-carat').value,typeBijou=document.getElementById('v-type-bijou')?.value||'',montant=parseInt(document.getElementById('v-montant').value)||0,acompte=parseInt(document.getElementById('v-acompte').value)||0;
-  if(!date||!client||!desc||!carat||montant<=0){showToast('⚠ Tous les champs obligatoires doivent être remplis.');return;}
-  if(acompte>montant){showToast('⚠ L\'acompte ne peut pas dépasser le montant.');return;}
+  const date=document.getElementById('v-date').value;
+  const client=document.getElementById('v-client').value;
+  const desc=document.getElementById('v-description').value.trim();
+  const local=parseFloat(document.getElementById('v-local').value)||0;
+  const importe=parseFloat(document.getElementById('v-importe').value)||0;
+  const carat=document.getElementById('v-carat').value;
+  const typeBijou=(document.getElementById('v-type-bijou')&&document.getElementById('v-type-bijou').value)||'';
+  const paiement=(document.getElementById('v-paiement')&&document.getElementById('v-paiement').value)||'especes';
+  const montant=parseInt(document.getElementById('v-montant').value)||0;
+  let acompte=parseInt(document.getElementById('v-acompte').value)||0;
+
+  if(!date||!client||!desc||!carat||montant<=0){showToast('Tous les champs obligatoires doivent etre remplis.');return;}
+  if(acompte>montant){showToast('Acompte ne peut pas depasser le montant.');return;}
+
+  let compteClientId=null;
+  if(paiement==='compte'){
+    const cc=STATE.comptesClients.find(c=>c.client===client&&c.actif!==false);
+    if(!cc){showToast('Aucun compte epargne actif pour ce client.');return;}
+    if(montant>cc.solde){showToast('Solde insuffisant — disponible : '+fmt(cc.solde));return;}
+    cc.solde-=montant;
+    cc.mouvements.push({date:date,type:'retrait',montant:montant,note:'Vente - '+desc});
+    compteClientId=cc.id;
+    acompte=montant;
+  }
+
   const id=nextId('V','v');
-  STATE.ventes.unshift({id,date,client,description:desc,local,importe,carat,typeBijou,montant,acompte,restant:montant-acompte});
-  save();closeModal('modal-nouvelle-vente');renderJournal();renderDashboard();showToast(`✓ Vente ${id} — ${fmt(montant)}`);
+  STATE.ventes.unshift({id,date,client,description:desc,local,importe,carat,typeBijou,paiement,montant,acompte,restant:montant-acompte,compteClientId});
+  save();closeModal('modal-nouvelle-vente');renderJournal();renderDashboard();
+  showToast(paiement==='compte'?('Vente '+id+' — '+fmt(montant)+' deduit compte '+client):('Vente '+id+' — '+fmt(montant)));
 }
 
 function ouvrirEditVente(id){
@@ -648,7 +688,29 @@ function exporterJournalCSV(){
 function renderStocks(f=''){
   const q=f.toLowerCase();
   const data=STATE.stock.filter(i=>i.nom.toLowerCase().includes(q)||i.ref.toLowerCase().includes(q)||(i.carat||'').toLowerCase().includes(q));
-  document.getElementById('stock-count-label').textContent=`${STATE.stock.length} références · ${STATE.stock.reduce((s,i)=>s+i.qty,0)} unités`;
+  const totalUnites=STATE.stock.reduce((s,i)=>s+i.qty,0);
+  const totalPoids=STATE.stock.reduce((s,i)=>s+(parseFloat(i.poids)||0)*i.qty,0);
+  document.getElementById('stock-count-label').textContent=STATE.stock.length+' references - '+totalUnites+' unites - '+totalPoids.toFixed(2)+'g total';
+
+  var byCarat={};
+  STATE.stock.forEach(function(i){ if(!i.carat||!i.qty)return; byCarat[i.carat]=(byCarat[i.carat]||0)+(parseFloat(i.poids)||0)*i.qty; });
+  var caratMax=Math.max.apply(null,Object.values(byCarat).concat([0.01]));
+  var rcEl=document.getElementById('stock-recap-carats');
+  if(rcEl) rcEl.innerHTML=Object.keys(byCarat).length===0?'<p style="color:var(--text-tertiary);font-size:13px">Aucun poids enregistre</p>':
+    Object.entries(byCarat).sort(function(a,b){return b[1]-a[1];}).map(function(e){
+      var c=getCarat(e[0])||{label:e[0],couleur:'#ccc'};
+      return '<div class="bar-row"><span class="bar-label" style="width:150px;display:flex;align-items:center;gap:5px"><span style="width:9px;height:9px;border-radius:50%;background:'+c.couleur+';display:inline-block"></span>'+c.label+'</span><div class="bar-track"><div class="bar-fill" style="width:'+Math.round(e[1]/caratMax*100)+'%"></div></div><span class="bar-val">'+e[1].toFixed(2)+'g</span></div>';
+    }).join('');
+
+  var byType={};
+  STATE.stock.forEach(function(i){ if(!i.qty)return; var k=i.type||'autre'; byType[k]=(byType[k]||0)+(parseFloat(i.poids)||0)*i.qty; });
+  var typeMax=Math.max.apply(null,Object.values(byType).concat([0.01]));
+  var rtEl=document.getElementById('stock-recap-types');
+  if(rtEl) rtEl.innerHTML=Object.keys(byType).length===0?'<p style="color:var(--text-tertiary);font-size:13px">Aucun type enregistre</p>':
+    Object.entries(byType).sort(function(a,b){return b[1]-a[1];}).map(function(e){
+      var lbl={'local':'Or local','importe':'Or importe','mixte':'Mixte','argent':'Argent','autre':'Autre'}[e[0]]||e[0];
+      return '<div class="bar-row"><span class="bar-label" style="width:120px">'+lbl+'</span><div class="bar-track"><div class="bar-fill" style="width:'+Math.round(e[1]/typeMax*100)+'%"></div></div><span class="bar-val">'+e[1].toFixed(2)+'g</span></div>';
+    }).join('');
   document.getElementById('stock-body').innerHTML=data.map(item=>{
     const st=statutStock(item);const c=getCarat(item.carat);const dot=c?`<span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${c.couleur};margin-right:4px;vertical-align:middle"></span>`:'';
     const typeL={local:'Local',importe:'Importé',mixte:'Mixte',argent:'Argent',autre:'Autre'}[item.type]||item.type||'—';
@@ -794,8 +856,9 @@ function renderComptesClients(filtre=''){
         ${cc.mouvements.slice().reverse().slice(0,5).map(m=>`<div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0;border-bottom:0.5px solid var(--border-light)"><span style="color:var(--text-secondary)">${fmtDate(m.date)} — ${m.note}</span><span style="color:var(--success-text);font-weight:500">+${fmt(m.montant)}</span></div>`).join('')}
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
-        <button class="btn small btn-primary" onclick="openDepotCC('${cc.id}')">+ Dépôt</button>
-        <button class="btn small" style="background:var(--success-bg);color:var(--success-text);border-color:transparent" onclick="cloturerCC('${cc.id}')">✓ Clôturer &amp; convertir</button>
+        <button class="btn small btn-primary" onclick="openDepotCC('${cc.id}')">+ Depot</button>
+        <button class="btn small" style="background:var(--warning-bg);color:var(--warning-text);border-color:transparent" onclick="ouvrirAjustCC('${cc.id}')">Utiliser pour vente</button>
+        <button class="btn small" onclick="imprimerCompteClient('${cc.id}')">Imprimer</button>
         <button class="btn small btn-danger" onclick="supprimerCC('${cc.id}')">Supprimer</button>
       </div>
     </div>`;
@@ -1206,6 +1269,88 @@ function agrandirPhotoReprise(id) {
   p{color:#fff;font-family:sans-serif;font-size:13px;opacity:0.7}</style></head>
   <body><img src="${a.photo}" alt="Photo reprise" /><p>${a.client} — ${a.description} — ${fmtDate(a.date)}</p></body></html>`);
   win.document.close();
+}
+
+
+function ouvrirAjustCC(id){
+  var cc=STATE.comptesClients.find(function(c){return c.id===id;});if(!cc)return;
+  document.getElementById('ajust-cc-id').value=id;
+  document.getElementById('ajust-cc-montant').value='';
+  document.getElementById('ajust-cc-restant').value='';
+  document.getElementById('ajust-cc-desc').value='';
+  peuplerSelect('ajust-cc-carat');
+  document.getElementById('ajust-cc-info').innerHTML='<div style="display:flex;justify-content:space-between"><div><strong>'+cc.client+'</strong><br><small>Ouvert le '+fmtDate(cc.dateOuverture)+'</small></div><div style="text-align:right"><div style="font-size:20px;font-weight:700;color:var(--success-text)">'+fmt(cc.solde)+'</div><small>solde disponible</small></div></div>';
+  document.getElementById('modal-ajust-cc').classList.add('show');
+}
+function previewAjustCC(){
+  var id=document.getElementById('ajust-cc-id').value;
+  var cc=STATE.comptesClients.find(function(c){return c.id===id;});if(!cc)return;
+  var montant=parseInt(document.getElementById('ajust-cc-montant').value)||0;
+  var restant=cc.solde-montant;
+  document.getElementById('ajust-cc-restant').value=montant>0?(restant<0?'Depassement':fmt(restant)):'';
+}
+function validerAjustCC(){
+  var id=document.getElementById('ajust-cc-id').value;
+  var cc=STATE.comptesClients.find(function(c){return c.id===id;});if(!cc)return;
+  var montant=parseInt(document.getElementById('ajust-cc-montant').value)||0;
+  var desc=document.getElementById('ajust-cc-desc').value.trim();
+  var carat=document.getElementById('ajust-cc-carat')&&document.getElementById('ajust-cc-carat').value||'';
+  if(montant<=0){showToast('Montant obligatoire.');return;}
+  if(!desc){showToast('Description obligatoire.');return;}
+  if(montant>cc.solde){showToast('Solde insuffisant ('+fmt(cc.solde)+' disponible).');return;}
+  cc.solde-=montant;
+  cc.mouvements.push({date:today(),type:'retrait',montant:montant,note:'Vente - '+desc});
+  var vid=nextId('V','v');
+  STATE.ventes.unshift({id:vid,date:today(),client:cc.client,description:desc,local:0,importe:0,carat:carat,typeBijou:'',paiement:'compte',montant:montant,acompte:montant,restant:0,compteClientId:cc.id});
+  save();closeModal('modal-ajust-cc');renderComptesClients();renderJournal();renderDashboard();
+  showToast('Vente '+vid+' creee - '+fmt(montant)+' deduit du compte de '+cc.client);
+}
+function imprimerCompteClient(id){
+  var cc=STATE.comptesClients.find(function(c){return c.id===id;});if(!cc)return;
+  var ventesCC=STATE.ventes.filter(function(v){return v.client===cc.client&&v.compteClientId===cc.id;});
+  var totalDepots=cc.mouvements.filter(function(m){return m.type!=='retrait';}).reduce(function(s,m){return s+m.montant;},0);
+  var totalRetraits=cc.mouvements.filter(function(m){return m.type==='retrait';}).reduce(function(s,m){return s+m.montant;},0);
+  var now=new Date();
+  var win=window.open('','_blank','width=750,height=900');
+  win.document.write('<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><title>Compte - '+cc.client+'</title>'
+    +'<style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:sans-serif;font-size:13px;color:#111;padding:30px;max-width:700px;margin:0 auto}'
+    +'h1{font-size:18px;margin-bottom:4px}h2{font-size:13px;font-weight:600;margin:16px 0 6px;border-bottom:1px solid #ccc;padding-bottom:4px}'
+    +'.header{display:flex;justify-content:space-between;margin-bottom:20px;padding-bottom:14px;border-bottom:2px solid #111}'
+    +'.solde{font-size:22px;font-weight:700;color:#3b6d11}'
+    +'table{width:100%;border-collapse:collapse;font-size:12px;margin-bottom:14px}'
+    +'th{text-align:left;padding:6px 8px;background:#f5f5f5;font-size:10px;text-transform:uppercase}'
+    +'td{padding:6px 8px;border-bottom:1px solid #eee}'
+    +'.credit{color:#3b6d11}.debit{color:#a32d2d}'
+    +'</style></head><body>'
+    +'<div class="header"><div><div style="font-size:18px;font-weight:700">MARJAN BIJOUTERIE</div><div style="font-size:11px;color:#888">Dakar, Senegal</div></div>'
+    +'<div style="text-align:right"><div style="font-size:15px;font-weight:700">RELEVE DE COMPTE EPARGNE</div><div style="font-size:11px;color:#888">'+now.toLocaleDateString('fr-FR')+'</div></div></div>'
+    +'<div style="background:#f7f6f3;border-radius:8px;padding:14px;margin-bottom:16px;display:flex;justify-content:space-between">'
+    +'<div><div style="font-size:16px;font-weight:700">'+cc.client+'</div><div style="font-size:12px;color:#666">Compte ouvert le '+fmtDate(cc.dateOuverture)+'</div></div>'
+    +'<div style="text-align:right"><div class="solde">'+fmt(cc.solde)+'</div><div style="font-size:11px;color:#888">Solde disponible</div></div></div>'
+    +'<h2>Historique des mouvements</h2>'
+    +'<table><thead><tr><th>Date</th><th>Operation</th><th>Credit</th><th>Debit</th></tr></thead><tbody>'
+    +cc.mouvements.map(function(m){return '<tr><td>'+fmtDate(m.date)+'</td><td>'+m.note+'</td><td class="credit">'+(m.type!=='retrait'?fmt(m.montant):'')+'</td><td class="debit">'+(m.type==='retrait'?fmt(m.montant):'')+'</td></tr>';}).join('')
+    +'<tr style="font-weight:600;border-top:2px solid #111"><td colspan="2">SOLDE</td><td class="credit">'+fmt(totalDepots)+'</td><td class="debit">'+fmt(totalRetraits)+'</td></tr>'
+    +'</tbody></table>'
+    +(ventesCC.length?'<h2>Ventes associees</h2><table><thead><tr><th>Date</th><th>Description</th><th>Montant</th></tr></thead><tbody>'+ventesCC.map(function(v){return '<tr><td>'+fmtDate(v.date)+'</td><td>'+v.description+'</td><td class="debit">'+fmt(v.montant)+'</td></tr>';}).join('')+'</tbody></table>':'')
+    +'<div style="margin-top:24px;padding-top:12px;border-top:1px dashed #ccc;font-size:11px;color:#888;text-align:center">Marjan Bijouterie - Dakar - '+now.toLocaleString('fr-FR')+'</div>'
+    +'</body></html>');
+  win.document.close();
+  setTimeout(function(){win.focus();win.print();},500);
+}
+
+function onChangePaiementVente(){
+  var paiement=document.getElementById('v-paiement')&&document.getElementById('v-paiement').value;
+  var bloc=document.getElementById('v-compte-bloc');
+  if(!bloc)return;
+  if(paiement!=='compte'){bloc.style.display='none';return;}
+  var clientNom=document.getElementById('v-client')&&document.getElementById('v-client').value;
+  if(!clientNom){bloc.style.display='none';showToast('Selectionnez d\'abord un client.');document.getElementById('v-paiement').value='especes';return;}
+  var cc=STATE.comptesClients.find(function(c){return c.client===clientNom&&c.actif!==false;});
+  if(!cc){bloc.style.display='none';showToast(clientNom+' n\'a pas de compte epargne actif.');document.getElementById('v-paiement').value='especes';return;}
+  document.getElementById('v-compte-nom').textContent=cc.client+' — '+cc.id;
+  document.getElementById('v-compte-solde').textContent=fmt(cc.solde);
+  bloc.style.display='block';
 }
 
 

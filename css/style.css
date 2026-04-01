@@ -609,3 +609,12 @@ tr:hover td { background: var(--bg-secondary); }
   font-weight: 500; margin-left: 4px;
   vertical-align: middle;
 }
+
+/* ===== PAIEMENT PILLS ===== */
+.paiement-pill{display:inline-block;font-size:10px;padding:2px 7px;border-radius:20px;font-weight:500;white-space:nowrap}
+.paiement-especes{background:var(--success-bg);color:var(--success-text)}
+.paiement-wave{background:#e6f1fb;color:#185fa5}
+.paiement-orange-money{background:#faeeda;color:#854f0b}
+.paiement-carte{background:#eeedfe;color:#534ab7}
+.paiement-livraison{background:var(--bg-secondary);color:var(--text-secondary);border:0.5px solid var(--border-light)}
+.paiement-compte{background:var(--local-bg);color:var(--local-text)}
