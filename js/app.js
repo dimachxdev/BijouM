@@ -332,7 +332,8 @@ function renderJournal(){
   const ft=document.getElementById('filtre-type')?.value||'';
   const fr=document.getElementById('filtre-restant')?.value||'';
   const ventes=[...STATE.ventes].sort((a,b)=>b.date.localeCompare(a.date)).filter(v=>{
-    if(q&&!v.client.toLowerCase().includes(q)&&!v.description.toLowerCase().includes(q))return false;
+    const clV=STATE.clients.find(c=>c.nom===v.client);
+    if(q&&!v.client.toLowerCase().includes(q)&&!v.description.toLowerCase().includes(q)&&!(clV?.tel||'').includes(q))return false;
     if(fc&&v.carat!==fc)return false;
     if(ft==='local'&&!(parseFloat(v.local)||0))return false;
     if(ft==='importe'&&!(parseFloat(v.importe)||0))return false;
@@ -644,7 +645,7 @@ function supprimerDecaiss(id){if(!isAdmin()){showToast('⛔ Seul l\'administrate
 // ============================================
 function renderClients(f=''){
   const q=f.toLowerCase();
-  const data=STATE.clients.filter(c=>c.nom.toLowerCase().includes(q)||c.tel.includes(q));
+  const data=STATE.clients.filter(c=>c.nom.toLowerCase().includes(q)||c.tel.includes(q)||(c.email||'').toLowerCase().includes(q));
   document.getElementById('clients-count-label').textContent=`${STATE.clients.length} clients`;
   const stats={};STATE.ventes.forEach(v=>{if(!stats[v.client])stats[v.client]={total:0,restant:0,nb:0,derniere:''};stats[v.client].total+=(v.montant||0);stats[v.client].restant+=(v.restant||0);stats[v.client].nb+=1;if(!stats[v.client].derniere||v.date>stats[v.client].derniere)stats[v.client].derniere=v.date;});
   document.getElementById('clients-body').innerHTML=data.map(c=>{const s=stats[c.nom]||{total:0,restant:0,nb:0,derniere:''};const t=tier(s.total);const d=s.derniere===today()?"Aujourd'hui":s.derniere?fmtDate(s.derniere):'—';return`<tr><td><div style="display:flex;align-items:center;gap:10px"><div style="width:32px;height:32px;border-radius:50%;background:var(--info-bg);color:var(--info-text);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:600;flex-shrink:0">${ini(c.nom)}</div><div><div style="font-size:13px;font-weight:500">${c.nom}</div><div style="font-size:11px;color:var(--text-tertiary)">${c.tel}</div></div></div></td><td>${c.tel}</td><td><strong>${fmt(s.total)}</strong></td><td>${s.restant>0?`<span class="stock-badge stock-low">${fmt(s.restant)}</span>`:'<span style="color:var(--success-text);font-size:12px">Soldé</span>'}</td><td>${s.nb}</td><td><span class="tier-badge ${t.cls}">${t.label}</span></td><td style="font-size:12px;color:var(--text-secondary)">${d}</td></tr>`;}).join('');
@@ -664,7 +665,7 @@ function ajouterClient(){
 function renderComptesClients(filtre=''){
   const q = filtre.toLowerCase();
   document.getElementById('cc-count-label').textContent=`${STATE.comptesClients.length} compte${STATE.comptesClients.length>1?'s':''} — épargne bijoux`;
-  const ccFiltres = STATE.comptesClients.filter(cc => !q || cc.client.toLowerCase().includes(q));
+  const ccFiltres = STATE.comptesClients.filter(cc => { if(!q) return true; const clCC=STATE.clients.find(c=>c.nom===cc.client); return cc.client.toLowerCase().includes(q)||(clCC?.tel||'').includes(q); });
   document.getElementById('cc-list').innerHTML = ccFiltres.length===0
     ? '<div style="padding:24px;text-align:center;color:var(--text-tertiary);font-size:13px">Aucun compte ouvert</div>'
     : ccFiltres.map(cc=>{
