@@ -394,7 +394,6 @@ function renderJournal(){
       <td style="text-align:center">${(parseFloat(v.importe)||0)>0?`<span class="badge-importe">${fmtG(v.importe)}</span>`:'<span style="color:var(--text-tertiary)">—</span>'}</td>
       <td><span class="carat-pill">${dot}${(v.carat||'—').toUpperCase()}</span></td>
       <td style="font-weight:500;white-space:nowrap">${fmt(v.montant)}</td>
-      <td style="color:var(--text-secondary);white-space:nowrap">${(v.acompte||0)>0?fmt(v.acompte):'<span style="color:var(--text-tertiary)">—</span>'}</td>
       <td>${rb}</td>
       <td><div style="display:flex;gap:4px;align-items:center">${btnModif}${btnSuppr}</div></td>
       <td><div style="display:flex;gap:4px">${btnAcompte}</div></td>
