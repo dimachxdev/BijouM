@@ -328,7 +328,7 @@ function renderJournal(){
     return true;
   });
 
-  // Calculs cumul bar
+  // Calculs cumul bar (pour la barre de totaux uniquement, plus de colonne)
   const tCumul    = STATE.ventes.reduce((s,v)=>s+(v.montant||0),0);
   const tEncaisse = STATE.ventes.reduce((s,v)=>s+(v.acompte||0),0);
   const tRest     = STATE.ventes.reduce((s,v)=>s+(v.restant||0),0);
@@ -342,11 +342,8 @@ function renderJournal(){
   document.getElementById('poids-local-total').textContent  = tLoc.toFixed(2)+'g';
   document.getElementById('poids-importe-total').textContent= tImp.toFixed(2)+'g';
 
-  // Cumul chronologique par ligne
-  const sorted=[...STATE.ventes].sort((a,b)=>a.date.localeCompare(b.date));
-  let rc=0; const cmap={};sorted.forEach(v=>{rc+=(v.montant||0);cmap[v.id]=rc;});
-
-  const admin = isAdmin();
+  const admin    = isAdmin();
+  const canEdit  = admin || STATE.currentUser?.role === 'gestionnaire' || STATE.currentUser?.role === 'vendeur';
 
   document.getElementById('journal-body').innerHTML=ventes.map(v=>{
     const c=getCarat(v.carat);
@@ -355,13 +352,21 @@ function renderJournal(){
       ? `<span class="stock-badge stock-low">${fmt(v.restant)}</span>`
       : `<span class="stock-badge stock-ok">Soldé</span>`;
 
-    // Boutons : modifier/supprimer = admin uniquement, acompte = tous si restant > 0
-    const btnEdit = admin
-      ? `<button class="btn small" onclick="ouvrirEditVente('${v.id}')" title="Modifier">✎</button>
-         <button class="btn small btn-danger" onclick="supprimerVente('${v.id}')" title="Supprimer">✕</button>`
-      : `<span class="perm-lock" title="Modification réservée à l'administrateur">🔒</span>`;
+    const nonFinalisee = (v.restant||0) > 0;
 
-    const btnAcompte = (v.restant||0)>0
+    // Modifier : admin toujours, gestionnaire/vendeur seulement si non finalisée
+    const peutModifier = admin || (canEdit && nonFinalisee);
+    const btnModif = peutModifier
+      ? `<button class="btn small" onclick="ouvrirEditVente('${v.id}')" title="${nonFinalisee?'Modifier (non finalisée)':'Modifier'}">✎</button>`
+      : `<span class="perm-lock" title="${nonFinalisee?'Non autorisé':'Vente finalisée — admin uniquement'}">🔒</span>`;
+
+    // Supprimer : admin uniquement
+    const btnSuppr = admin
+      ? `<button class="btn small btn-danger" onclick="supprimerVente('${v.id}')" title="Supprimer">✕</button>`
+      : '';
+
+    // Acompte : accessible si restant > 0
+    const btnAcompte = nonFinalisee
       ? `<button class="btn small" style="background:var(--warning-bg);color:var(--warning-text);border-color:transparent" onclick="ouvrirAjoutAcompte('${v.id}')" title="Ajouter un acompte">+&nbsp;Acompte</button>`
       : '';
 
@@ -378,8 +383,7 @@ function renderJournal(){
       <td style="font-weight:500;white-space:nowrap">${fmt(v.montant)}</td>
       <td style="color:var(--text-secondary);white-space:nowrap">${(v.acompte||0)>0?fmt(v.acompte):'<span style="color:var(--text-tertiary)">—</span>'}</td>
       <td>${rb}</td>
-      <td style="font-size:12px;color:var(--text-secondary);white-space:nowrap">${fmt(cmap[v.id]||0)}</td>
-      <td><div style="display:flex;gap:4px;flex-wrap:nowrap">${btnEdit}</div></td>
+      <td><div style="display:flex;gap:4px;align-items:center">${btnModif}${btnSuppr}</div></td>
       <td><div style="display:flex;gap:4px">${btnAcompte}</div></td>
       <td><button class="btn small" onclick="afficherTicket('${v.id}')" title="Ticket" style="font-size:14px">🖨</button></td>
     </tr>`;
@@ -399,8 +403,17 @@ function enregistrerVente(){
 }
 
 function ouvrirEditVente(id){
-  if(!isAdmin()){showToast('⛔ Seul l\'administrateur peut modifier une vente.');return;}
   const v=STATE.ventes.find(x=>x.id===id);if(!v)return;
+  const nonFinalisee = (v.restant||0) > 0;
+  const admin = isAdmin();
+  const role  = STATE.currentUser?.role;
+  // Admin = toujours. Gestionnaire/Vendeur = seulement si non finalisée
+  if(!admin && !nonFinalisee){
+    showToast('⛔ Vente finalisée — modification réservée à l\'administrateur.');return;
+  }
+  if(!admin && role !== 'gestionnaire' && role !== 'vendeur'){
+    showToast('⛔ Accès non autorisé.');return;
+  }
   peuplerSelect('edit-v-carat',v.carat);peuplerClientSelect('edit-v-client',v.client);
   document.getElementById('edit-v-id').value=id;
   document.getElementById('edit-v-id-label').textContent='#'+id;
@@ -412,30 +425,51 @@ function ouvrirEditVente(id){
   document.getElementById('edit-v-acompte').value=v.acompte||'';
   calcRestant('edit-v-montant','edit-v-acompte','edit-v-restant-disp');
   afficherInfoCarat('edit-v-carat','edit-v-carat-badge');
-  // Afficher/masquer boutons selon restant
-  const restant = (v.montant||0)-(v.acompte||0);
+  // Champs désactivés pour non-admin sur ventes non finalisées (montant, date, carat non modifiables)
+  const readOnly = !admin;
+  ['edit-v-date','edit-v-montant','edit-v-local','edit-v-importe'].forEach(eid=>{
+    const el=document.getElementById(eid);
+    if(el) el.disabled = readOnly;
+  });
+  document.getElementById('edit-v-carat').disabled = readOnly;
+  // Boutons acompte
+  const restant=(v.montant||0)-(v.acompte||0);
   document.getElementById('btn-add-acompte').style.display = restant>0?'':'none';
   document.getElementById('btn-regler-total').style.display= restant>0?'':'none';
   document.getElementById('modal-edit-vente').classList.add('show');
 }
 
 function sauvegarderVente(){
-  if(!isAdmin()){showToast('⛔ Action réservée à l\'administrateur.');return;}
   const id=document.getElementById('edit-v-id').value;
   const v=STATE.ventes.find(x=>x.id===id);if(!v)return;
-  const montant=parseInt(document.getElementById('edit-v-montant').value)||0;
-  const acompte=parseInt(document.getElementById('edit-v-acompte').value)||0;
+  const nonFinalisee=(v.restant||0)>0;
+  const admin=isAdmin();
+  const role=STATE.currentUser?.role;
+  if(!admin && !nonFinalisee){showToast('⛔ Vente finalisée — modification réservée à l\'administrateur.');return;}
+  if(!admin && role!=='gestionnaire' && role!=='vendeur'){showToast('⛔ Accès non autorisé.');return;}
+
+  // Non-admin : seulement acompte et description modifiables
+  const montant = admin ? (parseInt(document.getElementById('edit-v-montant').value)||0) : v.montant;
+  const acompte = parseInt(document.getElementById('edit-v-acompte').value)||0;
+  const desc    = document.getElementById('edit-v-description').value.trim();
+  const client  = admin ? document.getElementById('edit-v-client').value : v.client;
+  const date    = admin ? document.getElementById('edit-v-date').value : v.date;
+  const local   = admin ? (parseFloat(document.getElementById('edit-v-local').value)||0) : v.local;
+  const importe = admin ? (parseFloat(document.getElementById('edit-v-importe').value)||0) : v.importe;
+  const carat   = admin ? document.getElementById('edit-v-carat').value : v.carat;
+
   if(acompte>montant){showToast('⚠ L\'acompte ne peut pas dépasser le montant.');return;}
-  Object.assign(v,{
-    date:document.getElementById('edit-v-date').value,
-    client:document.getElementById('edit-v-client').value,
-    description:document.getElementById('edit-v-description').value.trim(),
-    local:parseFloat(document.getElementById('edit-v-local').value)||0,
-    importe:parseFloat(document.getElementById('edit-v-importe').value)||0,
-    carat:document.getElementById('edit-v-carat').value,
-    montant, acompte, restant: montant-acompte
+  if(!desc){showToast('⚠ La description est obligatoire.');return;}
+
+  // Réactiver les champs avant sauvegarde
+  ['edit-v-date','edit-v-montant','edit-v-local','edit-v-importe'].forEach(eid=>{
+    const el=document.getElementById(eid); if(el) el.disabled=false;
   });
-  save();closeModal('modal-edit-vente');renderJournal();renderDashboard();showToast('✓ Vente modifiée.');
+  document.getElementById('edit-v-carat').disabled=false;
+
+  Object.assign(v,{date,client,description:desc,local,importe,carat,montant,acompte,restant:montant-acompte});
+  save();closeModal('modal-edit-vente');renderJournal();renderDashboard();
+  showToast('✓ Vente mise à jour.');
 }
 
 function ajouterAcompteVente(){
