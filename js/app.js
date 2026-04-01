@@ -112,6 +112,7 @@ function buildNav() {
   });
   // Sorties : visible pour tous mais bouton ajout admin seulement
   document.getElementById('btn-add-sortie').style.display = isAdmin() ? '' : 'none';
+  // comptes_users et rapport_jour visibles selon perms déjà filtrées
   document.getElementById('sorties-perm-warning').style.display = isAdmin() ? 'none' : 'flex';
 }
 
@@ -133,7 +134,6 @@ function renderSection(id) {
   if(id==='dashboard')     renderDashboard();
   if(id==='journal')       renderJournal();
   if(id==='stocks')        renderStocks();
-  if(id==='achats')        renderAchats();
   if(id==='achats_clients')renderAchatsClients();
   if(id==='sorties')       renderSorties();
   if(id==='decaissements') renderDecaissements();
@@ -141,6 +141,8 @@ function renderSection(id) {
   if(id==='compte_client') renderComptesClients();
   if(id==='bijou_arr')     renderBijouxArr();
   if(id==='historique')    renderHistorique();
+  if(id==='comptes_users') renderComptesUsers();
+  if(id==='rapport_jour')  renderRapportJour();
 }
 
 // ============================================
@@ -385,7 +387,7 @@ function renderJournal(){
       <td>${rb}</td>
       <td><div style="display:flex;gap:4px;align-items:center">${btnModif}${btnSuppr}</div></td>
       <td><div style="display:flex;gap:4px">${btnAcompte}</div></td>
-      <td><button class="btn small" onclick="afficherTicket('${v.id}')" title="Ticket" style="font-size:14px">🖨</button></td>
+      <td><button class="btn small" onclick="afficherFacture('${v.id}')" title="Facture" style="font-size:14px">🖨</button></td>
     </tr>`;
   }).join('');
 }
@@ -572,32 +574,6 @@ function enregistrerSortie(){
   save();closeModal('modal-add-sortie');renderSorties();renderStocks();renderDashboard();showToast(`✓ Sortie ${id} enregistrée.`);
 }
 
-// ============================================
-// ACHATS
-// ============================================
-function calcAchatTotal(){
-  const p=parseFloat(document.getElementById('a-poids')?.value)||0,g=parseFloat(document.getElementById('a-prix-g')?.value)||0;
-  const el=document.getElementById('a-total-disp');if(el)el.value=p>0&&g>0?fmt(Math.round(p*g)):'—';
-}
-function renderAchats(){
-  const mois=STATE.achats.filter(a=>isMois(a.date));
-  document.getElementById('achats-count-label').textContent=`${STATE.achats.length} achat${STATE.achats.length>1?'s':''} enregistré${STATE.achats.length>1?'s':''}`;
-  document.getElementById('metric-achat-mois').textContent=fmt(mois.reduce((s,a)=>s+(a.montantTotal||0),0));
-  document.getElementById('metric-achat-total').textContent=fmt(STATE.achats.reduce((s,a)=>s+(a.montantTotal||0),0));
-  document.getElementById('metric-achat-poids').textContent=STATE.achats.reduce((s,a)=>s+(a.poids||0),0).toFixed(2)+' g';
-  document.getElementById('achats-body').innerHTML=[...STATE.achats].sort((a,b)=>b.date.localeCompare(a.date)).map(a=>{
-    const c=getCarat(a.carat);const dot=c?`<span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${c.couleur};margin-right:4px;vertical-align:middle"></span>`:'';
-    return`<tr><td style="white-space:nowrap;font-size:12px;color:var(--text-secondary)">${fmtDate(a.date)}</td><td>${a.fournisseur}</td><td>${a.description}</td><td><span class="carat-pill">${dot}${(a.carat||'—').toUpperCase()}</span></td><td style="text-align:center">${a.poids}g</td><td>${fmt(a.prixUnitaire)}/g</td><td style="font-weight:500">${fmt(a.montantTotal)}</td><td><span class="role-pill role-${a.saisiPar}">${a.saisiPar}</span></td><td><button class="btn small btn-danger" onclick="supprimerAchat('${a.id}')">✕</button></td></tr>`;
-  }).join('');
-}
-function enregistrerAchat(){
-  const date=document.getElementById('a-date').value,four=document.getElementById('a-fournisseur').value.trim(),desc=document.getElementById('a-description').value.trim(),carat=document.getElementById('a-carat').value,poids=parseFloat(document.getElementById('a-poids').value)||0,prixG=parseFloat(document.getElementById('a-prix-g').value)||0;
-  if(!date||!four||!desc||!carat||poids<=0||prixG<=0){showToast('⚠ Tous les champs sont obligatoires.');return;}
-  const id=nextId('A','a');
-  STATE.achats.unshift({id,date,fournisseur:four,description:desc,carat,poids,prixUnitaire:Math.round(prixG),montantTotal:Math.round(poids*prixG),saisiPar:STATE.currentUser?.role||'admin'});
-  save();closeModal('modal-add-achat');renderAchats();renderDashboard();showToast(`✓ Achat ${id} enregistré.`);
-}
-function supprimerAchat(id){if(!confirm('Supprimer cet achat ?'))return;STATE.achats=STATE.achats.filter(a=>a.id!==id);save();renderAchats();showToast('Achat supprimé.');}
 
 // ============================================
 // DÉCAISSEMENTS
@@ -881,76 +857,6 @@ Généré le ${now.toLocaleString('fr-FR')} par ${STATE.currentUser?.nom||'—'}
   showToast('✓ Rapport exporté.');
 }
 
-// ============================================
-// TICKET DE VENTE — Impression PDF
-// ============================================
-function afficherTicket(id) {
-  calculerCumuls();
-  const v = STATE.ventes.find(x => x.id === id);
-  if (!v) return;
-  const c = getCarat(v.carat);
-  const caratLabel = c ? `${v.carat.toUpperCase()} — ${c.purete}` : (v.carat || '—').toUpperCase();
-  const restant = v.restant || 0;
-  const now = new Date();
-
-  document.getElementById('ticket-content').innerHTML = `
-    <div class="ticket-body">
-      <div class="ticket-header">
-        <div class="ticket-logo">💎</div>
-        <div class="ticket-shop">MARJAN BIJOUTERIE</div>
-        <div class="ticket-shop-sub">Vente de bijoux — Dakar, Sénégal</div>
-        <div class="ticket-divider"></div>
-      </div>
-
-      <div class="ticket-meta">
-        <div class="ticket-meta-row"><span>N° Vente</span><span class="ticket-id">${v.id}</span></div>
-        <div class="ticket-meta-row"><span>Date</span><span>${fmtDate(v.date)}</span></div>
-        <div class="ticket-meta-row"><span>Imprimé le</span><span>${now.toLocaleDateString('fr-FR')} à ${now.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})}</span></div>
-        <div class="ticket-meta-row"><span>Vendeur</span><span>${STATE.currentUser?.nom || '—'}</span></div>
-      </div>
-
-      <div class="ticket-divider"></div>
-
-      <div class="ticket-section-title">CLIENT</div>
-      <div class="ticket-client">${v.client}</div>
-
-      <div class="ticket-divider"></div>
-
-      <div class="ticket-section-title">DÉTAIL DE LA VENTE</div>
-      <div class="ticket-detail-row"><span>Description</span><span>${v.description}</span></div>
-      <div class="ticket-detail-row"><span>Carat</span><span>${caratLabel}</span></div>
-      ${(parseFloat(v.local)||0) > 0 ? `<div class="ticket-detail-row"><span>Or local</span><span>${fmtG(v.local)}</span></div>` : ''}
-      ${(parseFloat(v.importe)||0) > 0 ? `<div class="ticket-detail-row"><span>Or importé</span><span>${fmtG(v.importe)}</span></div>` : ''}
-
-      <div class="ticket-divider"></div>
-
-      <div class="ticket-section-title">RÈGLEMENT</div>
-      <div class="ticket-montant-row"><span>Montant total</span><strong>${fmt(v.montant)}</strong></div>
-      <div class="ticket-montant-row"><span>Acompte versé</span><span>${fmt(v.acompte || 0)}</span></div>
-      <div class="ticket-montant-row ${restant > 0 ? 'ticket-restant-due' : 'ticket-solde'}">
-        <span>${restant > 0 ? 'Restant dû' : 'Statut'}</span>
-        <strong>${restant > 0 ? fmt(restant) : '✓ SOLDÉ'}</strong>
-      </div>
-
-      <div class="ticket-divider"></div>
-
-      <div class="ticket-footer">
-        <div>Merci pour votre confiance</div>
-        <div class="ticket-footer-sub">Conservez ce ticket comme preuve d'achat</div>
-        <div class="ticket-footer-sub">Marjan Bijouterie — ${now.getFullYear()}</div>
-      </div>
-    </div>
-  `;
-  document.getElementById('modal-ticket').classList.add('show');
-}
-
-function imprimerTicket() {
-  const contenu = document.getElementById('ticket-content').innerHTML;
-  const win = window.open('', '_blank', 'width=400,height=700');
-  win.document.write(`<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8">
-  <title>Ticket Marjan Bijouterie</title>
-  <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: 'Courier New', monospace; font-size: 13px; color: #111; background: #fff; padding: 16px; max-width: 320px; margin: 0 auto; }
     .ticket-body { padding: 8px; }
     .ticket-header { text-align: center; margin-bottom: 12px; }
@@ -1062,9 +968,6 @@ function viderHistorique() {
   // Application prête — attente de connexion
 })();
 
-// ============================================
-// DRAWER MOBILE
-// ============================================
 function toggleDrawer() {
   const sidebar  = document.querySelector('.sidebar');
   const overlay  = document.getElementById('drawer-overlay');
@@ -1093,3 +996,401 @@ document.querySelectorAll('.nav-item').forEach(btn => {
 window.addEventListener('resize', () => {
   if (window.innerWidth >= 900) closeDrawer();
 });
+
+// ============================================
+// GESTION DES COMPTES UTILISATEURS (admin)
+// ============================================
+function renderComptesUsers() {
+  if (!isAdmin()) { showToast('⛔ Accès réservé à l\'administrateur.'); return; }
+  document.getElementById('users-count-label').textContent =
+    `${STATE.users.length} compte${STATE.users.length > 1 ? 's' : ''} enregistré${STATE.users.length > 1 ? 's' : ''}`;
+
+  document.getElementById('users-body').innerHTML = STATE.users.map(u => {
+    const role = ROLES[u.role] || { label: u.role, color: '#888', bg: '#eee' };
+    const dernConn = STATE.connexions.find(c => c.userId === u.id && c.action === 'connexion');
+    const dernDate = dernConn ? `${fmtDate(dernConn.date)} ${dernConn.heure}` : 'Jamais';
+    const isCurrentUser = STATE.currentUser?.id === u.id;
+    return `<tr>
+      <td>
+        <div style="display:flex;align-items:center;gap:10px">
+          <div style="width:34px;height:34px;border-radius:50%;background:${role.bg};color:${role.color};display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;flex-shrink:0">${ini(u.nom)}</div>
+          <div>
+            <div style="font-size:13px;font-weight:500">${u.nom} ${isCurrentUser ? '<span style="font-size:10px;color:var(--text-tertiary)">(vous)</span>' : ''}</div>
+          </div>
+        </div>
+      </td>
+      <td><span class="ref-code">${u.login}</span></td>
+      <td><span class="role-pill role-${u.role}">${role.label}</span></td>
+      <td><span class="stock-badge ${u.actif ? 'stock-ok' : 'stock-out'}">${u.actif ? 'Actif' : 'Désactivé'}</span></td>
+      <td style="font-size:12px;color:var(--text-secondary)">${dernDate}</td>
+      <td>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <button class="btn small" onclick="ouvrirEditUser('${u.id}')">✎ Modifier</button>
+          ${!isCurrentUser ? `<button class="btn small ${u.actif ? 'btn-danger' : ''}" onclick="toggleUserActif('${u.id}')">${u.actif ? 'Désactiver' : 'Activer'}</button>` : ''}
+          ${!isCurrentUser && STATE.users.filter(x=>x.role==='admin').length > 1 ? `<button class="btn small btn-danger" onclick="supprimerUtilisateur('${u.id}')">✕</button>` : ''}
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function creerUtilisateur() {
+  if (!isAdmin()) { showToast('⛔ Accès réservé.'); return; }
+  const nom   = document.getElementById('u-nom').value.trim();
+  const login = document.getElementById('u-login').value.trim().toLowerCase();
+  const pass  = document.getElementById('u-password').value;
+  const pass2 = document.getElementById('u-password2').value;
+  const role  = document.getElementById('u-role').value;
+  if (!nom || !login || !pass) { showToast('⚠ Tous les champs obligatoires.'); return; }
+  if (pass !== pass2) { showToast('⚠ Les mots de passe ne correspondent pas.'); return; }
+  if (pass.length < 6) { showToast('⚠ Mot de passe trop court (6 caractères min).'); return; }
+  if (STATE.users.find(u => u.login === login)) { showToast('⚠ Ce login existe déjà.'); return; }
+  STATE.counters.u++;
+  STATE.users.push({ id: `U-${String(STATE.counters.u).padStart(3,'0')}`, nom, login, password: pass, role, actif: true });
+  save(); renderComptesUsers(); closeModal('modal-add-user');
+  ['u-nom','u-login','u-password','u-password2'].forEach(id => document.getElementById(id).value = '');
+  showToast(`✓ Compte "${nom}" créé.`);
+}
+
+function ouvrirEditUser(id) {
+  const u = STATE.users.find(x => x.id === id); if (!u) return;
+  document.getElementById('edit-u-id').value     = id;
+  document.getElementById('edit-u-label').textContent = u.nom;
+  document.getElementById('edit-u-nom').value    = u.nom;
+  document.getElementById('edit-u-role').value   = u.role;
+  document.getElementById('edit-u-password').value  = '';
+  document.getElementById('edit-u-password2').value = '';
+  document.getElementById('modal-edit-user').classList.add('show');
+}
+
+function sauvegarderUtilisateur() {
+  if (!isAdmin()) { showToast('⛔ Accès réservé.'); return; }
+  const id    = document.getElementById('edit-u-id').value;
+  const u     = STATE.users.find(x => x.id === id); if (!u) return;
+  const nom   = document.getElementById('edit-u-nom').value.trim();
+  const role  = document.getElementById('edit-u-role').value;
+  const pass  = document.getElementById('edit-u-password').value;
+  const pass2 = document.getElementById('edit-u-password2').value;
+  if (!nom) { showToast('⚠ Nom obligatoire.'); return; }
+  if (pass && pass !== pass2) { showToast('⚠ Les mots de passe ne correspondent pas.'); return; }
+  if (pass && pass.length < 6) { showToast('⚠ Mot de passe trop court (6 caractères min).'); return; }
+  // Empêcher de supprimer le dernier admin
+  if (u.role === 'admin' && role !== 'admin' && STATE.users.filter(x=>x.role==='admin').length <= 1) {
+    showToast('⚠ Impossible — il doit rester au moins un administrateur.'); return;
+  }
+  u.nom  = nom;
+  u.role = role;
+  if (pass) u.password = pass;
+  save(); renderComptesUsers(); closeModal('modal-edit-user');
+  showToast(`✓ Compte "${nom}" mis à jour.`);
+}
+
+function toggleUserActif(id) {
+  if (!isAdmin()) { showToast('⛔ Accès réservé.'); return; }
+  const u = STATE.users.find(x => x.id === id); if (!u) return;
+  if (u.actif && STATE.users.filter(x=>x.actif && x.role==='admin').length <= 1 && u.role === 'admin') {
+    showToast('⚠ Impossible de désactiver le dernier admin actif.'); return;
+  }
+  u.actif = !u.actif;
+  save(); renderComptesUsers();
+  showToast(`Compte "${u.nom}" ${u.actif ? 'activé' : 'désactivé'}.`);
+}
+
+function supprimerUtilisateur(id) {
+  if (!isAdmin()) { showToast('⛔ Accès réservé.'); return; }
+  const u = STATE.users.find(x => x.id === id); if (!u) return;
+  if (STATE.users.filter(x=>x.role==='admin').length <= 1 && u.role === 'admin') {
+    showToast('⚠ Impossible de supprimer le seul administrateur.'); return;
+  }
+  if (!confirm(`Supprimer le compte "${u.nom}" ? Cette action est irréversible.`)) return;
+  STATE.users = STATE.users.filter(x => x.id !== id);
+  save(); renderComptesUsers(); showToast('Compte supprimé.');
+}
+
+// ============================================
+// RAPPORT JOURNALIER
+// ============================================
+function renderRapportJour() {
+  const picker = document.getElementById('rapport-date-picker');
+  const dateRJ = picker?.value || today();
+  if (picker && !picker.value) picker.value = dateRJ;
+  const dLabel = new Date(dateRJ + 'T00:00:00').toLocaleDateString('fr-FR', { weekday:'long', day:'numeric', month:'long', year:'numeric' });
+  document.getElementById('rapport-date-label').textContent = dLabel;
+
+  const ventesJ      = STATE.ventes.filter(v => v.date === dateRJ);
+  const decaissJ     = STATE.decaissements.filter(d => d.date === dateRJ);
+  const rachatsJ     = STATE.achatsClients.filter(a => a.date === dateRJ);
+  const connexionsJ  = STATE.connexions.filter(c => c.date === dateRJ);
+
+  const totalVentes   = ventesJ.reduce((s,v) => s+(v.montant||0), 0);
+  const totalEncaisse = ventesJ.reduce((s,v) => s+(v.acompte||0), 0);
+  const totalDecaiss  = decaissJ.reduce((s,d) => s+(d.montant||0), 0);
+  const soldeNet      = totalEncaisse - totalDecaiss;
+
+  document.getElementById('rj-ventes').textContent    = fmt(totalVentes);
+  document.getElementById('rj-ventes-nb').textContent = `${ventesJ.length} vente${ventesJ.length>1?'s':''}`;
+  document.getElementById('rj-encaisse').textContent  = fmt(totalEncaisse);
+  document.getElementById('rj-decaiss').textContent   = fmt(totalDecaiss);
+  document.getElementById('rj-decaiss-nb').textContent= `${decaissJ.length} opération${decaissJ.length>1?'s':''}`;
+  document.getElementById('rj-solde').textContent     = fmt(soldeNet);
+  const sb = document.getElementById('rj-solde-badge');
+  sb.textContent = soldeNet >= 0 ? 'Positif' : 'Négatif';
+  sb.className = 'metric-badge ' + (soldeNet >= 0 ? 'badge-success' : 'badge-danger');
+
+  const rowStyle = 'display:flex;justify-content:space-between;align-items:center;padding:10px 16px;border-bottom:0.5px solid var(--border-light);font-size:13px';
+  const empty = '<div style="padding:16px;color:var(--text-tertiary);font-size:13px;text-align:center">Aucune opération ce jour</div>';
+
+  document.getElementById('rj-detail-ventes').innerHTML = ventesJ.length === 0 ? empty :
+    ventesJ.map(v => `<div style="${rowStyle}">
+      <div>
+        <div style="font-weight:500">${v.client}</div>
+        <div style="font-size:12px;color:var(--text-secondary)">${v.description} — <span class="carat-pill" style="font-size:10px">${(v.carat||'').toUpperCase()}</span></div>
+      </div>
+      <div style="text-align:right">
+        <div style="font-weight:600">${fmt(v.montant)}</div>
+        <div style="font-size:11px;color:${(v.restant||0)>0?'var(--warning-text)':'var(--success-text)'}">
+          ${(v.restant||0)>0?'Restant: '+fmt(v.restant):'✓ Soldé'}
+        </div>
+      </div>
+    </div>`).join('');
+
+  document.getElementById('rj-detail-decaiss').innerHTML = decaissJ.length === 0 ? empty :
+    decaissJ.map(d => `<div style="${rowStyle}">
+      <div>
+        <div style="font-weight:500">${d.description}</div>
+        <div style="font-size:12px;color:var(--text-secondary)">${d.categorie}</div>
+      </div>
+      <div style="font-weight:600;color:var(--danger-text)">-${fmt(d.montant)}</div>
+    </div>`).join('');
+
+  document.getElementById('rj-detail-rachats').innerHTML = rachatsJ.length === 0 ? empty :
+    rachatsJ.map(a => `<div style="${rowStyle}">
+      <div>
+        <div style="font-weight:500">${a.client}</div>
+        <div style="font-size:12px;color:var(--text-secondary)">${a.description} — ${(a.carat||'').toUpperCase()} — ${a.poids}g</div>
+      </div>
+      <div style="font-weight:600;color:var(--success-text)">${fmt(a.prixPropose)}</div>
+    </div>`).join('');
+
+  document.getElementById('rj-detail-connexions').innerHTML = connexionsJ.length === 0 ? empty :
+    connexionsJ.map(c => {
+      const r = ROLES[c.role] || {};
+      return `<div style="${rowStyle}">
+        <div style="display:flex;align-items:center;gap:8px">
+          <div style="width:28px;height:28px;border-radius:50%;background:${r.bg||'#eee'};color:${r.color||'#888'};display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:600;flex-shrink:0">${ini(c.nom)}</div>
+          <div>
+            <div style="font-weight:500">${c.nom}</div>
+            <div style="font-size:12px;color:var(--text-secondary)">${r.label||c.role}</div>
+          </div>
+        </div>
+        <div style="text-align:right">
+          <div style="font-size:12px;font-weight:500">${c.heure}</div>
+          <span class="stock-badge ${c.action==='connexion'?'stock-ok':'stock-low'}" style="font-size:10px">${c.action}</span>
+        </div>
+      </div>`;
+    }).join('');
+}
+
+function exporterRapportJourPDF() {
+  const dateRJ = document.getElementById('rapport-date-picker')?.value || today();
+  const dLabel = new Date(dateRJ + 'T00:00:00').toLocaleDateString('fr-FR', { weekday:'long', day:'numeric', month:'long', year:'numeric' });
+  const ventesJ   = STATE.ventes.filter(v => v.date === dateRJ);
+  const decaissJ  = STATE.decaissements.filter(d => d.date === dateRJ);
+  const rachatsJ  = STATE.achatsClients.filter(a => a.date === dateRJ);
+  const connexJ   = STATE.connexions.filter(c => c.date === dateRJ);
+  const totalV    = ventesJ.reduce((s,v)=>s+(v.montant||0),0);
+  const totalE    = ventesJ.reduce((s,v)=>s+(v.acompte||0),0);
+  const totalD    = decaissJ.reduce((s,d)=>s+(d.montant||0),0);
+  const solde     = totalE - totalD;
+
+  const win = window.open('', '_blank', 'width=820,height=900');
+  win.document.write(`<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8">
+<title>Rapport journalier — ${dateRJ}</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Segoe UI',sans-serif;font-size:13px;color:#111;padding:32px;max-width:800px;margin:0 auto}
+  h1{font-size:22px;font-weight:700;margin-bottom:4px;letter-spacing:-0.3px}
+  .sub{font-size:13px;color:#666;margin-bottom:24px}
+  .shop{text-align:right;font-size:14px;font-weight:700;letter-spacing:0.5px}
+  .shop-sub{text-align:right;font-size:12px;color:#888;margin-bottom:24px}
+  .metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:28px}
+  .metric{background:#f7f6f3;border-radius:8px;padding:14px}
+  .metric-label{font-size:10px;text-transform:uppercase;letter-spacing:0.4px;color:#888;margin-bottom:5px}
+  .metric-value{font-size:20px;font-weight:700;color:#1a1916}
+  .metric-sub{font-size:11px;color:#888;margin-top:3px}
+  h2{font-size:14px;font-weight:600;margin:20px 0 8px;padding-bottom:6px;border-bottom:2px solid #1a1916}
+  table{width:100%;border-collapse:collapse;font-size:12px;margin-bottom:20px}
+  th{text-align:left;padding:7px 10px;background:#f7f6f3;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.4px;color:#666}
+  td{padding:8px 10px;border-bottom:1px solid #eee}
+  .badge-ok{background:#eaf3de;color:#3b6d11;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:600}
+  .badge-warn{background:#faeeda;color:#854f0b;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:600}
+  .badge-danger{background:#fcebeb;color:#a32d2d;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:600}
+  .total-row td{font-weight:700;background:#f7f6f3;border-top:2px solid #1a1916}
+  .footer{margin-top:32px;padding-top:16px;border-top:1px dashed #ccc;font-size:11px;color:#888;text-align:center}
+  @media print{body{padding:20px}.no-print{display:none}}
+</style></head><body>
+<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px">
+  <div><h1>Rapport journalier</h1><div class="sub">${dLabel}</div></div>
+  <div><div class="shop">💎 MARJAN BIJOUTERIE</div><div class="shop-sub">Dakar, Sénégal</div></div>
+</div>
+<div class="metrics">
+  <div class="metric"><div class="metric-label">Total ventes</div><div class="metric-value">${totalV.toLocaleString('fr-FR')} F</div><div class="metric-sub">${ventesJ.length} vente${ventesJ.length>1?'s':''}</div></div>
+  <div class="metric"><div class="metric-label">Encaissé</div><div class="metric-value">${totalE.toLocaleString('fr-FR')} F</div><div class="metric-sub">acomptes reçus</div></div>
+  <div class="metric"><div class="metric-label">Décaissé</div><div class="metric-value">${totalD.toLocaleString('fr-FR')} F</div><div class="metric-sub">${decaissJ.length} opération${decaissJ.length>1?'s':''}</div></div>
+  <div class="metric"><div class="metric-label">Solde net</div><div class="metric-value" style="color:${solde>=0?'#3b6d11':'#a32d2d'}">${solde.toLocaleString('fr-FR')} F</div><div class="metric-sub">${solde>=0?'Positif':'Négatif'}</div></div>
+</div>
+${ventesJ.length>0?`<h2>Ventes</h2><table><thead><tr><th>Client</th><th>Description</th><th>Carat</th><th>Montant</th><th>Acompte</th><th>Restant</th><th>Statut</th></tr></thead><tbody>
+${ventesJ.map(v=>`<tr><td>${v.client}</td><td>${v.description}</td><td>${(v.carat||'').toUpperCase()}</td><td>${(v.montant||0).toLocaleString('fr-FR')} F</td><td>${(v.acompte||0).toLocaleString('fr-FR')} F</td><td>${(v.restant||0).toLocaleString('fr-FR')} F</td><td><span class="${(v.restant||0)>0?'badge-warn':'badge-ok'}">${(v.restant||0)>0?'En cours':'Soldé'}</span></td></tr>`).join('')}
+<tr class="total-row"><td colspan="3">TOTAL</td><td>${totalV.toLocaleString('fr-FR')} F</td><td>${totalE.toLocaleString('fr-FR')} F</td><td>${ventesJ.reduce((s,v)=>s+(v.restant||0),0).toLocaleString('fr-FR')} F</td><td></td></tr>
+</tbody></table>`:''}
+${decaissJ.length>0?`<h2>Décaissements</h2><table><thead><tr><th>Description</th><th>Catégorie</th><th>Saisi par</th><th>Montant</th></tr></thead><tbody>
+${decaissJ.map(d=>`<tr><td>${d.description}</td><td>${d.categorie}</td><td>${d.saisiPar}</td><td style="color:#a32d2d;font-weight:600">${(d.montant||0).toLocaleString('fr-FR')} F</td></tr>`).join('')}
+<tr class="total-row"><td colspan="3">TOTAL DÉCAISSÉ</td><td style="color:#a32d2d">${totalD.toLocaleString('fr-FR')} F</td></tr>
+</tbody></table>`:''}
+${rachatsJ.length>0?`<h2>Rachats clients</h2><table><thead><tr><th>Client</th><th>Description</th><th>Carat</th><th>Poids</th><th>Prix proposé</th></tr></thead><tbody>
+${rachatsJ.map(a=>`<tr><td>${a.client}</td><td>${a.description}</td><td>${(a.carat||'').toUpperCase()}</td><td>${a.poids}g</td><td style="color:#3b6d11;font-weight:600">${(a.prixPropose||0).toLocaleString('fr-FR')} F</td></tr>`).join('')}
+</tbody></table>`:''}
+${connexJ.length>0?`<h2>Connexions</h2><table><thead><tr><th>Heure</th><th>Utilisateur</th><th>Rôle</th><th>Action</th></tr></thead><tbody>
+${connexJ.map(c=>`<tr><td>${c.heure}</td><td>${c.nom}</td><td>${c.role}</td><td><span class="${c.action==='connexion'?'badge-ok':'badge-warn'}">${c.action}</span></td></tr>`).join('')}
+</tbody></table>`:''}
+<div class="footer">Rapport généré le ${new Date().toLocaleString('fr-FR')} · Marjan Bijouterie · Dakar, Sénégal</div>
+</body></html>`);
+  win.document.close();
+  setTimeout(() => { win.focus(); win.print(); }, 500);
+}
+
+// ============================================
+// FACTURE PROFESSIONNELLE PDF
+// ============================================
+function afficherFacture(id) {
+  const v = STATE.ventes.find(x => x.id === id);
+  if (!v) return;
+  const c = getCarat(v.carat);
+  const caratInfo = c ? `${v.carat.toUpperCase()} (${c.purete} — ${c.desc})` : (v.carat||'—').toUpperCase();
+  const numFacture = `FAC-${v.id}`;
+  const dateFacture = fmtDate(v.date);
+  const dateImpression = new Date().toLocaleDateString('fr-FR');
+  const restant = v.restant || 0;
+
+  document.getElementById('facture-content').innerHTML = `
+  <div style="font-family:'Segoe UI',sans-serif;font-size:13px;color:#111;padding:28px 32px">
+
+    <!-- En-tête -->
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:28px;padding-bottom:20px;border-bottom:2px solid #1a1916">
+      <div>
+        <div style="font-size:26px;font-weight:700;letter-spacing:-0.5px">💎 MARJAN BIJOUTERIE</div>
+        <div style="font-size:12px;color:#666;margin-top:4px">Vente et fabrication de bijoux</div>
+        <div style="font-size:12px;color:#666">Dakar, Sénégal</div>
+      </div>
+      <div style="text-align:right">
+        <div style="font-size:22px;font-weight:700;color:#1a1916">FACTURE</div>
+        <div style="font-size:14px;font-weight:600;color:#534ab7;margin-top:4px">${numFacture}</div>
+        <div style="font-size:12px;color:#666;margin-top:4px">Date : ${dateFacture}</div>
+        <div style="font-size:12px;color:#888">Imprimé le : ${dateImpression}</div>
+      </div>
+    </div>
+
+    <!-- Infos client + vente -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:24px">
+      <div style="background:#f7f6f3;border-radius:8px;padding:14px">
+        <div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;color:#888;margin-bottom:8px">Facturé à</div>
+        <div style="font-size:16px;font-weight:700">${v.client}</div>
+        ${(() => { const cl = STATE.clients.find(x=>x.nom===v.client); return cl ? `<div style="font-size:12px;color:#666;margin-top:4px">${cl.tel}</div>${cl.adresse?`<div style="font-size:12px;color:#888">${cl.adresse}</div>`:''}` : ''; })()}
+      </div>
+      <div style="background:#f7f6f3;border-radius:8px;padding:14px">
+        <div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;color:#888;margin-bottom:8px">Détails de la transaction</div>
+        <div style="font-size:12px;margin-top:2px"><span style="color:#666">N° vente :</span> <strong>${v.id}</strong></div>
+        <div style="font-size:12px;margin-top:4px"><span style="color:#666">Vendeur :</span> ${STATE.currentUser?.nom || 'Marjan Bijouterie'}</div>
+        <div style="font-size:12px;margin-top:4px"><span style="color:#666">Date :</span> ${dateFacture}</div>
+      </div>
+    </div>
+
+    <!-- Tableau détail -->
+    <table style="width:100%;border-collapse:collapse;margin-bottom:20px;font-size:13px">
+      <thead>
+        <tr style="background:#1a1916;color:#fff">
+          <th style="text-align:left;padding:10px 14px;font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:0.4px">Description</th>
+          <th style="text-align:center;padding:10px 14px;font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:0.4px">Carat</th>
+          <th style="text-align:center;padding:10px 14px;font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:0.4px">Or local (g)</th>
+          <th style="text-align:center;padding:10px 14px;font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:0.4px">Or importé (g)</th>
+          <th style="text-align:right;padding:10px 14px;font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:0.4px">Montant</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr style="border-bottom:1px solid #eee">
+          <td style="padding:12px 14px">
+            <div style="font-weight:600">${v.description}</div>
+            <div style="font-size:11px;color:#888;margin-top:3px">${caratInfo}</div>
+          </td>
+          <td style="text-align:center;padding:12px 14px">
+            <span style="background:#eeedfe;color:#534ab7;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600">${(v.carat||'—').toUpperCase()}</span>
+          </td>
+          <td style="text-align:center;padding:12px 14px;color:#0f6e56;font-weight:500">${(parseFloat(v.local)||0)>0?(+v.local).toFixed(2)+'g':'—'}</td>
+          <td style="text-align:center;padding:12px 14px;color:#534ab7;font-weight:500">${(parseFloat(v.importe)||0)>0?(+v.importe).toFixed(2)+'g':'—'}</td>
+          <td style="text-align:right;padding:12px 14px;font-weight:700;font-size:15px">${fmt(v.montant)}</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <!-- Totaux -->
+    <div style="display:flex;justify-content:flex-end;margin-bottom:24px">
+      <div style="min-width:280px">
+        <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #eee;font-size:13px">
+          <span style="color:#666">Montant total</span>
+          <strong>${fmt(v.montant)}</strong>
+        </div>
+        <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #eee;font-size:13px">
+          <span style="color:#666">Acompte versé</span>
+          <span style="color:#3b6d11;font-weight:500">${fmt(v.acompte||0)}</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;padding:12px 16px;background:${restant>0?'#faeeda':'#eaf3de'};border-radius:8px;margin-top:8px">
+          <span style="font-weight:700;font-size:14px;color:${restant>0?'#854f0b':'#3b6d11'}">${restant>0?'RESTANT DÛ':'✓ SOLDÉ'}</span>
+          <span style="font-weight:700;font-size:16px;color:${restant>0?'#854f0b':'#3b6d11'}">${restant>0?fmt(restant):'0 F'}</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Pied de page -->
+    <div style="border-top:1px dashed #ccc;padding-top:16px;margin-top:8px">
+      <div style="display:flex;justify-content:space-between;align-items:flex-end">
+        <div>
+          <div style="font-size:11px;color:#888;margin-bottom:4px">Signature &amp; cachet :</div>
+          <div style="border-bottom:1px solid #ccc;width:160px;margin-top:24px"></div>
+        </div>
+        <div style="text-align:center">
+          <div style="font-size:11px;color:#888;margin-bottom:4px">Signature client :</div>
+          <div style="border-bottom:1px solid #ccc;width:160px;margin-top:24px"></div>
+        </div>
+        <div style="text-align:right;font-size:11px;color:#aaa">
+          <div>Marjan Bijouterie — Dakar, Sénégal</div>
+          <div>Facture ${numFacture} · ${dateFacture}</div>
+          <div style="margin-top:4px;font-size:10px">Merci pour votre confiance</div>
+        </div>
+      </div>
+    </div>
+
+  </div>`;
+
+  document.getElementById('modal-facture').classList.add('show');
+}
+
+function imprimerFacture() {
+  const contenu = document.getElementById('facture-content').innerHTML;
+  const win = window.open('', '_blank', 'width=900,height=800');
+  win.document.write(`<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8">
+<title>Facture — Marjan Bijouterie</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Segoe UI',sans-serif;font-size:13px;color:#111;padding:0;background:#fff}
+  @media print{
+    body{padding:0}
+    @page{margin:15mm;size:A4}
+  }
+</style></head><body>${contenu}</body></html>`);
+  win.document.close();
+  setTimeout(() => { win.focus(); win.print(); win.close(); }, 500);
+}
+
+// ============================================
+// DRAWER MOBILE
+// ============================================

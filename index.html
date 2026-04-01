@@ -71,9 +71,6 @@
       <button class="nav-item" data-section="stocks" data-perm="stocks">
         <span class="nav-icon">◻</span> Stocks &amp; Inventaire
       </button>
-      <button class="nav-item" data-section="achats" data-perm="achats">
-        <span class="nav-icon">⊕</span> Achats
-      </button>
       <button class="nav-item" data-section="achats_clients" data-perm="achats">
         <span class="nav-icon">⊘</span> Achats clients
       </button>
@@ -98,6 +95,8 @@
       </button>
           <div class="nav-section-label" style="margin-top:8px">Sécurité</div>
       <button class="nav-item" data-section="historique" data-perm="historique"><span class="nav-icon">◷</span> Historique connexions</button>
+      <button class="nav-item" data-section="comptes_users" data-perm="historique"><span class="nav-icon">⊛</span> Gestion comptes</button>
+      <button class="nav-item" data-section="rapport_jour" data-perm="all"><span class="nav-icon">◈</span> Rapport journalier</button>
     </nav>
 
     <div class="sidebar-footer">
@@ -184,7 +183,7 @@
             <tr>
               <th>Date</th><th>Client</th><th>Description</th>
               <th>Local (g)</th><th>Importé (g)</th><th>Carat</th>
-              <th>Montant</th><th>Acompte</th><th>Restant</th><th>Modifier</th><th>Acompte</th><th>Ticket</th>
+              <th>Montant</th><th>Acompte</th><th>Restant</th><th>Modifier</th><th>Acompte</th><th>Facture</th>
             </tr>
           </thead>
           <tbody id="journal-body"></tbody>
@@ -207,24 +206,6 @@
       </div></div>
     </section>
 
-    <!-- ACHATS -->
-    <section class="section" id="achats">
-      <div class="page-header">
-        <div><h1 class="page-title">Achats de bijoux</h1><p class="page-sub" id="achats-count-label"></p></div>
-        <button class="btn btn-primary" onclick="openModal('modal-add-achat')">+ Nouvel achat</button>
-      </div>
-      <div class="metrics-grid" style="grid-template-columns:repeat(3,1fr)">
-        <div class="metric-card"><div class="metric-label">Total achats (mois)</div><div class="metric-value" id="metric-achat-mois">—</div></div>
-        <div class="metric-card"><div class="metric-label">Total achats (tout)</div><div class="metric-value" id="metric-achat-total">—</div></div>
-        <div class="metric-card"><div class="metric-label">Poids total acheté</div><div class="metric-value" id="metric-achat-poids">—</div></div>
-      </div>
-      <div class="card"><div class="table-wrap">
-        <table>
-          <thead><tr><th>Date</th><th>Fournisseur</th><th>Description</th><th>Carat</th><th>Poids (g)</th><th>Prix/g</th><th>Total</th><th>Saisi par</th><th>Actions</th></tr></thead>
-          <tbody id="achats-body"></tbody>
-        </table>
-      </div></div>
-    </section>
 
     <!-- ACHATS DEPUIS CLIENTS -->
     <section class="section" id="achats_clients">
@@ -312,6 +293,82 @@
         <button class="btn btn-primary" onclick="openModal('modal-add-bijou-arr')">+ Nouvelle réservation</button>
       </div>
       <div class="card" id="ba-list"></div>
+    </section>
+
+    <!-- RAPPORT JOURNALIER -->
+    <section class="section" id="rapport_journalier">
+      <div class="page-header">
+        <div><h1 class="page-title">Rapport journalier</h1><p class="page-sub" id="rapport-date-label"></p></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <input type="date" class="form-input" id="rapport-date" style="width:auto" onchange="renderRapportJournalier()"/>
+          <button class="btn btn-primary" onclick="imprimerRapportJournalier()">&#x1F5A8; Imprimer / PDF</button>
+        </div>
+      </div>
+      <div id="rapport-journalier-content"></div>
+    </section>
+
+    <!-- GESTION COMPTES UTILISATEURS -->
+    <section class="section" id="gestion_comptes">
+      <div class="page-header">
+        <div><h1 class="page-title">Gestion des comptes</h1><p class="page-sub" id="gc-count-label"></p></div>
+        <button class="btn btn-primary" onclick="openModal('modal-add-user')">+ Nouveau compte</button>
+      </div>
+      <div class="card" style="overflow-x:auto">
+        <table><thead><tr><th>Nom</th><th>Identifiant</th><th>Role</th><th>Statut</th><th>Date creation</th><th>Actions</th></tr></thead>
+        <tbody id="users-body"></tbody></table>
+      </div>
+    </section>
+
+
+    <!-- GESTION COMPTES UTILISATEURS -->
+    <section class="section" id="comptes_users">
+      <div class="page-header">
+        <div><h1 class="page-title">Gestion des comptes</h1><p class="page-sub" id="users-count-label"></p></div>
+        <button class="btn btn-primary" onclick="openModal('modal-add-user')">+ Nouveau compte</button>
+      </div>
+      <div class="card"><div class="table-wrap">
+        <table>
+          <thead><tr><th>Utilisateur</th><th>Login</th><th>Rôle</th><th>Statut</th><th>Dernière connexion</th><th>Actions</th></tr></thead>
+          <tbody id="users-body"></tbody>
+        </table>
+      </div></div>
+    </section>
+
+    <!-- RAPPORT JOURNALIER -->
+    <section class="section" id="rapport_jour">
+      <div class="page-header">
+        <div><h1 class="page-title">Rapport journalier</h1><p class="page-sub" id="rapport-date-label"></p></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <input type="date" class="form-input" id="rapport-date-picker" style="width:auto" onchange="renderRapportJour()" />
+          <button class="btn btn-primary" onclick="exporterRapportJourPDF()">🖨 Exporter PDF</button>
+        </div>
+      </div>
+      <div class="metrics-grid">
+        <div class="metric-card"><div class="metric-label">Ventes du jour</div><div class="metric-value" id="rj-ventes">—</div><span class="metric-badge badge-success" id="rj-ventes-nb">—</span></div>
+        <div class="metric-card"><div class="metric-label">Encaissé du jour</div><div class="metric-value" id="rj-encaisse">—</div><span class="metric-badge badge-info">en caisse</span></div>
+        <div class="metric-card"><div class="metric-label">Décaissements</div><div class="metric-value" id="rj-decaiss">—</div><span class="metric-badge badge-danger" id="rj-decaiss-nb">—</span></div>
+        <div class="metric-card"><div class="metric-label">Solde net du jour</div><div class="metric-value" id="rj-solde">—</div><span class="metric-badge" id="rj-solde-badge">—</span></div>
+      </div>
+      <div class="two-col">
+        <div class="card">
+          <div class="card-header"><span class="card-title">Ventes enregistrées</span></div>
+          <div id="rj-detail-ventes"></div>
+        </div>
+        <div class="card">
+          <div class="card-header"><span class="card-title">Décaissements</span></div>
+          <div id="rj-detail-decaiss"></div>
+        </div>
+      </div>
+      <div class="two-col">
+        <div class="card">
+          <div class="card-header"><span class="card-title">Rachats clients</span></div>
+          <div id="rj-detail-rachats"></div>
+        </div>
+        <div class="card">
+          <div class="card-header"><span class="card-title">Connexions du jour</span></div>
+          <div id="rj-detail-connexions"></div>
+        </div>
+      </div>
     </section>
 
     <!-- HISTORIQUE CONNEXIONS -->
@@ -608,34 +665,71 @@
   </div>
 </div>
 
-<!-- TICKET PDF MODAL -->
-<div class="modal-backdrop" id="modal-ticket">
-  <div class="modal modal-ticket">
-    <div class="modal-header"><div class="modal-title">Aperçu du ticket</div><div style="display:flex;gap:8px"><button class="btn btn-primary" onclick="imprimerTicket()">🖨 Imprimer</button><button class="modal-close" onclick="closeModal('modal-ticket')">✕</button></div></div>
-    <div id="ticket-content" class="ticket-preview"></div>
+
+<!-- MODAL CRÉER UTILISATEUR -->
+<div class="modal-backdrop" id="modal-add-user">
+  <div class="modal">
+    <div class="modal-header"><div class="modal-title">Nouveau compte utilisateur</div><button class="modal-close" onclick="closeModal('modal-add-user')">✕</button></div>
+    <div class="role-banner role-admin" style="margin-bottom:12px"><span>🔒</span> Réservé à l'administrateur</div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Nom complet *</label><input class="form-input" placeholder="ex: Fatou Ndiaye" id="u-nom" /></div>
+      <div class="form-group"><label class="form-label">Login *</label><input class="form-input" placeholder="ex: fatou" id="u-login" /></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Mot de passe *</label><input class="form-input" type="password" id="u-password" /></div>
+      <div class="form-group"><label class="form-label">Confirmer *</label><input class="form-input" type="password" id="u-password2" /></div>
+    </div>
+    <div class="form-group" style="margin-bottom:12px"><label class="form-label">Rôle *</label>
+      <select class="form-input" id="u-role">
+        <option value="vendeur">Vendeur</option>
+        <option value="gestionnaire">Gestionnaire Stock</option>
+        <option value="admin">Administrateur</option>
+      </select>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeModal('modal-add-user')">Annuler</button>
+      <button class="btn btn-primary" onclick="creerUtilisateur()">Créer le compte</button>
+    </div>
   </div>
 </div>
 
-<!-- MODAL RACHAT BIJOU CLIENT -->
-<div class="modal-backdrop" id="modal-add-achat-client">
-  <div class="modal modal-large">
-    <div class="modal-header"><div class="modal-title">Rachat bijou — Achat depuis client</div><button class="modal-close" onclick="closeModal('modal-add-achat-client')">✕</button></div>
+<!-- MODAL MODIFIER UTILISATEUR -->
+<div class="modal-backdrop" id="modal-edit-user">
+  <div class="modal">
+    <div class="modal-header"><div class="modal-title">Modifier le compte — <span id="edit-u-label" style="font-weight:400"></span></div><button class="modal-close" onclick="closeModal('modal-edit-user')">✕</button></div>
+    <input type="hidden" id="edit-u-id" />
     <div class="form-row">
-      <div class="form-group"><label class="form-label">Date *</label><input class="form-input" type="date" id="ac-date" /></div>
-      <div class="form-group"><label class="form-label">Client *</label><select class="form-input" id="ac-client"><option value="">— Sélectionner un client —</option></select></div>
+      <div class="form-group"><label class="form-label">Nom complet</label><input class="form-input" id="edit-u-nom" /></div>
+      <div class="form-group"><label class="form-label">Rôle</label>
+        <select class="form-input" id="edit-u-role">
+          <option value="vendeur">Vendeur</option>
+          <option value="gestionnaire">Gestionnaire Stock</option>
+          <option value="admin">Administrateur</option>
+        </select>
+      </div>
     </div>
-    <div class="form-group" style="margin-bottom:12px"><label class="form-label">Description *</label><input class="form-input" type="text" placeholder="ex: Rachat bracelet or 18k usagé, Reprise bague..." id="ac-description" /></div>
-    <div class="form-row-3">
-      <div class="form-group"><label class="form-label">Carat *</label><select class="form-input" id="ac-carat" onchange="afficherInfoCarat('ac-carat','ac-carat-badge')"><option value="">— Choisir —</option></select></div>
-      <div class="form-group"><label class="form-label">Poids (g) *</label><input class="form-input" type="number" step="0.01" min="0" placeholder="0,00" id="ac-poids" /></div>
-      <div class="form-group"><label class="form-label">Prix proposé (F CFA) *</label><input class="form-input" type="number" min="0" placeholder="0" id="ac-prix" /></div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Nouveau mot de passe</label><input class="form-input" type="password" placeholder="Laisser vide pour conserver" id="edit-u-password" /></div>
+      <div class="form-group"><label class="form-label">Confirmer</label><input class="form-input" type="password" id="edit-u-password2" /></div>
     </div>
-    <div id="ac-carat-badge" class="carat-badge" style="display:none;margin-bottom:12px"></div>
-    <div class="form-group" style="margin-bottom:12px"><label class="form-label">Note</label><input class="form-input" type="text" placeholder="Observations sur l'état du bijou..." id="ac-note" /></div>
     <div class="modal-actions">
-      <button class="btn btn-secondary" onclick="closeModal('modal-add-achat-client')">Annuler</button>
-      <button class="btn btn-primary" onclick="enregistrerAchatClient()">Enregistrer le rachat</button>
+      <button class="btn btn-secondary" onclick="closeModal('modal-edit-user')">Annuler</button>
+      <button class="btn btn-primary" onclick="sauvegarderUtilisateur()">Sauvegarder</button>
     </div>
+  </div>
+</div>
+
+<!-- MODAL FACTURE PROFESSIONNELLE -->
+<div class="modal-backdrop" id="modal-facture">
+  <div class="modal" style="width:700px;max-width:98vw;max-height:95vh">
+    <div class="modal-header">
+      <div class="modal-title">Facture</div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-primary" onclick="imprimerFacture()">🖨 Imprimer / PDF</button>
+        <button class="modal-close" onclick="closeModal('modal-facture')">✕</button>
+      </div>
+    </div>
+    <div id="facture-content" style="background:#fff;border-radius:8px;padding:0"></div>
   </div>
 </div>
 

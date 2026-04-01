@@ -20,9 +20,9 @@ const INITIAL_USERS = [
 
 // Permissions par rôle
 const PERM_MAP = {
-  admin:        ['all','journal','stocks','achats','sorties','decaissements','clients','compte_client','bijou_arr','historique','parametres'],
-  gestionnaire: ['journal','stocks','achats','clients','compte_client','bijou_arr'],
-  vendeur:      ['journal','clients','compte_client','bijou_arr'],
+  admin:        ['all','journal','stocks','achats','sorties','decaissements','clients','compte_client','bijou_arr','historique','comptes_users','rapport_jour'],
+  gestionnaire: ['journal','stocks','achats_clients','clients','compte_client','bijou_arr','rapport_jour'],
+  vendeur:      ['journal','clients','compte_client','bijou_arr','rapport_jour'],
 };
 
 // ============================================

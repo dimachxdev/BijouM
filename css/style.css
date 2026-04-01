@@ -539,3 +539,9 @@ tr:hover td { background: var(--bg-secondary); }
   display: inline-block;
   padding: 2px 4px;
 }
+
+/* ===== FACTURE ===== */
+.modal-facture-wide { width: 700px; }
+@media (min-width: 640px) {
+  #modal-facture .modal { border-radius: var(--radius-xl); }
+}
