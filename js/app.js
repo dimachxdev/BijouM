@@ -32,12 +32,6 @@ function nextId(prefix, key) { STATE.counters[key]++; save(); return prefix+'-'+
 // ============================================
 // PERMISSIONS
 // ============================================
-const PERM_MAP = {
-  admin:        ['all','journal','stocks','achats','sorties','decaissements','clients','compte_client','bijou_arr'],
-  gestionnaire: ['journal','stocks','achats','clients','compte_client','bijou_arr'],
-  vendeur:      ['journal','clients','compte_client','bijou_arr'],
-};
-
 function peutAcceder(section) {
   if (!STATE.currentUser) return false;
   const perms = PERM_MAP[STATE.currentUser.role] || [];
@@ -409,7 +403,7 @@ function renderStocks(f=''){
     return`<tr><td><span class="ref-code">${item.ref}</span></td><td>${item.nom}</td><td><span class="carat-pill">${dot}${(item.carat||'—').toUpperCase()}</span></td><td><span style="font-size:12px;color:var(--text-secondary)">${typeL}</span></td><td style="text-align:center">${item.poids?item.poids+'g':'—'}</td><td><strong>${item.qty}</strong></td><td>${fmt(item.prix)}</td><td>${fmt(item.qty*item.prix)}</td><td><span class="stock-badge ${st.cls}">${st.label}</span></td><td><div style="display:flex;gap:4px"><button class="btn small" onclick="ajusterStock('${item.ref}')">Ajuster</button><button class="btn small btn-danger" onclick="supprimerArticle('${item.ref}')">✕</button></div></td></tr>`;
   }).join('');
 }
-document.getElementById('stock-search').addEventListener('input',function(){renderStocks(this.value);});
+document.getElementById('stock-search')?.addEventListener('input',function(){renderStocks(this.value);});
 
 function ajouterProduit(){
   const ref=document.getElementById('p-ref').value.trim(),nom=document.getElementById('p-nom').value.trim(),carat=document.getElementById('p-carat').value,type=document.getElementById('p-type').value,poids=parseFloat(document.getElementById('p-poids').value)||0,qty=parseInt(document.getElementById('p-qty').value)||0,prix=parseInt(document.getElementById('p-prix').value)||0,seuil=parseInt(document.getElementById('p-seuil').value)||5;
@@ -511,7 +505,7 @@ function renderClients(f=''){
   const stats={};STATE.ventes.forEach(v=>{if(!stats[v.client])stats[v.client]={total:0,restant:0,nb:0,derniere:''};stats[v.client].total+=(v.montant||0);stats[v.client].restant+=(v.restant||0);stats[v.client].nb+=1;if(!stats[v.client].derniere||v.date>stats[v.client].derniere)stats[v.client].derniere=v.date;});
   document.getElementById('clients-body').innerHTML=data.map(c=>{const s=stats[c.nom]||{total:0,restant:0,nb:0,derniere:''};const t=tier(s.total);const d=s.derniere===today()?"Aujourd'hui":s.derniere?fmtDate(s.derniere):'—';return`<tr><td><div style="display:flex;align-items:center;gap:10px"><div style="width:32px;height:32px;border-radius:50%;background:var(--info-bg);color:var(--info-text);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:600;flex-shrink:0">${ini(c.nom)}</div><div><div style="font-size:13px;font-weight:500">${c.nom}</div><div style="font-size:11px;color:var(--text-tertiary)">${c.tel}</div></div></div></td><td>${c.tel}</td><td><strong>${fmt(s.total)}</strong></td><td>${s.restant>0?`<span class="stock-badge stock-low">${fmt(s.restant)}</span>`:'<span style="color:var(--success-text);font-size:12px">Soldé</span>'}</td><td>${s.nb}</td><td><span class="tier-badge ${t.cls}">${t.label}</span></td><td style="font-size:12px;color:var(--text-secondary)">${d}</td></tr>`;}).join('');
 }
-document.getElementById('client-search').addEventListener('input',function(){renderClients(this.value);});
+document.getElementById('client-search')?.addEventListener('input',function(){renderClients(this.value);});
 function ajouterClient(){
   const nom=document.getElementById('c-nom').value.trim(),tel=document.getElementById('c-tel').value.trim(),email=document.getElementById('c-email').value.trim(),adresse=document.getElementById('c-adresse').value.trim();
   if(!nom||!tel){showToast('⚠ Nom et téléphone obligatoires.');return;}
