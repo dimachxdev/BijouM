@@ -77,7 +77,7 @@
         <span class="nav-icon">◻</span> Stocks &amp; Inventaire
       </button>
       <button class="nav-item" data-section="achats_clients" data-perm="achats">
-        <span class="nav-icon">⊘</span> Achats clients
+        <span class="nav-icon">⊘</span> Reprises
       </button>
       <button class="nav-item" data-section="sorties" data-perm="sorties">
         <span class="nav-icon">⊖</span> Sorties de stock
@@ -215,17 +215,17 @@
     <!-- ACHATS DEPUIS CLIENTS -->
     <section class="section" id="achats_clients">
       <div class="page-header">
-        <div><h1 class="page-title">Achats depuis clients</h1><p class="page-sub" id="ac-count-label"></p></div>
-        <button class="btn btn-primary" onclick="openModal('modal-add-achat-client')">+ Rachat bijou client</button>
+        <div><h1 class="page-title">Reprises de bijoux</h1><p class="page-sub" id="ac-count-label"></p></div>
+        <button class="btn btn-primary" onclick="openModal('modal-add-achat-client')">+ Nouvelle reprise</button>
       </div>
       <div class="metrics-grid" style="grid-template-columns:repeat(3,1fr)">
-        <div class="metric-card"><div class="metric-label">Total racheté (mois)</div><div class="metric-value" id="metric-ac-mois">—</div></div>
-        <div class="metric-card"><div class="metric-label">Total racheté (tout)</div><div class="metric-value" id="metric-ac-total">—</div></div>
-        <div class="metric-card"><div class="metric-label">Poids total racheté</div><div class="metric-value" id="metric-ac-poids">—</div></div>
+        <div class="metric-card"><div class="metric-label">Total reprises (mois)</div><div class="metric-value" id="metric-ac-mois">—</div></div>
+        <div class="metric-card"><div class="metric-label">Total reprises (tout)</div><div class="metric-value" id="metric-ac-total">—</div></div>
+        <div class="metric-card"><div class="metric-label">Poids total repris</div><div class="metric-value" id="metric-ac-poids">—</div></div>
       </div>
       <div class="card"><div class="table-wrap">
         <table>
-          <thead><tr><th>Date</th><th>Client</th><th>Description</th><th>Carat</th><th>Poids (g)</th><th>Prix proposé</th><th>Saisi par</th><th>Actions</th></tr></thead>
+          <thead><tr><th>Date</th><th>Client</th><th>Description</th><th>Photo</th><th>Carat</th><th>Poids (g)</th><th>Prix reprise</th><th>Saisi par</th><th>Actions</th></tr></thead>
           <tbody id="achats-clients-body"></tbody>
         </table>
       </div></div>
@@ -367,7 +367,7 @@
       </div>
       <div class="two-col">
         <div class="card">
-          <div class="card-header"><span class="card-title">Rachats clients</span></div>
+          <div class="card-header"><span class="card-title">Reprises</span></div>
           <div id="rj-detail-rachats"></div>
         </div>
         <div class="card">
@@ -771,7 +771,7 @@
 <div class="modal-backdrop" id="modal-add-achat-client">
   <div class="modal modal-large">
     <div class="modal-header">
-      <div class="modal-title">Rachat bijou — Achat depuis client</div>
+      <div class="modal-title">Nouvelle reprise de bijou</div>
       <button class="modal-close" onclick="closeModal('modal-add-achat-client')">✕</button>
     </div>
     <div class="form-row">
@@ -806,9 +806,19 @@
       </div>
     </div>
     <div id="ac-carat-badge" class="carat-badge" style="display:none;margin-bottom:12px"></div>
-    <div class="form-group" style="margin-bottom:12px">
-      <label class="form-label">Note (optionnel)</label>
-      <input class="form-input" type="text" placeholder="État du bijou, observations..." id="ac-note" />
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Note (optionnel)</label>
+        <input class="form-input" type="text" placeholder="État du bijou, observations..." id="ac-note" />
+      </div>
+      <div class="form-group">
+        <label class="form-label">Photo du bijou (optionnel)</label>
+        <input class="form-input" type="file" accept="image/*" id="ac-photo" onchange="previewReprise(this)" style="padding:6px 10px;cursor:pointer" />
+      </div>
+    </div>
+    <div id="ac-photo-preview" style="display:none;margin-bottom:12px">
+      <img id="ac-photo-img" src="" alt="Aperçu" style="max-height:160px;max-width:100%;border-radius:var(--radius-md);border:0.5px solid var(--border-light);object-fit:cover" />
+      <button type="button" class="btn small btn-danger" style="margin-top:6px" onclick="supprimerPhotoReprise()">✕ Supprimer la photo</button>
     </div>
     <div class="modal-actions">
       <button class="btn btn-secondary" onclick="closeModal('modal-add-achat-client')">Annuler</button>

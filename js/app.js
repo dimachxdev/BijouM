@@ -797,7 +797,7 @@ function renderAchatsClients(){
   const totalAll =STATE.achatsClients.reduce((s,a)=>s+(a.prixPropose||0),0);
   const totalMois=mois.reduce((s,a)=>s+(a.prixPropose||0),0);
   const poidsAll =STATE.achatsClients.reduce((s,a)=>s+(a.poids||0),0);
-  document.getElementById('ac-count-label').textContent=`${STATE.achatsClients.length} rachat${STATE.achatsClients.length>1?'s':''} enregistré${STATE.achatsClients.length>1?'s':''}`;
+  document.getElementById('ac-count-label').textContent=`${STATE.achatsClients.length} reprise${STATE.achatsClients.length>1?'s':''} enregistrée${STATE.achatsClients.length>1?'s':''}`;
   document.getElementById('metric-ac-mois').textContent =fmt(totalMois);
   document.getElementById('metric-ac-total').textContent=fmt(totalAll);
   document.getElementById('metric-ac-poids').textContent=poidsAll.toFixed(2)+' g';
@@ -813,6 +813,11 @@ function renderAchatsClients(){
         <span>${a.client}</span>
       </div></td>
       <td style="font-size:12px;color:var(--text-secondary)">${a.description}</td>
+      <td style="text-align:center">
+        ${a.photo
+          ? `<img src="${a.photo}" alt="Photo" style="width:44px;height:44px;object-fit:cover;border-radius:6px;border:0.5px solid var(--border-light);cursor:pointer" onclick="agrandirPhotoReprise('${a.id}')" title="Cliquer pour agrandir" />`
+          : '<span style="color:var(--text-tertiary);font-size:12px">—</span>'}
+      </td>
       <td><span class="carat-pill">${dot}${(a.carat||'—').toUpperCase()}</span></td>
       <td style="text-align:center">${a.poids}g</td>
       <td style="font-weight:500;color:var(--success-text)">${fmt(a.prixPropose)}</td>
@@ -823,28 +828,52 @@ function renderAchatsClients(){
 }
 
 function enregistrerAchatClient(){
-  const date   =document.getElementById('ac-date').value;
-  const client =document.getElementById('ac-client').value;
-  const desc   =document.getElementById('ac-description').value.trim();
-  const carat  =document.getElementById('ac-carat').value;
-  const poids  =parseFloat(document.getElementById('ac-poids').value)||0;
-  const prix   =parseInt(document.getElementById('ac-prix').value)||0;
-  const note   =document.getElementById('ac-note').value.trim();
-  if(!date||!client||!desc||!carat||poids<=0||prix<=0){showToast('⚠ Tous les champs obligatoires doivent être remplis.');return;}
+  const date   = document.getElementById('ac-date').value;
+  const client = document.getElementById('ac-client').value;
+  const desc   = document.getElementById('ac-description').value.trim();
+  const carat  = document.getElementById('ac-carat').value;
+  const poids  = parseFloat(document.getElementById('ac-poids').value)||0;
+  const prix   = parseInt(document.getElementById('ac-prix').value)||0;
+  const note   = document.getElementById('ac-note').value.trim();
+  if(!date||!client||!desc||!carat||poids<=0||prix<=0){
+    showToast('⚠ Tous les champs obligatoires doivent être remplis.');return;
+  }
+  const fileEl = document.getElementById('ac-photo');
+  const file   = fileEl?.files?.[0];
+  if (file) {
+    // Lire la photo en base64 puis enregistrer
+    const reader = new FileReader();
+    reader.onload = function(e) {
+      _sauvegarderReprise(date,client,desc,carat,poids,prix,note, e.target.result);
+    };
+    reader.readAsDataURL(file);
+  } else {
+    _sauvegarderReprise(date,client,desc,carat,poids,prix,note,null);
+  }
+}
+
+function _sauvegarderReprise(date,client,desc,carat,poids,prix,note,photo){
   const id=nextId('AC','ac');
   STATE.achatsClients.unshift({
     id, date, client, description:desc, carat, poids,
-    prixPropose:prix, note, saisiPar:STATE.currentUser?.role||'admin'
+    prixPropose:prix, note, photo: photo||null,
+    saisiPar:STATE.currentUser?.role||'admin'
   });
-  save();closeModal('modal-add-achat-client');renderAchatsClients();renderDashboard();
-  showToast(`✓ Rachat ${id} enregistré — ${fmt(prix)}`);
+  save();
+  closeModal('modal-add-achat-client');
+  // Reset champs
+  ['ac-description','ac-note'].forEach(x=>document.getElementById(x).value='');
+  document.getElementById('ac-photo').value='';
+  document.getElementById('ac-photo-preview').style.display='none';
+  renderAchatsClients();renderDashboard();
+  showToast(`✓ Reprise ${id} enregistrée — ${fmt(prix)}`);
 }
 
 function supprimerAchatClient(id){
   if(!isAdmin()){showToast('⛔ Seul l\'administrateur peut supprimer.');return;}
   if(!confirm('Supprimer ce rachat ?'))return;
   STATE.achatsClients=STATE.achatsClients.filter(a=>a.id!==id);
-  save();renderAchatsClients();showToast('Rachat supprimé.');
+  save();renderAchatsClients();showToast('Reprise supprimée.');
 }
 
 // ============================================
@@ -878,8 +907,8 @@ SOLDE NET CAISSE   : ${fmt(soldeNet)}
 
 ACHATS DEPUIS CLIENTS
 ---------------------
-Rachats total      : ${STATE.achatsClients.length}
-Montant total racheté : ${fmt(rachatTotal)}
+Reprises total     : ${STATE.achatsClients.length}
+Montant total reprises : ${fmt(rachatTotal)}
 
 STOCKS
 ------
@@ -1030,6 +1059,39 @@ function enregistrerMiniClient() {
 
   closeMiniClient();
   showToast(`✓ Client "${nom}" créé et sélectionné.`);
+}
+
+
+// ============================================
+// PHOTO REPRISE BIJOU
+// ============================================
+function previewReprise(input) {
+  const file = input.files[0];
+  const preview = document.getElementById('ac-photo-preview');
+  const img     = document.getElementById('ac-photo-img');
+  if (!file) { preview.style.display='none'; return; }
+  const reader  = new FileReader();
+  reader.onload = e => { img.src = e.target.result; preview.style.display='block'; };
+  reader.readAsDataURL(file);
+}
+
+function supprimerPhotoReprise() {
+  document.getElementById('ac-photo').value = '';
+  document.getElementById('ac-photo-preview').style.display = 'none';
+  document.getElementById('ac-photo-img').src = '';
+}
+
+function agrandirPhotoReprise(id) {
+  const a = STATE.achatsClients.find(x=>x.id===id);
+  if (!a?.photo) return;
+  // Ouvrir dans une nouvelle fenêtre
+  const win = window.open('','_blank','width=700,height=600');
+  win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Photo reprise ${a.id}</title>
+  <style>body{margin:0;background:#111;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;gap:12px}
+  img{max-width:95vw;max-height:90vh;object-fit:contain;border-radius:8px}
+  p{color:#fff;font-family:sans-serif;font-size:13px;opacity:0.7}</style></head>
+  <body><img src="${a.photo}" alt="Photo reprise" /><p>${a.client} — ${a.description} — ${fmtDate(a.date)}</p></body></html>`);
+  win.document.close();
 }
 
 

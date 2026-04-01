@@ -546,7 +546,11 @@ tr:hover td { background: var(--bg-secondary); }
   #modal-facture .modal { border-radius: var(--radius-xl); }
 }
 
-/* ===== BOUTON NOUVEAU CLIENT INLINE ===== */
+/* ===== MINI MODAL CLIENT (z-index supérieur) ===== */
+#modal-mini-client {
+  z-index: 1200;
+  background: rgba(0,0,0,0.55);
+}
 .btn-add-client-inline {
   display: inline-flex; align-items: center;
   margin-top: 5px; padding: 4px 10px;
