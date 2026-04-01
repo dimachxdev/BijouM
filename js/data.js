@@ -170,3 +170,11 @@ const INITIAL_BIJOUX_ARR = [
   { id:'BA-0002', date:'2026-02-20', client:'Marie-Claire Fall', article:'BJX-0002 — Bague diamant or blanc 18k', prixTotal:320000, arrhesVerse:320000, restantDu:0,      dateEcheance:'2026-03-20', statut:'solde',
     mouvements:[{date:'2026-02-20',montant:150000,note:'Arrhes initiales'},{date:'2026-03-15',montant:170000,note:'Solde final'}] },
 ];
+
+// ============================================
+// ACHATS DEPUIS CLIENTS (rachat bijoux)
+// ============================================
+const INITIAL_ACHATS_CLIENTS = [
+  { id:'AC-0001', date:'2026-02-12', client:'Ibrahima Sow',    description:'Rachat bracelet or 18k usagé', carat:'18k', poids:4.2, prixPropose:95000,  saisiPar:'admin' },
+  { id:'AC-0002', date:'2026-03-05', client:'Oumar Ba',         description:'Rachat bague or 22k',          carat:'22k', poids:2.8, prixPropose:72000,  saisiPar:'admin' },
+];

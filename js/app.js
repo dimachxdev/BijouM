@@ -16,15 +16,21 @@ const STATE = {
   sorties:       loadLS('marjan_sorties',    INITIAL_SORTIES),
   decaissements: loadLS('marjan_decaiss',    INITIAL_DECAISSEMENTS),
   achats:        loadLS('marjan_achats',     INITIAL_ACHATS),
+  achatsClients: loadLS('marjan_ac',         INITIAL_ACHATS_CLIENTS),
   comptesClients:loadLS('marjan_cc',         INITIAL_COMPTES_CLIENTS),
   bijouxArr:     loadLS('marjan_ba',         INITIAL_BIJOUX_ARR),
   connexions:    loadLS('marjan_connexions', INITIAL_CONNEXIONS),
-  counters: loadLS('marjan_counters', { v:16, s:3, d:6, a:5, cc:3, ba:3, cl:10, u:4, cn:8 }),
+  counters: loadLS('marjan_counters', { v:16, s:3, d:6, a:5, ac:3, cc:3, ba:3, cl:10, u:4, cn:8 }),
 };
 
 function loadLS(k, fb) { try { const s=localStorage.getItem(k); return s?JSON.parse(s):fb; } catch { return fb; } }
 function save() {
-  const keyMap = {users:'users',ventes:'ventes',clients:'clients',stock:'stock',sorties:'sorties',decaissements:'decaiss',achats:'achats',comptesClients:'cc',bijouxArr:'ba',connexions:'connexions',counters:'counters'};
+  const keyMap = {
+    users:'users', ventes:'ventes', clients:'clients', stock:'stock',
+    sorties:'sorties', decaissements:'decaiss', achats:'achats',
+    achatsClients:'ac', comptesClients:'cc', bijouxArr:'ba',
+    connexions:'connexions', counters:'counters'
+  };
   Object.keys(keyMap).forEach(k => localStorage.setItem('marjan_'+keyMap[k], JSON.stringify(STATE[k])));
 }
 function nextId(prefix, key) { STATE.counters[key]++; save(); return prefix+'-'+String(STATE.counters[key]).padStart(4,'0'); }
@@ -128,6 +134,7 @@ function renderSection(id) {
   if(id==='journal')       renderJournal();
   if(id==='stocks')        renderStocks();
   if(id==='achats')        renderAchats();
+  if(id==='achats_clients')renderAchatsClients();
   if(id==='sorties')       renderSorties();
   if(id==='decaissements') renderDecaissements();
   if(id==='clients')       renderClients();
@@ -140,11 +147,11 @@ function renderSection(id) {
 // MODALS
 // ============================================
 function openModal(id) {
-  // Pré-remplissage
   if(id==='modal-nouvelle-vente')   prepNouvelleVente();
   if(id==='modal-add-produit')      { peuplerSelect('p-carat'); }
   if(id==='modal-add-sortie')       prepSortie();
   if(id==='modal-add-achat')        { peuplerSelect('a-carat'); document.getElementById('a-date').value=today(); }
+  if(id==='modal-add-achat-client') { peuplerClientSelect('ac-client'); peuplerSelect('ac-carat'); document.getElementById('ac-date').value=today(); }
   if(id==='modal-add-decaiss')      { prepDecaiss(); }
   if(id==='modal-add-compte-client'){ peuplerClientSelect('cc-client'); document.getElementById('cc-date').value=today(); }
   if(id==='modal-add-bijou-arr')    { peuplerClientSelect('ba-client'); peuplerArticleSelect('ba-article'); document.getElementById('ba-date').value=today(); }
@@ -255,20 +262,23 @@ function renderDashboard(){
   document.getElementById('dashboard-date').textContent=now.toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
 
   const ventesMois=STATE.ventes.filter(v=>isMois(v.date));
-  const totalMois=ventesMois.reduce((s,v)=>s+(v.montant||0),0);
+  const totalMois =ventesMois.reduce((s,v)=>s+(v.montant||0),0);
+  const totalEncaisse=STATE.ventes.reduce((s,v)=>s+(v.acompte||0),0);  // argent réellement reçu
+  const totalDecaiss =STATE.decaissements.reduce((s,d)=>s+(d.montant||0),0);
+  const soldeNet     =totalEncaisse - totalDecaiss;                      // en caisse net
   const totalRestants=STATE.ventes.reduce((s,v)=>s+(v.restant||0),0);
-  const nbRestants=STATE.ventes.filter(v=>(v.restant||0)>0).length;
-  const decMois=STATE.decaissements.filter(d=>isMois(d.date));
-  const totalDecMois=decMois.reduce((s,d)=>s+(d.montant||0),0);
+  const nbRestants   =STATE.ventes.filter(v=>(v.restant||0)>0).length;
+  const decMois      =STATE.decaissements.filter(d=>isMois(d.date));
+  const totalDecMois =decMois.reduce((s,d)=>s+(d.montant||0),0);
   const arrhesEnCours=STATE.bijouxArr.filter(b=>b.statut==='en_cours');
-  const totalArrhes=arrhesEnCours.reduce((s,b)=>s+(b.restantDu||0),0);
+  const totalArrhes  =arrhesEnCours.reduce((s,b)=>s+(b.restantDu||0),0);
 
   document.getElementById('metric-ca').textContent=fmt(totalMois);
   document.getElementById('metric-ca-nb').textContent=ventesMois.length+' vente'+(ventesMois.length>1?'s':'');
   document.getElementById('metric-restants').textContent=fmt(totalRestants);
   document.getElementById('metric-nb-restants').textContent=nbRestants+' client'+(nbRestants>1?'s':'');
-  document.getElementById('metric-decaiss').textContent=fmt(totalDecMois);
-  document.getElementById('metric-nb-decaiss').textContent=decMois.length+' opération'+(decMois.length>1?'s':'');
+  document.getElementById('metric-decaiss').textContent=fmt(soldeNet);
+  document.getElementById('metric-nb-decaiss').textContent=soldeNet>=0?'Solde positif':'Solde négatif';
   document.getElementById('metric-arrhes').textContent=fmt(totalArrhes);
   document.getElementById('metric-nb-arrhes').textContent=arrhesEnCours.length+' bijou'+(arrhesEnCours.length>1?'x':'');
 
@@ -318,36 +328,60 @@ function renderJournal(){
     return true;
   });
 
-  const tCumul=STATE.ventes.reduce((s,v)=>s+(v.montant||0),0);
-  const tRest=STATE.ventes.reduce((s,v)=>s+(v.restant||0),0);
-  const tLoc=STATE.ventes.reduce((s,v)=>s+(parseFloat(v.local)||0),0);
-  const tImp=STATE.ventes.reduce((s,v)=>s+(parseFloat(v.importe)||0),0);
-  document.getElementById('journal-count-label').textContent=`${STATE.ventes.length} ventes · ${ventes.length} affichées`;
-  document.getElementById('montant-cumul').textContent=fmt(tCumul);
-  document.getElementById('total-restants').textContent=fmt(tRest);
-  document.getElementById('poids-local-total').textContent=tLoc.toFixed(2)+'g';
-  document.getElementById('poids-importe-total').textContent=tImp.toFixed(2)+'g';
+  // Calculs cumul bar
+  const tCumul    = STATE.ventes.reduce((s,v)=>s+(v.montant||0),0);
+  const tEncaisse = STATE.ventes.reduce((s,v)=>s+(v.acompte||0),0);
+  const tRest     = STATE.ventes.reduce((s,v)=>s+(v.restant||0),0);
+  const tLoc      = STATE.ventes.reduce((s,v)=>s+(parseFloat(v.local)||0),0);
+  const tImp      = STATE.ventes.reduce((s,v)=>s+(parseFloat(v.importe)||0),0);
 
+  document.getElementById('journal-count-label').textContent=`${STATE.ventes.length} ventes · ${ventes.length} affichées`;
+  document.getElementById('montant-cumul').textContent   = fmt(tCumul);
+  document.getElementById('montant-encaisse').textContent= fmt(tEncaisse);
+  document.getElementById('total-restants').textContent  = fmt(tRest);
+  document.getElementById('poids-local-total').textContent  = tLoc.toFixed(2)+'g';
+  document.getElementById('poids-importe-total').textContent= tImp.toFixed(2)+'g';
+
+  // Cumul chronologique par ligne
   const sorted=[...STATE.ventes].sort((a,b)=>a.date.localeCompare(b.date));
   let rc=0; const cmap={};sorted.forEach(v=>{rc+=(v.montant||0);cmap[v.id]=rc;});
+
+  const admin = isAdmin();
 
   document.getElementById('journal-body').innerHTML=ventes.map(v=>{
     const c=getCarat(v.carat);
     const dot=c?`<span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${c.couleur};margin-right:4px;vertical-align:middle"></span>`:'';
-    const rb=(v.restant||0)>0?`<span class="stock-badge stock-low">${fmt(v.restant)}</span>`:`<span class="stock-badge stock-ok">Soldé</span>`;
+    const rb=(v.restant||0)>0
+      ? `<span class="stock-badge stock-low">${fmt(v.restant)}</span>`
+      : `<span class="stock-badge stock-ok">Soldé</span>`;
+
+    // Boutons : modifier/supprimer = admin uniquement, acompte = tous si restant > 0
+    const btnEdit = admin
+      ? `<button class="btn small" onclick="ouvrirEditVente('${v.id}')" title="Modifier">✎</button>
+         <button class="btn small btn-danger" onclick="supprimerVente('${v.id}')" title="Supprimer">✕</button>`
+      : `<span class="perm-lock" title="Modification réservée à l'administrateur">🔒</span>`;
+
+    const btnAcompte = (v.restant||0)>0
+      ? `<button class="btn small" style="background:var(--warning-bg);color:var(--warning-text);border-color:transparent" onclick="ouvrirAjoutAcompte('${v.id}')" title="Ajouter un acompte">+&nbsp;Acompte</button>`
+      : '';
+
     return`<tr>
       <td style="white-space:nowrap;font-size:12px;color:var(--text-secondary)">${fmtDate(v.date)}</td>
-      <td><div style="display:flex;align-items:center;gap:7px"><div style="width:28px;height:28px;border-radius:50%;background:var(--info-bg);color:var(--info-text);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:600;flex-shrink:0">${ini(v.client)}</div><span>${v.client}</span></div></td>
+      <td><div style="display:flex;align-items:center;gap:7px">
+        <div style="width:28px;height:28px;border-radius:50%;background:var(--info-bg);color:var(--info-text);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:600;flex-shrink:0">${ini(v.client)}</div>
+        <span>${v.client}</span>
+      </div></td>
       <td style="font-size:12px;color:var(--text-secondary)">${v.description}</td>
       <td style="text-align:center">${(parseFloat(v.local)||0)>0?`<span class="badge-local">${fmtG(v.local)}</span>`:'<span style="color:var(--text-tertiary)">—</span>'}</td>
       <td style="text-align:center">${(parseFloat(v.importe)||0)>0?`<span class="badge-importe">${fmtG(v.importe)}</span>`:'<span style="color:var(--text-tertiary)">—</span>'}</td>
       <td><span class="carat-pill">${dot}${(v.carat||'—').toUpperCase()}</span></td>
       <td style="font-weight:500;white-space:nowrap">${fmt(v.montant)}</td>
-      <td style="color:var(--text-secondary)">${(v.acompte||0)>0?fmt(v.acompte):'<span style="color:var(--text-tertiary)">—</span>'}</td>
+      <td style="color:var(--text-secondary);white-space:nowrap">${(v.acompte||0)>0?fmt(v.acompte):'<span style="color:var(--text-tertiary)">—</span>'}</td>
       <td>${rb}</td>
-      <td style="font-size:12px;color:var(--text-secondary)">${fmt(cmap[v.id]||0)}</td>
-      <td><div style="display:flex;gap:4px"><button class="btn small" onclick="ouvrirEditVente('${v.id}')">✎</button><button class="btn small btn-danger" onclick="supprimerVente('${v.id}')">✕</button></div></td>
-      <td><button class="btn small" onclick="afficherTicket('${v.id}')" title="Imprimer ticket" style="font-size:14px">🖨</button></td>
+      <td style="font-size:12px;color:var(--text-secondary);white-space:nowrap">${fmt(cmap[v.id]||0)}</td>
+      <td><div style="display:flex;gap:4px;flex-wrap:nowrap">${btnEdit}</div></td>
+      <td><div style="display:flex;gap:4px">${btnAcompte}</div></td>
+      <td><button class="btn small" onclick="afficherTicket('${v.id}')" title="Ticket" style="font-size:14px">🖨</button></td>
     </tr>`;
   }).join('');
 }
@@ -365,23 +399,87 @@ function enregistrerVente(){
 }
 
 function ouvrirEditVente(id){
+  if(!isAdmin()){showToast('⛔ Seul l\'administrateur peut modifier une vente.');return;}
   const v=STATE.ventes.find(x=>x.id===id);if(!v)return;
   peuplerSelect('edit-v-carat',v.carat);peuplerClientSelect('edit-v-client',v.client);
-  document.getElementById('edit-v-id').value=id;document.getElementById('edit-v-id-label').textContent='#'+id;
-  document.getElementById('edit-v-date').value=v.date;document.getElementById('edit-v-description').value=v.description;
-  document.getElementById('edit-v-local').value=v.local||'';document.getElementById('edit-v-importe').value=v.importe||'';
-  document.getElementById('edit-v-montant').value=v.montant||'';document.getElementById('edit-v-acompte').value=v.acompte||'';
-  calcRestant('edit-v-montant','edit-v-acompte','edit-v-restant-disp');afficherInfoCarat('edit-v-carat','edit-v-carat-badge');
+  document.getElementById('edit-v-id').value=id;
+  document.getElementById('edit-v-id-label').textContent='#'+id;
+  document.getElementById('edit-v-date').value=v.date;
+  document.getElementById('edit-v-description').value=v.description;
+  document.getElementById('edit-v-local').value=v.local||'';
+  document.getElementById('edit-v-importe').value=v.importe||'';
+  document.getElementById('edit-v-montant').value=v.montant||'';
+  document.getElementById('edit-v-acompte').value=v.acompte||'';
+  calcRestant('edit-v-montant','edit-v-acompte','edit-v-restant-disp');
+  afficherInfoCarat('edit-v-carat','edit-v-carat-badge');
+  // Afficher/masquer boutons selon restant
+  const restant = (v.montant||0)-(v.acompte||0);
+  document.getElementById('btn-add-acompte').style.display = restant>0?'':'none';
+  document.getElementById('btn-regler-total').style.display= restant>0?'':'none';
   document.getElementById('modal-edit-vente').classList.add('show');
 }
 
 function sauvegarderVente(){
-  const id=document.getElementById('edit-v-id').value;const v=STATE.ventes.find(x=>x.id===id);if(!v)return;
-  Object.assign(v,{date:document.getElementById('edit-v-date').value,client:document.getElementById('edit-v-client').value,description:document.getElementById('edit-v-description').value.trim(),local:parseFloat(document.getElementById('edit-v-local').value)||0,importe:parseFloat(document.getElementById('edit-v-importe').value)||0,carat:document.getElementById('edit-v-carat').value,montant:parseInt(document.getElementById('edit-v-montant').value)||0,acompte:parseInt(document.getElementById('edit-v-acompte').value)||0});
-  v.restant=v.montant-v.acompte;save();closeModal('modal-edit-vente');renderJournal();renderDashboard();showToast('✓ Vente modifiée.');
+  if(!isAdmin()){showToast('⛔ Action réservée à l\'administrateur.');return;}
+  const id=document.getElementById('edit-v-id').value;
+  const v=STATE.ventes.find(x=>x.id===id);if(!v)return;
+  const montant=parseInt(document.getElementById('edit-v-montant').value)||0;
+  const acompte=parseInt(document.getElementById('edit-v-acompte').value)||0;
+  if(acompte>montant){showToast('⚠ L\'acompte ne peut pas dépasser le montant.');return;}
+  Object.assign(v,{
+    date:document.getElementById('edit-v-date').value,
+    client:document.getElementById('edit-v-client').value,
+    description:document.getElementById('edit-v-description').value.trim(),
+    local:parseFloat(document.getElementById('edit-v-local').value)||0,
+    importe:parseFloat(document.getElementById('edit-v-importe').value)||0,
+    carat:document.getElementById('edit-v-carat').value,
+    montant, acompte, restant: montant-acompte
+  });
+  save();closeModal('modal-edit-vente');renderJournal();renderDashboard();showToast('✓ Vente modifiée.');
 }
 
-function supprimerVente(id){if(!confirm(`Supprimer la vente ${id} ?`))return;STATE.ventes=STATE.ventes.filter(v=>v.id!==id);save();renderJournal();renderDashboard();showToast('Vente supprimée.');}
+function ajouterAcompteVente(){
+  // Lire les valeurs actuelles du formulaire d'édition
+  const montant=parseInt(document.getElementById('edit-v-montant').value)||0;
+  const acompteActuel=parseInt(document.getElementById('edit-v-acompte').value)||0;
+  const restantActuel=montant-acompteActuel;
+  if(restantActuel<=0){showToast('ℹ Cette vente est déjà soldée.');return;}
+  const saisie=prompt(`Acompte supplémentaire à ajouter :\nRestant actuel : ${restantActuel.toLocaleString('fr-FR')} F\n\nMontant à encaisser (F CFA) :`, '');
+  if(saisie===null)return;
+  const montantAdd=parseInt(saisie)||0;
+  if(montantAdd<=0){showToast('⚠ Montant invalide.');return;}
+  if(montantAdd>restantActuel){showToast(`⚠ Montant supérieur au restant dû (${restantActuel.toLocaleString('fr-FR')} F).`);return;}
+  const nouvelAcompte=acompteActuel+montantAdd;
+  document.getElementById('edit-v-acompte').value=nouvelAcompte;
+  calcRestant('edit-v-montant','edit-v-acompte','edit-v-restant-disp');
+  const newRestant=montant-nouvelAcompte;
+  if(newRestant===0){
+    document.getElementById('btn-add-acompte').style.display='none';
+    document.getElementById('btn-regler-total').style.display='none';
+  }
+  showToast(`✓ Acompte de ${montantAdd.toLocaleString('fr-FR')} F ajouté. Nouveau restant : ${newRestant.toLocaleString('fr-FR')} F`);
+}
+
+function reglerTotalVente(){
+  const montant=parseInt(document.getElementById('edit-v-montant').value)||0;
+  document.getElementById('edit-v-acompte').value=montant;
+  calcRestant('edit-v-montant','edit-v-acompte','edit-v-restant-disp');
+  document.getElementById('btn-add-acompte').style.display='none';
+  document.getElementById('btn-regler-total').style.display='none';
+  showToast('✓ Vente réglée en totalité. Cliquez Sauvegarder pour confirmer.');
+}
+
+function ouvrirAjoutAcompte(id){
+  // Ouvrir la vente en édition avec focus sur acompte
+  ouvrirEditVente(id);
+}
+
+function supprimerVente(id){
+  if(!isAdmin()){showToast('⛔ Seul l\'administrateur peut supprimer une vente.');return;}
+  if(!confirm(`Supprimer la vente ${id} ? Cette action est irréversible.`))return;
+  STATE.ventes=STATE.ventes.filter(v=>v.id!==id);
+  save();renderJournal();renderDashboard();showToast('Vente supprimée.');
+}
 
 function exporterJournalCSV(){
   calculerCumuls();const sorted=[...STATE.ventes].sort((a,b)=>a.date.localeCompare(b.date));
@@ -643,16 +741,110 @@ function retournerStockArr(id){
 }
 
 // ============================================
+// ACHATS DEPUIS CLIENTS (rachat bijoux)
+// ============================================
+function renderAchatsClients(){
+  const mois=STATE.achatsClients.filter(a=>isMois(a.date));
+  const totalAll =STATE.achatsClients.reduce((s,a)=>s+(a.prixPropose||0),0);
+  const totalMois=mois.reduce((s,a)=>s+(a.prixPropose||0),0);
+  const poidsAll =STATE.achatsClients.reduce((s,a)=>s+(a.poids||0),0);
+  document.getElementById('ac-count-label').textContent=`${STATE.achatsClients.length} rachat${STATE.achatsClients.length>1?'s':''} enregistré${STATE.achatsClients.length>1?'s':''}`;
+  document.getElementById('metric-ac-mois').textContent =fmt(totalMois);
+  document.getElementById('metric-ac-total').textContent=fmt(totalAll);
+  document.getElementById('metric-ac-poids').textContent=poidsAll.toFixed(2)+' g';
+
+  document.getElementById('achats-clients-body').innerHTML=[...STATE.achatsClients].sort((a,b)=>b.date.localeCompare(a.date)).map(a=>{
+    const c=getCarat(a.carat);
+    const dot=c?`<span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${c.couleur};margin-right:4px;vertical-align:middle"></span>`:'';
+    const btnSuppr=isAdmin()?`<button class="btn small btn-danger" onclick="supprimerAchatClient('${a.id}')">✕</button>`:'<span class="perm-lock" title="Admin uniquement">🔒</span>';
+    return`<tr>
+      <td style="white-space:nowrap;font-size:12px;color:var(--text-secondary)">${fmtDate(a.date)}</td>
+      <td><div style="display:flex;align-items:center;gap:7px">
+        <div style="width:26px;height:26px;border-radius:50%;background:var(--info-bg);color:var(--info-text);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:600;flex-shrink:0">${ini(a.client)}</div>
+        <span>${a.client}</span>
+      </div></td>
+      <td style="font-size:12px;color:var(--text-secondary)">${a.description}</td>
+      <td><span class="carat-pill">${dot}${(a.carat||'—').toUpperCase()}</span></td>
+      <td style="text-align:center">${a.poids}g</td>
+      <td style="font-weight:500;color:var(--success-text)">${fmt(a.prixPropose)}</td>
+      <td><span class="role-pill role-${a.saisiPar}">${a.saisiPar}</span></td>
+      <td>${btnSuppr}</td>
+    </tr>`;
+  }).join('');
+}
+
+function enregistrerAchatClient(){
+  const date   =document.getElementById('ac-date').value;
+  const client =document.getElementById('ac-client').value;
+  const desc   =document.getElementById('ac-description').value.trim();
+  const carat  =document.getElementById('ac-carat').value;
+  const poids  =parseFloat(document.getElementById('ac-poids').value)||0;
+  const prix   =parseInt(document.getElementById('ac-prix').value)||0;
+  const note   =document.getElementById('ac-note').value.trim();
+  if(!date||!client||!desc||!carat||poids<=0||prix<=0){showToast('⚠ Tous les champs obligatoires doivent être remplis.');return;}
+  const id=nextId('AC','ac');
+  STATE.achatsClients.unshift({
+    id, date, client, description:desc, carat, poids,
+    prixPropose:prix, note, saisiPar:STATE.currentUser?.role||'admin'
+  });
+  save();closeModal('modal-add-achat-client');renderAchatsClients();renderDashboard();
+  showToast(`✓ Rachat ${id} enregistré — ${fmt(prix)}`);
+}
+
+function supprimerAchatClient(id){
+  if(!isAdmin()){showToast('⛔ Seul l\'administrateur peut supprimer.');return;}
+  if(!confirm('Supprimer ce rachat ?'))return;
+  STATE.achatsClients=STATE.achatsClients.filter(a=>a.id!==id);
+  save();renderAchatsClients();showToast('Rachat supprimé.');
+}
+
+// ============================================
 // EXPORT & RAPPORT
 // ============================================
 function downloadFile(f,c,t='text/plain'){const b=new Blob(['\uFEFF'+c],{type:t+';charset=utf-8;'});const u=URL.createObjectURL(b);const a=document.createElement('a');a.href=u;a.download=f;a.click();URL.revokeObjectURL(u);}
 
 function exporterRapport(){
   const now=new Date();
-  const caM=STATE.ventes.filter(v=>isMois(v.date)).reduce((s,v)=>s+(v.montant||0),0);
-  const decM=STATE.decaissements.filter(d=>isMois(d.date)).reduce((s,d)=>s+(d.montant||0),0);
-  const content=`RAPPORT MARJAN BIJOUTERIE — ${now.toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long',year:'numeric'})}\n${'='.repeat(60)}\n\nVENTES\nCA mois : ${fmt(caM)} · Total restants : ${fmt(STATE.ventes.reduce((s,v)=>s+(v.restant||0),0))}\n\nSTOCK\nRéférences : ${STATE.stock.length} · Ruptures : ${STATE.stock.filter(i=>i.qty===0).length}\n\nDÉCAISSEMENTS\nDécaissé ce mois : ${fmt(decM)} · Solde net : ${fmt(caM-decM)}\n\nACHATS\nTotal acheté : ${fmt(STATE.achats.reduce((s,a)=>s+(a.montantTotal||0),0))}\n\nBIJOUX EN ARRHES\nEn cours : ${STATE.bijouxArr.filter(b=>b.statut==='en_cours').length} · Restant dû total : ${fmt(STATE.bijouxArr.filter(b=>b.statut==='en_cours').reduce((s,b)=>s+(b.restantDu||0),0))}\n\nCLIENTS\nTotal : ${STATE.clients.length}\n\n${'='.repeat(60)}\nGénéré le ${now.toLocaleString('fr-FR')}`;
-  downloadFile('rapport_marjan_'+today()+'.txt',content);showToast('✓ Rapport exporté.');
+  const caM       =STATE.ventes.filter(v=>isMois(v.date)).reduce((s,v)=>s+(v.montant||0),0);
+  const encaisseTotal=STATE.ventes.reduce((s,v)=>s+(v.acompte||0),0);
+  const decTotal  =STATE.decaissements.reduce((s,d)=>s+(d.montant||0),0);
+  const soldeNet  =encaisseTotal-decTotal;
+  const rachatTotal=STATE.achatsClients.reduce((s,a)=>s+(a.prixPropose||0),0);
+  const content=`RAPPORT DE GESTION — MARJAN BIJOUTERIE
+${now.toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long',year:'numeric'})}
+${'='.repeat(60)}
+
+JOURNAL DES VENTES
+------------------
+Ventes totales     : ${STATE.ventes.length}
+CA ce mois         : ${fmt(caM)}
+Total encaissé     : ${fmt(encaisseTotal)}
+Total restants dus : ${fmt(STATE.ventes.reduce((s,v)=>s+(v.restant||0),0))}
+
+CAISSE (Solde net)
+------------------
+Encaissé total     : ${fmt(encaisseTotal)}
+Décaissements      : ${fmt(decTotal)}
+SOLDE NET CAISSE   : ${fmt(soldeNet)}
+
+ACHATS DEPUIS CLIENTS
+---------------------
+Rachats total      : ${STATE.achatsClients.length}
+Montant total racheté : ${fmt(rachatTotal)}
+
+STOCKS
+------
+Références : ${STATE.stock.length} · Ruptures : ${STATE.stock.filter(i=>i.qty===0).length}
+Valeur totale : ${fmt(STATE.stock.reduce((s,i)=>s+(i.qty*i.prix),0))}
+
+CLIENTS
+-------
+Total clients : ${STATE.clients.length}
+
+${'='.repeat(60)}
+Généré le ${now.toLocaleString('fr-FR')} par ${STATE.currentUser?.nom||'—'}`;
+  downloadFile('rapport_marjan_'+today()+'.txt',content);
+  showToast('✓ Rapport exporté.');
 }
 
 // ============================================

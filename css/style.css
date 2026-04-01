@@ -530,3 +530,12 @@ tr:hover td { background: var(--bg-secondary); }
   .section { display: block !important; padding: 0; }
   .card { box-shadow: none; border: 1px solid #ddd; }
 }
+
+/* ===== PERMISSIONS LOCK ===== */
+.perm-lock {
+  font-size: 14px;
+  opacity: 0.4;
+  cursor: not-allowed;
+  display: inline-block;
+  padding: 2px 4px;
+}
