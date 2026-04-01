@@ -164,7 +164,7 @@ function openModal(id) {
   if(id==='modal-nouvelle-vente')   prepNouvelleVente();
   if(id==='modal-add-produit')      { peuplerSelect('p-carat'); }
   if(id==='modal-add-sortie')       prepSortie();
-  if(id==='modal-add-achat-client') { peuplerClientSelect('ac-client'); peuplerSelect('ac-carat'); document.getElementById('ac-date').value=today(); }
+  if(id==='modal-add-achat-client') { peuplerClientSelect('ac-client'); peuplerSelect('ac-carat'); peuplerTypeBijou('ac-type-bijou'); document.getElementById('ac-date').value=today(); }
   if(id==='modal-add-decaiss')      { prepDecaiss(); }
   if(id==='modal-add-compte-client'){ peuplerClientSelect('cc-client'); document.getElementById('cc-date').value=today(); }
   if(id==='modal-add-bijou-arr')    { peuplerClientSelect('ba-client'); peuplerArticleSelect('ba-article'); document.getElementById('ba-date').value=today(); }
@@ -207,21 +207,39 @@ function calcRestant(mId,aId,dId){
 // PEUPLEMENT SELECTS
 // ============================================
 function peuplerSelect(id, selected='') {
-  const sel=document.getElementById(id); if(!sel)return;
-  const groupes=[
-    {label:'Or jaune',types:['or']},{label:'Or blanc',types:['or-blanc']},
-    {label:'Or rose',types:['or-rose']},{label:'Argent',types:['argent']},
-    {label:'Plaqué / Fantaisie',types:['plaque','fantaisie']},
+  const sel = document.getElementById(id); if(!sel) return;
+  // Deux groupes simples : Local / Importé
+  const groupes = [
+    { label:'Or local',    items: CARATS_LIST.filter(c=>c.origine==='local')   },
+    { label:'Or importé',  items: CARATS_LIST.filter(c=>c.origine==='importe') },
   ];
-  sel.innerHTML='<option value="">— Choisir —</option>';
-  groupes.forEach(g=>{
-    const items=CARATS_LIST.filter(c=>g.types.includes(c.type));
-    if(!items.length)return;
-    const og=document.createElement('optgroup'); og.label=g.label;
-    items.forEach(c=>{const o=document.createElement('option');o.value=c.code;o.textContent=c.label;if(c.code===selected)o.selected=true;og.appendChild(o);});
+  sel.innerHTML = '<option value="">— Choisir —</option>';
+  groupes.forEach(g => {
+    if (!g.items.length) return;
+    const og = document.createElement('optgroup');
+    og.label = g.label;
+    g.items.forEach(c => {
+      const o = document.createElement('option');
+      o.value = c.code;
+      o.textContent = c.label;
+      if (c.code === selected) o.selected = true;
+      og.appendChild(o);
+    });
     sel.appendChild(og);
   });
 }
+
+function peuplerTypeBijou(id, selected='') {
+  const sel = document.getElementById(id); if(!sel) return;
+  sel.innerHTML = '<option value="">— Type de bijou —</option>';
+  TYPES_BIJOUX.forEach(t => {
+    const o = document.createElement('option');
+    o.value = t.code; o.textContent = t.label;
+    if (t.code === selected) o.selected = true;
+    sel.appendChild(o);
+  });
+}
+
 
 function peuplerClientSelect(id, selected='') {
   // Compatibilité : si c'est un picker, initialiser proprement
@@ -334,7 +352,7 @@ function afficherInfoCarat(selectId, badgeId) {
   if(!code){badge.style.display='none';return;}
   const c=getCarat(code); if(!c){badge.style.display='none';return;}
   badge.style.display='flex';
-  badge.innerHTML=`<span class="carat-dot" style="background:${c.couleur}"></span><span class="carat-code">${c.code.toUpperCase()}</span><span class="carat-purete">${c.purete}</span><span class="carat-desc">${c.desc}</span>`;
+  badge.innerHTML=`<span class="carat-dot" style="background:${c.couleur}"></span><span class="carat-code">${c.label}</span><span class="carat-purete">${c.purete}</span><span class="carat-desc">${c.origine==='local'?'Or fabriqué localement':'Or importé'}</span>`;
 }
 
 function peuplerFiltreCarat(){
@@ -478,7 +496,7 @@ function renderJournal(){
         <div style="width:28px;height:28px;border-radius:50%;background:var(--info-bg);color:var(--info-text);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:600;flex-shrink:0">${ini(v.client)}</div>
         <span>${v.client}</span>
       </div></td>
-      <td style="font-size:12px;color:var(--text-secondary)">${v.description}</td>
+      <td style="font-size:12px;color:var(--text-secondary)">${v.description}${v.typeBijou?` <span class="type-bijou-pill">${TYPES_BIJOUX.find(t=>t.code===v.typeBijou)?.label||v.typeBijou}</span>`:''}</td>
       <td style="text-align:center">${(parseFloat(v.local)||0)>0?`<span class="badge-local">${fmtG(v.local)}</span>`:'<span style="color:var(--text-tertiary)">—</span>'}</td>
       <td style="text-align:center">${(parseFloat(v.importe)||0)>0?`<span class="badge-importe">${fmtG(v.importe)}</span>`:'<span style="color:var(--text-tertiary)">—</span>'}</td>
       <td><span class="carat-pill">${dot}${(v.carat||'—').toUpperCase()}</span></td>
@@ -492,14 +510,14 @@ function renderJournal(){
 }
 ['journal-search','filtre-carat','filtre-type','filtre-restant'].forEach(id=>{document.getElementById(id)?.addEventListener('input',renderJournal);});
 
-function prepNouvelleVente(){peuplerSelect('v-carat');peuplerClientSelect('v-client');document.getElementById('v-date').value=today();['v-description','v-local','v-importe','v-montant','v-acompte'].forEach(id=>document.getElementById(id).value='');document.getElementById('v-restant-disp').value='—';document.getElementById('v-carat-badge').style.display='none';}
+function prepNouvelleVente(){peuplerSelect('v-carat');peuplerTypeBijou('v-type-bijou');peuplerClientSelect('v-client');document.getElementById('v-date').value=today();['v-description','v-local','v-importe','v-montant','v-acompte'].forEach(id=>document.getElementById(id).value='');document.getElementById('v-restant-disp').value='—';document.getElementById('v-carat-badge').style.display='none';}
 
 function enregistrerVente(){
-  const date=document.getElementById('v-date').value,client=document.getElementById('v-client').value,desc=document.getElementById('v-description').value.trim(),local=parseFloat(document.getElementById('v-local').value)||0,importe=parseFloat(document.getElementById('v-importe').value)||0,carat=document.getElementById('v-carat').value,montant=parseInt(document.getElementById('v-montant').value)||0,acompte=parseInt(document.getElementById('v-acompte').value)||0;
+  const date=document.getElementById('v-date').value,client=document.getElementById('v-client').value,desc=document.getElementById('v-description').value.trim(),local=parseFloat(document.getElementById('v-local').value)||0,importe=parseFloat(document.getElementById('v-importe').value)||0,carat=document.getElementById('v-carat').value,typeBijou=document.getElementById('v-type-bijou')?.value||'',montant=parseInt(document.getElementById('v-montant').value)||0,acompte=parseInt(document.getElementById('v-acompte').value)||0;
   if(!date||!client||!desc||!carat||montant<=0){showToast('⚠ Tous les champs obligatoires doivent être remplis.');return;}
   if(acompte>montant){showToast('⚠ L\'acompte ne peut pas dépasser le montant.');return;}
   const id=nextId('V','v');
-  STATE.ventes.unshift({id,date,client,description:desc,local,importe,carat,montant,acompte,restant:montant-acompte});
+  STATE.ventes.unshift({id,date,client,description:desc,local,importe,carat,typeBijou,montant,acompte,restant:montant-acompte});
   save();closeModal('modal-nouvelle-vente');renderJournal();renderDashboard();showToast(`✓ Vente ${id} — ${fmt(montant)}`);
 }
 
@@ -515,7 +533,7 @@ function ouvrirEditVente(id){
   if(!admin && role !== 'gestionnaire' && role !== 'vendeur'){
     showToast('⛔ Accès non autorisé.');return;
   }
-  peuplerSelect('edit-v-carat',v.carat);peuplerClientSelect('edit-v-client',v.client);
+  peuplerSelect('edit-v-carat',v.carat);peuplerTypeBijou('edit-v-type-bijou',v.typeBijou||'');peuplerClientSelect('edit-v-client',v.client);
   document.getElementById('edit-v-id').value=id;
   document.getElementById('edit-v-id-label').textContent='#'+id;
   document.getElementById('edit-v-date').value=v.date;
@@ -557,7 +575,8 @@ function sauvegarderVente(){
   const date    = admin ? document.getElementById('edit-v-date').value : v.date;
   const local   = admin ? (parseFloat(document.getElementById('edit-v-local').value)||0) : v.local;
   const importe = admin ? (parseFloat(document.getElementById('edit-v-importe').value)||0) : v.importe;
-  const carat   = admin ? document.getElementById('edit-v-carat').value : v.carat;
+  const carat      = admin ? document.getElementById('edit-v-carat').value : v.carat;
+  const typeBijou  = document.getElementById('edit-v-type-bijou')?.value || v.typeBijou || '';
 
   if(acompte>montant){showToast('⚠ L\'acompte ne peut pas dépasser le montant.');return;}
   if(!desc){showToast('⚠ La description est obligatoire.');return;}
@@ -568,7 +587,7 @@ function sauvegarderVente(){
   });
   document.getElementById('edit-v-carat').disabled=false;
 
-  Object.assign(v,{date,client,description:desc,local,importe,carat,montant,acompte,restant:montant-acompte});
+  Object.assign(v,{date,client,description:desc,local,importe,carat,typeBijou,montant,acompte,restant:montant-acompte});
   save();closeModal('modal-edit-vente');renderJournal();renderDashboard();
   showToast('✓ Vente mise à jour.');
 }
@@ -922,7 +941,8 @@ function enregistrerAchatClient(){
   const carat  = document.getElementById('ac-carat').value;
   const poids  = parseFloat(document.getElementById('ac-poids').value)||0;
   const prix   = parseInt(document.getElementById('ac-prix').value)||0;
-  const note   = document.getElementById('ac-note').value.trim();
+  const note      = document.getElementById('ac-note').value.trim();
+  const typeBijou = document.getElementById('ac-type-bijou')?.value||'';
   if(!date||!client||!desc||!carat||poids<=0||prix<=0){
     showToast('⚠ Tous les champs obligatoires doivent être remplis.');return;
   }
@@ -932,18 +952,18 @@ function enregistrerAchatClient(){
     // Lire la photo en base64 puis enregistrer
     const reader = new FileReader();
     reader.onload = function(e) {
-      _sauvegarderReprise(date,client,desc,carat,poids,prix,note, e.target.result);
+      _sauvegarderReprise(date,client,desc,carat,typeBijou,poids,prix,note, e.target.result);
     };
     reader.readAsDataURL(file);
   } else {
-    _sauvegarderReprise(date,client,desc,carat,poids,prix,note,null);
+    _sauvegarderReprise(date,client,desc,carat,typeBijou,poids,prix,note,null);
   }
 }
 
-function _sauvegarderReprise(date,client,desc,carat,poids,prix,note,photo){
+function _sauvegarderReprise(date,client,desc,carat,typeBijou,poids,prix,note,photo){
   const id=nextId('AC','ac');
   STATE.achatsClients.unshift({
-    id, date, client, description:desc, carat, poids,
+    id, date, client, description:desc, carat, typeBijou, poids,
     prixPropose:prix, note, photo: photo||null,
     saisiPar:STATE.currentUser?.role||'admin'
   });
@@ -1339,7 +1359,8 @@ function afficherFacture(id) {
   const v=STATE.ventes.find(x=>x.id===id); if(!v)return;
   const c=getCarat(v.carat);
   const numFac=genNumFacture(v.id);
-  const caratLabel=c?`${v.carat.toUpperCase()} — ${c.purete} — ${c.desc}`:v.carat?.toUpperCase()||'—';
+  const caratLabel=c?`${c.label} (${c.purete})`:v.carat?.toUpperCase()||'—';
+  const typeBijouLabel=(v.typeBijou&&TYPES_BIJOUX.find(t=>t.code===v.typeBijou)?.label)||'';
   const cl=STATE.clients.find(x=>x.nom===v.client)||{};
   const restant=v.restant||0;
   const now=new Date();
@@ -1384,7 +1405,7 @@ function afficherFacture(id) {
     <tbody>
       <tr>
         <td>${v.description}</td>
-        <td>${caratLabel}</td>
+        <td>${caratLabel}${typeBijouLabel?' · '+typeBijouLabel:''}</td>
         <td style="text-align:center">${(parseFloat(v.local)||0)>0?fmtG(v.local):'—'}</td>
         <td style="text-align:center">${(parseFloat(v.importe)||0)>0?fmtG(v.importe):'—'}</td>
         <td style="text-align:right;font-weight:600">${fmt(v.montant)}</td>
