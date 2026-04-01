@@ -545,3 +545,15 @@ tr:hover td { background: var(--bg-secondary); }
 @media (min-width: 640px) {
   #modal-facture .modal { border-radius: var(--radius-xl); }
 }
+
+/* ===== BOUTON NOUVEAU CLIENT INLINE ===== */
+.btn-add-client-inline {
+  display: inline-flex; align-items: center;
+  margin-top: 5px; padding: 4px 10px;
+  font-size: 11px; font-weight: 500;
+  color: var(--info-text); background: var(--info-bg);
+  border: none; border-radius: var(--radius-sm);
+  cursor: pointer; font-family: inherit;
+  transition: opacity var(--transition);
+}
+.btn-add-client-inline:hover { opacity: 0.8; }
