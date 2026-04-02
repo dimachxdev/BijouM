@@ -21,7 +21,7 @@ const STATE = {
   comptesClients:loadLS('marjan_cc',         INITIAL_COMPTES_CLIENTS),
   bijouxArr:     loadLS('marjan_ba',         INITIAL_BIJOUX_ARR),
   connexions:    loadLS('marjan_connexions', INITIAL_CONNEXIONS),
-  counters: loadLS('marjan_counters', { v:16, s:3, d:6, a:5, ac:3, cc:3, ba:3, cl:10, u:4, cn:8 }),
+  counters: loadLS('marjan_counters', { v:16, s:3, d:6, a:5, ac:3, cc:3, ba:3, cl:10, u:4, cn:8, stk:0, fac:0 }),
 };
 
 const PAIEMENT_LABELS = {
@@ -168,9 +168,9 @@ function renderSection(id) {
 // ============================================
 function openModal(id) {
   if(id==='modal-nouvelle-vente')   prepNouvelleVente();
-  if(id==='modal-add-produit')      { peuplerSelect('p-carat'); }
+  if(id==='modal-add-produit') { peuplerTypeBijou('p-type-bijou'); var orf2=document.getElementById('p-or-fields');if(orf2)orf2.style.display='none'; var sf2=document.getElementById('p-poids-simple');if(sf2)sf2.style.display='none'; STATE.counters.stk++; var refEl=document.getElementById('p-ref');if(refEl)refEl.value='ART-'+String(STATE.counters.stk).padStart(4,'0'); }
   if(id==='modal-add-sortie')       prepSortie();
-  if(id==='modal-add-achat-client') { peuplerClientSelect('ac-client'); peuplerSelect('ac-carat'); peuplerTypeBijou('ac-type-bijou'); document.getElementById('ac-date').value=today(); }
+  if(id==='modal-add-achat-client') { peuplerClientSelect('ac-client'); peuplerTypeBijou('ac-type-bijou'); document.getElementById('ac-date').value=today(); var orf=document.getElementById('ac-or-fields');if(orf)orf.style.display='none'; var sf=document.getElementById('ac-poids-simple');if(sf)sf.style.display='none'; }
   if(id==='modal-add-decaiss')      { prepDecaiss(); }
   if(id==='modal-add-compte-client'){ peuplerClientSelect('cc-client'); document.getElementById('cc-date').value=today(); }
   if(id==='modal-add-bijou-arr')    { peuplerClientSelect('ba-client'); peuplerArticleSelect('ba-article'); document.getElementById('ba-date').value=today(); }
@@ -510,8 +510,7 @@ function renderJournal(){
       <td><span class="paiement-pill paiement-${v.paiement||'especes'}">${PAIEMENT_LABELS[v.paiement||'especes']||''}</span></td>
       <td>${rb}</td>
       <td><div style="display:flex;gap:4px;align-items:center">${btnModif}${btnSuppr}</div></td>
-      <td><div style="display:flex;gap:4px">${btnAcompte}</div></td>
-      <td><button class="btn small" onclick="afficherFacture('${v.id}')" title="Ticket" style="font-size:14px">🖨</button></td>
+      <td><button class="btn small" onclick="afficherFacture('${v.id}')" title="Imprimer la facture" style="font-size:14px">🖨</button></td>
     </tr>`;
   }).join('');
 }
@@ -525,6 +524,9 @@ function prepNouvelleVente(){
   ['v-description','v-local','v-importe','v-montant','v-acompte'].forEach(id=>document.getElementById(id).value='');
   var vp=document.getElementById('v-paiement'); if(vp) vp.value='especes';
   var cb=document.getElementById('v-compte-bloc'); if(cb) cb.style.display='none';
+  var of_=document.getElementById('v-or-fields'); if(of_) of_.style.display='none';
+  var vl=document.getElementById('v-local'); if(vl) vl.value='0';
+  var vi=document.getElementById('v-importe'); if(vi) vi.value='0';
   document.getElementById('v-restant-disp').value='—';
   document.getElementById('v-carat-badge').style.display='none';
 }
@@ -552,11 +554,18 @@ function enregistrerVente(){
     cc.solde-=montant;
     cc.mouvements.push({date:date,type:'retrait',montant:montant,note:'Vente - '+desc});
     compteClientId=cc.id;
-    acompte=montant;
+    acompte=montant; // compte = soldé d'office
+  } else {
+    // Si acompte non rempli (0 ou vide) → vente soldée directement
+    const acompteEl = document.getElementById('v-acompte');
+    const acompteRaw = acompteEl && acompteEl.value.trim();
+    if(!acompteRaw || acompteRaw === '0') acompte = montant;
   }
 
   const id=nextId('V','v');
-  STATE.ventes.unshift({id,date,client,description:desc,local,importe,carat,typeBijou,paiement,montant,acompte,restant:montant-acompte,compteClientId});
+  STATE.counters.fac++;
+  var numFacture='FAC-'+String(STATE.counters.fac).padStart(4,'0');
+  STATE.ventes.unshift({id,date,client,description:desc,local,importe,carat,typeBijou,paiement,montant,acompte,restant:montant-acompte,compteClientId,numFacture});
   save();closeModal('modal-nouvelle-vente');renderJournal();renderDashboard();
   showToast(paiement==='compte'?('Vente '+id+' — '+fmt(montant)+' deduit compte '+client):('Vente '+id+' — '+fmt(montant)));
 }
@@ -720,10 +729,19 @@ function renderStocks(f=''){
 document.getElementById('stock-search')?.addEventListener('input',function(){renderStocks(this.value);});
 
 function ajouterProduit(){
-  const ref=document.getElementById('p-ref').value.trim(),nom=document.getElementById('p-nom').value.trim(),carat=document.getElementById('p-carat').value,type=document.getElementById('p-type').value,poids=parseFloat(document.getElementById('p-poids').value)||0,qty=parseInt(document.getElementById('p-qty').value)||0,prix=parseInt(document.getElementById('p-prix').value)||0,seuil=parseInt(document.getElementById('p-seuil').value)||5;
-  if(!ref||!nom){showToast('⚠ Référence et désignation obligatoires.');return;}
-  if(STATE.stock.find(i=>i.ref===ref)){showToast('⚠ Cette référence existe déjà.');return;}
-  STATE.stock.unshift({ref,nom,carat,type,poids,qty,prix,seuil});save();renderStocks();closeModal('modal-add-produit');showToast('✓ Article ajouté.');
+  var ref=document.getElementById('p-ref').value.trim(),nom=document.getElementById('p-nom').value.trim();
+  var typeBijouP=document.getElementById('p-type-bijou')&&document.getElementById('p-type-bijou').value||'';
+  var hasOrP=TYPES_AVEC_OR_CODES.indexOf(typeBijouP)>=0;
+  var carat=hasOrP?(document.getElementById('p-carat')&&document.getElementById('p-carat').value||''):'';
+  var prov=hasOrP?(document.getElementById('p-provenance')&&document.getElementById('p-provenance').value||'local'):'autre';
+  var type=hasOrP?prov:(typeBijouP||'autre');
+  var poids=hasOrP?(parseFloat(document.getElementById('p-poids')&&document.getElementById('p-poids').value)||0):(parseFloat(document.getElementById('p-poids-s')&&document.getElementById('p-poids-s').value)||0);
+  var qty=parseInt(document.getElementById('p-qty').value)||0,prix=parseInt(document.getElementById('p-prix').value)||0,seuil=parseInt(document.getElementById('p-seuil').value)||5;
+  if(!nom){showToast('Designation obligatoire.');return;}
+  // ref auto-generee, s'assurer unicite
+  if(!ref) ref='ART-'+String(STATE.counters.stk).padStart(4,'0');
+  if(STATE.stock.find(i=>i.ref===ref)){STATE.counters.stk++;ref='ART-'+String(STATE.counters.stk).padStart(4,'0');}
+  STATE.stock.unshift({ref,nom,carat,type,poids,qty,prix,seuil,typeBijou:typeBijouP});save();renderStocks();closeModal('modal-add-produit');showToast('✓ Article ajouté.');
 }
 function ajusterStock(ref){const i=STATE.stock.find(x=>x.ref===ref);if(!i)return;const n=prompt(`Qté pour "${i.nom}" (actuel: ${i.qty}):`,i.qty);if(n===null)return;const q=parseInt(n);if(isNaN(q)||q<0){showToast('⚠ Qté invalide.');return;}i.qty=q;save();renderStocks();showToast('✓ Stock ajusté.');}
 function supprimerArticle(ref){if(!confirm('Supprimer '+ref+' ?'))return;STATE.stock=STATE.stock.filter(i=>i.ref!==ref);save();renderStocks();showToast('Article supprimé.');}
@@ -857,7 +875,6 @@ function renderComptesClients(filtre=''){
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button class="btn small btn-primary" onclick="openDepotCC('${cc.id}')">+ Depot</button>
-        <button class="btn small" style="background:var(--warning-bg);color:var(--warning-text);border-color:transparent" onclick="ouvrirAjustCC('${cc.id}')">Utiliser pour vente</button>
         <button class="btn small" onclick="imprimerCompteClient('${cc.id}')">Imprimer</button>
         <button class="btn small btn-danger" onclick="supprimerCC('${cc.id}')">Supprimer</button>
       </div>
@@ -998,16 +1015,20 @@ function renderAchatsClients(){
 }
 
 function enregistrerAchatClient(){
-  const date   = document.getElementById('ac-date').value;
-  const client = document.getElementById('ac-client').value;
-  const desc   = document.getElementById('ac-description').value.trim();
-  const carat  = document.getElementById('ac-carat').value;
-  const poids  = parseFloat(document.getElementById('ac-poids').value)||0;
-  const prix   = parseInt(document.getElementById('ac-prix').value)||0;
-  const note      = document.getElementById('ac-note').value.trim();
-  const typeBijou = document.getElementById('ac-type-bijou')?.value||'';
-  if(!date||!client||!desc||!carat||poids<=0||prix<=0){
-    showToast('⚠ Tous les champs obligatoires doivent être remplis.');return;
+  var date   = document.getElementById('ac-date').value;
+  var client = document.getElementById('ac-client').value;
+  var desc   = document.getElementById('ac-description').value.trim();
+  var typeBijou = (document.getElementById('ac-type-bijou')&&document.getElementById('ac-type-bijou').value)||'';
+  var hasOrAC = TYPES_AVEC_OR_CODES.indexOf(typeBijou)>=0;
+  var carat  = hasOrAC?(document.getElementById('ac-carat')&&document.getElementById('ac-carat').value||''):'';
+  var poids  = hasOrAC?(parseFloat(document.getElementById('ac-poids')&&document.getElementById('ac-poids').value)||0):(parseFloat(document.getElementById('ac-poids-s')&&document.getElementById('ac-poids-s').value)||0);
+  var prov   = hasOrAC?(document.getElementById('ac-provenance')&&document.getElementById('ac-provenance').value||'local'):'';
+  var localAC  = (hasOrAC&&prov==='local')?poids:0;
+  var importeAC= (hasOrAC&&prov==='importe')?poids:0;
+  var prix   = parseInt(document.getElementById('ac-prix').value)||0;
+  var note   = document.getElementById('ac-note').value.trim();
+  if(!date||!client||!desc||!typeBijou||prix<=0){
+    showToast('Tous les champs obligatoires doivent etre remplis.');return;
   }
   const fileEl = document.getElementById('ac-photo');
   const file   = fileEl?.files?.[0];
@@ -1015,18 +1036,19 @@ function enregistrerAchatClient(){
     // Lire la photo en base64 puis enregistrer
     const reader = new FileReader();
     reader.onload = function(e) {
-      _sauvegarderReprise(date,client,desc,carat,typeBijou,poids,prix,note, e.target.result);
+      _sauvegarderReprise(date,client,desc,carat,typeBijou,poids,localAC,importeAC,prix,note,e.target.result);
     };
     reader.readAsDataURL(file);
   } else {
-    _sauvegarderReprise(date,client,desc,carat,typeBijou,poids,prix,note,null);
+    _sauvegarderReprise(date,client,desc,carat,typeBijou,poids,localAC,importeAC,prix,note,null);
   }
 }
 
-function _sauvegarderReprise(date,client,desc,carat,typeBijou,poids,prix,note,photo){
+function _sauvegarderReprise(date,client,desc,carat,typeBijou,poids,localVal,importeVal,prix,note,photo){
   const id=nextId('AC','ac');
   STATE.achatsClients.unshift({
     id, date, client, description:desc, carat, typeBijou, poids,
+    local:localVal||0, importe:importeVal||0,
     prixPropose:prix, note, photo: photo||null,
     saisiPar:STATE.currentUser?.role||'admin'
   });
@@ -1355,6 +1377,87 @@ function onChangePaiementVente(){
 
 
 // ============================================
+// LOGIQUE TYPE BIJOU / PROVENANCE / CARAT
+// ============================================
+var TYPES_AVEC_OR_CODES = ['or','raika','extra','argent-or'];
+
+function _getFieldIds(prefix) {
+  // Retourne les IDs des champs selon le prefix
+  var m = {
+    'v':      { type:'v-type-bijou',      carat:'v-carat',      local:'v-local',      importe:'v-importe',      badge:'v-carat-badge',      poids:'v-poids-or',      prov:'v-provenance',      simple:'v-poids-simple'   },
+    'edit-v': { type:'edit-v-type-bijou', carat:'edit-v-carat', local:'edit-v-local', importe:'edit-v-importe', badge:'edit-v-carat-badge', poids:'edit-v-poids-or', prov:'edit-v-provenance', simple:null               },
+    'ac':     { type:'ac-type-bijou',     carat:'ac-carat',     local:'ac-local',     importe:'ac-importe',     badge:'ac-carat-badge',     poids:'ac-poids',        prov:'ac-provenance',     simple:'ac-poids-simple'  },
+    'p':      { type:'p-type-bijou',      carat:'p-carat',      local:null,           importe:null,             badge:'p-carat-badge',      poids:'p-poids',         prov:'p-provenance',      simple:'p-poids-simple'   },
+  };
+  return m[prefix] || m['v'];
+}
+
+function onChangeTypeBijou(prefix) {
+  var ids = _getFieldIds(prefix);
+  var typeEl = document.getElementById(ids.type);
+  var type = typeEl && typeEl.value || '';
+  var hasOr = TYPES_AVEC_OR_CODES.indexOf(type) >= 0;
+
+  var orFields = document.getElementById(prefix + '-or-fields');
+  if (orFields) orFields.style.display = hasOr ? 'block' : 'none';
+
+  var simpleField = ids.simple && document.getElementById(ids.simple);
+  if (simpleField) simpleField.style.display = (!hasOr && type) ? 'block' : 'none';
+
+  if (!hasOr) {
+    var poidsEl = document.getElementById(ids.poids);
+    var caratEl = document.getElementById(ids.carat);
+    var badgeEl = document.getElementById(ids.badge);
+    var localEl = ids.local && document.getElementById(ids.local);
+    var importEl= ids.importe && document.getElementById(ids.importe);
+    if (poidsEl) poidsEl.value = '';
+    if (caratEl) caratEl.value = '';
+    if (badgeEl) badgeEl.style.display = 'none';
+    if (localEl) localEl.value = '0';
+    if (importEl) importEl.value = '0';
+    // Mettre à jour p-type pour le stock
+    if (prefix === 'p') {
+      var ptEl = document.getElementById('p-type');
+      if (ptEl) ptEl.value = type || 'autre';
+    }
+  } else {
+    onChangeProvenance(prefix);
+  }
+}
+
+function onChangeProvenance(prefix) {
+  var ids = _getFieldIds(prefix);
+  var prov = document.getElementById(ids.prov) && document.getElementById(ids.prov).value || 'local';
+  var poids = parseFloat(document.getElementById(ids.poids) && document.getElementById(ids.poids).value) || 0;
+  var filtre = prov === 'local' ? 'local' : 'importe';
+  var sel = document.getElementById(ids.carat); if (!sel) return;
+  var curVal = sel.value;
+  sel.innerHTML = '<option value="">— Choisir —</option>';
+  CARATS_LIST.filter(function(c){ return c.origine === filtre; }).forEach(function(c) {
+    var o = document.createElement('option');
+    o.value = c.code; o.textContent = c.label;
+    if (c.code === curVal) o.selected = true;
+    sel.appendChild(o);
+  });
+  if (ids.local) { var lEl=document.getElementById(ids.local); if(lEl) lEl.value = prov==='local'?poids:0; }
+  if (ids.importe){ var iEl=document.getElementById(ids.importe); if(iEl) iEl.value = prov==='importe'?poids:0; }
+  // Mettre à jour p-type pour le stock
+  if (prefix === 'p') {
+    var ptEl = document.getElementById('p-type');
+    if (ptEl) ptEl.value = prov;
+  }
+}
+
+function syncPoidsOr(prefix) {
+  var ids = _getFieldIds(prefix);
+  var prov = document.getElementById(ids.prov) && document.getElementById(ids.prov).value || 'local';
+  var poids = parseFloat(document.getElementById(ids.poids) && document.getElementById(ids.poids).value) || 0;
+  if (ids.local)  { var lEl=document.getElementById(ids.local);  if(lEl) lEl.value = prov==='local'?poids:0; }
+  if (ids.importe){ var iEl=document.getElementById(ids.importe);if(iEl) iEl.value = prov==='importe'?poids:0; }
+}
+
+
+// ============================================
 // DRAWER MOBILE
 // ============================================
 function toggleDrawer() {
@@ -1498,7 +1601,17 @@ function supprimerUser(id) {
 
 
 function fmtDateLong(d){ if(!d)return'—'; return new Date(d+'T00:00:00').toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long',year:'numeric'}); }
-function genNumFacture(ventId){ return 'FAC-'+ventId; }
+function genNumFacture(ventId){
+  // Chercher la vente et retourner son numFacture (ou en créer un)
+  var v = STATE.ventes.find(function(x){ return x.id === ventId; });
+  if (!v) return 'FAC-'+ventId;
+  if (!v.numFacture) {
+    STATE.counters.fac++;
+    v.numFacture = 'FAC-' + String(STATE.counters.fac).padStart(4,'0');
+    save();
+  }
+  return v.numFacture;
+}
 function afficherFacture(id) {
   calculerCumuls();
   const v=STATE.ventes.find(x=>x.id===id); if(!v)return;
@@ -1510,7 +1623,7 @@ function afficherFacture(id) {
   const restant=v.restant||0;
   const now=new Date();
   document.getElementById('facture-content').innerHTML=`
-<div class="facture" id="facture-print-zone">
+<div class="facture" id="facture-print-zone" data-numfac="${numFac}" data-client="${v.client}" data-date="${fmtDate(v.date)}">
   <div class="facture-header">
     <div class="facture-logo-zone">
       <div class="facture-logo-icon">💎</div>
@@ -1578,8 +1691,12 @@ function afficherFacture(id) {
 
 function imprimerFacture() {
   const zone=document.getElementById('facture-print-zone');
+  const numFac=zone&&zone.dataset.numfac||'Facture';
+  const client=zone&&zone.dataset.client||'';
+  const date=zone&&zone.dataset.date||'';
+  const pdfTitle=numFac+(client?' - '+client:'')+(date?' - '+date:'');
   const win=window.open('','_blank','width=800,height=1000');
-  win.document.write(`<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><title>Facture</title>
+  win.document.write(`<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><title>${pdfTitle}</title>
 <style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:'Segoe UI',Arial,sans-serif;font-size:13px;color:#111;background:#fff;padding:20px}
 .facture{max-width:720px;margin:0 auto}.facture-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:28px}
 .facture-logo-zone{display:flex;align-items:center;gap:14px}.facture-logo-icon{font-size:40px;line-height:1}

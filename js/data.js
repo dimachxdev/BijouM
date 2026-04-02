@@ -44,9 +44,14 @@ const INITIAL_CONNEXIONS = [
 const CARATS_LIST = [
   { code:'14k-local',   label:'14 carats - Local',   purete:'585/1000', couleur:'#FF9500', origine:'local'   },
   { code:'18k-local',   label:'18 carats - Local',   purete:'750/1000', couleur:'#FFB347', origine:'local'   },
+  { code:'21k-local',   label:'21 carats - Local',   purete:'875/1000', couleur:'#FFC800', origine:'local'   },
+  { code:'22k-local',   label:'22 carats - Local',   purete:'916/1000', couleur:'#FFD000', origine:'local'   },
+  { code:'24k-local',   label:'24 carats - Local',   purete:'999/1000', couleur:'#FFD700', origine:'local'   },
   { code:'14k-importe', label:'14 carats - Importe',  purete:'585/1000', couleur:'#E8943A', origine:'importe' },
-  { code:'18k-importe', label:'18 carats - Importe',  purete:'750/1000', couleur:'#FFC800', origine:'importe' },
-  { code:'21k-importe', label:'21 carats - Importe',  purete:'875/1000', couleur:'#FFD700', origine:'importe' },
+  { code:'18k-importe', label:'18 carats - Importe',  purete:'750/1000', couleur:'#FFA500', origine:'importe' },
+  { code:'21k-importe', label:'21 carats - Importe',  purete:'875/1000', couleur:'#FFC000', origine:'importe' },
+  { code:'22k-importe', label:'22 carats - Importe',  purete:'916/1000', couleur:'#FFCA00', origine:'importe' },
+  { code:'24k-importe', label:'24 carats - Importe',  purete:'999/1000', couleur:'#FFD700', origine:'importe' },
 ];
 
 // ============================================
@@ -55,15 +60,19 @@ const CARATS_LIST = [
 
 
 const TYPES_BIJOUX = [
-  { code:'raika',       label:'Raika' },
-  { code:'extra',       label:'Extra' },
-  { code:'argent',      label:'Argent' },
-  { code:'ndiakhass',   label:'Ndiakhass' },
-  { code:'argent-or',   label:'Argent Or' },
-  { code:'pierre',      label:'Pierre precieuse' },
-  { code:'argent-dore', label:'Argent dore' },
-  { code:'marcasite',   label:'Marcasite' },
+  { code:'or',          label:'Or',              hasOr: true  },
+  { code:'raika',       label:'Raika',           hasOr: true  },
+  { code:'extra',       label:'Extra',           hasOr: true  },
+  { code:'argent',      label:'Argent',          hasOr: false },
+  { code:'ndiakhass',   label:'Ndiakhass',       hasOr: false },
+  { code:'argent-or',   label:'Argent Or',       hasOr: true  },
+  { code:'pierre',      label:'Pierre precieuse',hasOr: false },
+  { code:'argent-dore', label:'Argent dore',     hasOr: false },
+  { code:'marcasite',   label:'Marcasite',       hasOr: false },
 ];
+
+// Types qui permettent de choisir local/importe/carat
+const TYPES_AVEC_OR = ['or','raika','extra','argent-or'];
 
 // ============================================
 // CLIENTS
