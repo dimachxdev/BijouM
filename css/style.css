@@ -138,13 +138,15 @@ html, body {
 .sidebar.open { transform: translateX(0); }
 
 .logo {
-  display: flex; align-items: center; gap: 10px;
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
   padding: 18px 16px 14px;
-  border-bottom: 0.5px solid var(--border-light);
+  border-bottom: 1px solid rgba(201,168,76,0.3);
+  text-align: center;
 }
 .logo-icon  { font-size: 22px; line-height: 1; }
-.logo-title { font-size: 14px; font-weight: 600; color: var(--text-primary); letter-spacing: -0.2px; }
-.logo-sub   { font-size: 11px; color: var(--text-tertiary); margin-top: 1px; }
+.logo-title { font-size: 14px; font-weight: 600; color: var(--accent); letter-spacing: 2px; }
+.logo-sub   { font-size: 10px; color: rgba(255,255,255,0.4); margin-top: 1px; letter-spacing: 1px; text-transform: uppercase; }
+.brand-tagline { font-size: 11px; color: rgba(201,168,76,0.7); letter-spacing: 1px; font-style: italic; }
 
 .nav { flex: 1; padding: 10px 8px; display: flex; flex-direction: column; gap: 2px; }
 .nav-section-label {
@@ -618,3 +620,107 @@ tr:hover td { background: var(--bg-secondary); }
 .paiement-carte{background:#eeedfe;color:#534ab7}
 .paiement-livraison{background:var(--bg-secondary);color:var(--text-secondary);border:0.5px solid var(--border-light)}
 .paiement-compte{background:var(--local-bg);color:var(--local-text)}
+
+/* ===== CHARTE KAYOR ===== */
+:root {
+  --kayor-or:        #C9A84C;
+  --kayor-or-light:  #e8c96a;
+  --kayor-or-dark:   #8a6a1a;
+  --kayor-noir:      #1A1916;
+  --kayor-or-bg:     #faf3e0;
+  --kayor-gradient:  linear-gradient(135deg, #C9A84C 0%, #e8c96a 50%, #a8872e 100%);
+}
+
+/* Login screen KAYOR */
+.login-screen {
+  background: linear-gradient(160deg, #1A1916 0%, #2d2a22 60%, #1A1916 100%);
+}
+.login-box {
+  border-top: 3px solid #C9A84C;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.5), 0 0 0 1px rgba(201,168,76,0.15);
+}
+.login-logo-img {
+  display: block;
+  max-width: 200px;
+  margin: 0 auto 8px;
+}
+.login-tagline {
+  text-align: center;
+  font-size: 13px;
+  color: #C9A84C;
+  letter-spacing: 1px;
+  margin-bottom: 24px;
+  font-style: italic;
+}
+.login-box .btn-primary {
+  background: var(--kayor-gradient) !important;
+  border: none !important;
+  color: #fff !important;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+.login-box .btn-primary:hover { opacity: 0.9; }
+
+/* Sidebar KAYOR */
+.sidebar {
+  border-right: 1px solid rgba(201,168,76,0.2);
+}
+.sidebar-brand {
+  background: transparent;
+  border-bottom: 1px solid rgba(201,168,76,0.2);
+  padding: 20px 16px;
+}
+.brand-logo-img {
+  display: block;
+  max-width: 130px;
+  margin: 0 auto;
+}
+.brand-tagline {
+  text-align: center;
+  font-size: 10px;
+  color: var(--kayor-or);
+  letter-spacing: 1.5px;
+  margin-top: 4px;
+  text-transform: uppercase;
+}
+.nav-item.active {
+  background: linear-gradient(90deg, rgba(201,168,76,0.15) 0%, transparent 100%);
+  color: var(--kayor-or) !important;
+  border-left: 2px solid var(--kayor-or);
+}
+.nav-item:hover:not(.active) {
+  background: rgba(201,168,76,0.06);
+}
+
+/* Boutons primaires KAYOR */
+.btn-primary {
+  background: var(--kayor-gradient) !important;
+  border-color: transparent !important;
+  color: #fff !important;
+}
+.btn-primary:hover { opacity: 0.88; }
+
+/* Metric cards */
+.metric-card { border-top: 2px solid rgba(201,168,76,0.3); }
+.metric-value { color: var(--kayor-noir); }
+
+/* Carat pill or */
+.carat-pill { border: 1px solid rgba(201,168,76,0.3); background: #faf3e0; color: var(--kayor-or-dark); }
+
+/* Paiement pills */
+.paiement-especes { background: #faf3e0; color: var(--kayor-or-dark); }
+
+/* Page title accent */
+.page-title::after {
+  content: '';
+  display: block;
+  width: 36px;
+  height: 2px;
+  background: var(--kayor-gradient);
+  margin-top: 4px;
+  border-radius: 2px;
+}
+
+/* Facture header KAYOR */
+.facture-shop-name { color: var(--kayor-noir); }
+.facture-num { color: var(--kayor-or); }

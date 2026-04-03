@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Marjan Bijouterie — Gestion</title>
+  <title>KAYOR — Brillez sans effort</title>
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml" />
   <link rel="stylesheet" href="css/style.css" />
 </head>
@@ -14,9 +14,8 @@
      ============================================================ -->
 <div id="login-screen">
   <div class="login-card">
-    <div class="login-logo">💎</div>
-    <div class="login-title">Marjan Bijouterie</div>
-    <div class="login-sub">Connexion au système de gestion</div>
+    <div style="font-size:32px;font-weight:700;letter-spacing:2px;color:#C9A84C;text-align:center;margin-bottom:4px">KAYOR</div>
+    <div class="login-tagline">Brillez sans effort</div>
     <div class="form-group" style="margin-top:24px">
       <label class="form-label">Identifiant</label>
       <input class="form-input" type="text" id="login-user" placeholder="admin / stock / vendeur" autocomplete="username" />
@@ -45,7 +44,7 @@
 
 <!-- TOPBAR MOBILE -->
 <div class="topbar">
-  <div class="topbar-logo"><span class="topbar-logo-icon">💎</span><span class="topbar-logo-title">Marjan Bijouterie</span></div>
+  <div class="topbar-logo"><span style="font-weight:700;font-size:16px;letter-spacing:1px;color:#C9A84C">KAYOR</span></div>
   <div class="topbar-right"><span class="topbar-user-badge" id="topbar-role-badge"></span><button class="btn-logout-top" onclick="doLogout()" title="Déconnexion">⏻</button><button class="btn-menu" onclick="toggleDrawer()" aria-label="Menu">☰</button></div>
 </div>
 
@@ -56,11 +55,9 @@
   <!-- SIDEBAR -->
   <aside class="sidebar">
     <div class="logo">
-      <div class="logo-icon">💎</div>
-      <div>
-        <div class="logo-title">Marjan Bijouterie</div>
-        <div class="logo-sub">Système de gestion</div>
-      </div>
+      <img src="assets/logo-kayor.jpg" alt="KAYOR" style="max-width:120px;display:block;margin:0 auto" />
+      <div class="brand-tagline">Brillez sans effort</div>
+      <div class="logo-sub">Système de gestion</div>
     </div>
 
     <nav class="nav" id="main-nav">
@@ -164,7 +161,7 @@
       </div>
       <div class="filters-bar">
         <input class="form-input" style="flex:1;min-width:160px" type="text" placeholder="Client, description..." id="journal-search" />
-        <select class="form-input filter-select" id="filtre-carat"><option value="">Tous les carats</option></select>
+        <select class="form-input filter-select" id="filtre-carat" onchange="renderJournal()"><option value="">Tous les carats</option></select>
         <select class="form-input filter-select" id="filtre-type">
           <option value="">Tout type</option><option value="local">Local</option><option value="importe">Importé</option>
         </select>
@@ -246,7 +243,7 @@
       </div>
       <div class="card"><div class="table-wrap">
         <table>
-          <thead><tr><th>Date</th><th>Article</th><th>Réf.</th><th>Qté sortie</th><th>Motif</th><th>Validé par</th></tr></thead>
+          <thead><tr><th>Date</th><th>Type de bijou</th><th>Carat</th><th>Poids sorti (g)</th><th>Motif</th><th>Valide par</th></tr></thead>
           <tbody id="sorties-body"></tbody>
         </table>
       </div></div>
@@ -487,7 +484,13 @@
       </div>
       <div id="v-carat-badge" class="carat-badge" style="display:none;margin-bottom:12px"></div>
     </div>
-    <!-- Champs poids masqués (legacy pour compatibilité) -->
+    <!-- Poids pour types sans or -->
+    <div id="v-poids-simple" style="display:none;margin-bottom:12px">
+      <div class="form-group" style="max-width:200px">
+        <label class="form-label">Poids (g)</label>
+        <input class="form-input" type="number" step="0.01" min="0" placeholder="0,00" id="v-poids-simple-input" />
+      </div>
+    </div>
     <input type="hidden" id="v-local" value="0" />
     <input type="hidden" id="v-importe" value="0" />
     <div class="form-row-3">
@@ -642,26 +645,66 @@
 <div class="modal-backdrop" id="modal-add-sortie">
   <div class="modal">
     <div class="modal-header"><div class="modal-title">Nouvelle sortie de stock</div><button class="modal-close" onclick="closeModal('modal-add-sortie')">✕</button></div>
-    <div class="role-banner role-admin"><span>🔒</span> Opération réservée à l'administrateur</div>
-    <div class="form-row">
-      <div class="form-group"><label class="form-label">Date *</label><input class="form-input" type="date" id="s-date" /></div>
-      <div class="form-group"><label class="form-label">Article *</label><select class="form-input" id="s-article"><option value="">— Sélectionner —</option></select></div>
+    <div class="role-banner role-admin"><span>🔒</span> Operation reservee a l'administrateur</div>
+    <div class="form-group" style="margin-bottom:12px">
+      <label class="form-label">Date *</label>
+      <input class="form-input" type="date" id="s-date" style="max-width:200px" />
     </div>
+    <!-- Type de bijou -->
+    <div class="form-group" style="margin-bottom:12px">
+      <label class="form-label">Type de bijou *</label>
+      <select class="form-input" id="s-type-bijou" onchange="onChangeSortieType()">
+        <option value="">— Choisir —</option>
+      </select>
+    </div>
+    <!-- Champs Or -->
+    <div id="s-or-fields" style="display:none;margin-bottom:12px">
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Provenance</label>
+          <select class="form-input" id="s-provenance" onchange="onChangeSortieProv()">
+            <option value="local">Local</option>
+            <option value="importe">Importe</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Carat</label>
+          <select class="form-input" id="s-carat" onchange="onChangeSortieCarat()">
+            <option value="">— Choisir —</option>
+          </select>
+        </div>
+      </div>
+    </div>
+    <!-- Stock disponible -->
+    <div id="s-stock-info" style="display:none;margin-bottom:12px;padding:10px 14px;background:var(--bg-secondary);border-radius:var(--radius-md)">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <span style="font-size:13px;color:var(--text-secondary)">Stock disponible</span>
+        <strong id="s-stock-poids" style="font-size:16px;color:var(--success-text)">—</strong>
+      </div>
+    </div>
+    <!-- Poids + Motif -->
     <div class="form-row">
-      <div class="form-group"><label class="form-label">Quantité à sortir *</label><input class="form-input" type="number" min="1" placeholder="1" id="s-qty" /></div>
-      <div class="form-group"><label class="form-label">Motif *</label>
+      <div class="form-group">
+        <label class="form-label">Poids a sortir (g) *</label>
+        <input class="form-input" type="number" step="0.01" min="0" placeholder="0,00" id="s-poids" oninput="previewSortie()" />
+      </div>
+      <div class="form-group">
+        <label class="form-label">Motif *</label>
         <select class="form-input" id="s-motif">
           <option value="">— Choisir —</option>
           <option>Don / cadeau</option>
-          <option>Casse / défaut fabrication</option>
+          <option>Casse / defaut fabrication</option>
           <option>Perte / vol</option>
           <option>Retour fournisseur</option>
-          <option>Usage interne / réparation</option>
+          <option>Usage interne / reparation</option>
           <option>Autre</option>
         </select>
       </div>
     </div>
-    <div class="form-group" style="margin-bottom:12px"><label class="form-label">Commentaire</label><input class="form-input" type="text" placeholder="Précisions..." id="s-commentaire" /></div>
+    <div class="form-group" style="margin-bottom:12px">
+      <label class="form-label">Commentaire</label>
+      <input class="form-input" type="text" placeholder="Precisions..." id="s-commentaire" />
+    </div>
     <div class="modal-actions">
       <button class="btn btn-secondary" onclick="closeModal('modal-add-sortie')">Annuler</button>
       <button class="btn btn-primary" onclick="enregistrerSortie()">Valider la sortie</button>
@@ -770,16 +813,17 @@
 <!-- DÉPÔT COMPTE CLIENT -->
 <div class="modal-backdrop" id="modal-depot-cc">
   <div class="modal">
-    <div class="modal-header"><div class="modal-title">Ajouter un dépôt</div><button class="modal-close" onclick="closeModal('modal-depot-cc')">✕</button></div>
+    <div class="modal-header"><div class="modal-title">Depot / Ajustement compte</div><button class="modal-close" onclick="closeModal('modal-depot-cc')">✕</button></div>
     <input type="hidden" id="depot-cc-id" />
+    <div id="depot-cc-info"></div>
     <div class="form-row">
       <div class="form-group"><label class="form-label">Date *</label><input class="form-input" type="date" id="depot-cc-date" /></div>
       <div class="form-group"><label class="form-label">Montant (F CFA) *</label><input class="form-input" type="number" min="0" placeholder="0" id="depot-cc-montant" /></div>
     </div>
-    <div class="form-group" style="margin-bottom:12px"><label class="form-label">Note</label><input class="form-input" type="text" placeholder="ex: Dépôt mensuel" id="depot-cc-note" /></div>
+    <div class="form-group" style="margin-bottom:12px"><label class="form-label">Note</label><input class="form-input" type="text" placeholder="ex: Depot mensuel, Complement vente..." id="depot-cc-note" /></div>
     <div class="modal-actions">
       <button class="btn btn-secondary" onclick="closeModal('modal-depot-cc')">Annuler</button>
-      <button class="btn btn-primary" onclick="ajouterDepotCC()">Valider le dépôt</button>
+      <button class="btn btn-primary" onclick="ajouterDepotCC()">Valider le depot</button>
     </div>
   </div>
 </div>
@@ -1045,6 +1089,63 @@
     <div class="modal-actions">
       <button class="btn btn-secondary" onclick="closeModal('modal-ajust-cc')">Annuler</button>
       <button class="btn btn-primary" onclick="validerAjustCC()">Valider et creer la vente</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL COMPLEMENT COMPTE ÉPARGNE -->
+<div class="modal-backdrop" id="modal-complement-cc">
+  <div class="modal modal-large">
+    <div class="modal-header">
+      <div class="modal-title">Solde insuffisant — Complément requis</div>
+      <button class="modal-close" onclick="closeModal('modal-complement-cc')">✕</button>
+    </div>
+    <input type="hidden" id="complement-cc-id" />
+    <input type="hidden" id="complement-cc-montant" />
+    <input type="hidden" id="complement-cc-date" />
+    <input type="hidden" id="complement-cc-desc" />
+    <input type="hidden" id="complement-cc-carat" />
+    <input type="hidden" id="complement-cc-type" />
+    <!-- Résumé -->
+    <div style="background:var(--bg-secondary);border-radius:var(--radius-md);padding:14px;margin-bottom:16px">
+      <div style="font-size:14px;font-weight:700;margin-bottom:10px" id="complement-cc-client">—</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
+        <div style="text-align:center;padding:10px;background:var(--success-bg);border-radius:var(--radius-md)">
+          <div style="font-size:11px;color:var(--text-secondary);margin-bottom:4px">Solde compte</div>
+          <div style="font-size:18px;font-weight:700;color:var(--success-text)" id="complement-cc-solde">—</div>
+        </div>
+        <div style="text-align:center;padding:10px;background:var(--danger-bg);border-radius:var(--radius-md)">
+          <div style="font-size:11px;color:var(--text-secondary);margin-bottom:4px">Manque</div>
+          <div style="font-size:18px;font-weight:700;color:var(--danger-text)" id="complement-cc-manque">—</div>
+        </div>
+        <div style="text-align:center;padding:10px;background:var(--info-bg);border-radius:var(--radius-md)">
+          <div style="font-size:11px;color:var(--text-secondary);margin-bottom:4px">Total vente</div>
+          <div style="font-size:18px;font-weight:700;color:var(--info-text)" id="complement-cc-total">—</div>
+        </div>
+      </div>
+    </div>
+    <div style="font-size:13px;color:var(--text-secondary);margin-bottom:14px;padding:10px 14px;background:var(--warning-bg);border-radius:var(--radius-md)">
+      Le solde du compte sera utilisé entièrement. Le client doit compléter le montant manquant par un autre mode de paiement.
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Montant du complément (F CFA) *</label>
+        <input class="form-input" type="number" min="0" id="complement-cc-montant-comp" />
+      </div>
+      <div class="form-group">
+        <label class="form-label">Mode de paiement du complément</label>
+        <select class="form-input" id="complement-cc-paiement">
+          <option value="especes">Espèces</option>
+          <option value="wave">Wave</option>
+          <option value="orange-money">Orange Money</option>
+          <option value="carte">Carte bancaire</option>
+          <option value="livraison">Paiement à la livraison</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeModal('modal-complement-cc')">Annuler</button>
+      <button class="btn btn-primary" onclick="validerComplementCC()">Valider la vente avec complément</button>
     </div>
   </div>
 </div>
