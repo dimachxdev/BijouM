@@ -14,7 +14,7 @@
      ============================================================ -->
 <div id="login-screen">
   <div class="login-card">
-    <div style="font-size:32px;font-weight:700;letter-spacing:2px;color:#C9A84C;text-align:center;margin-bottom:4px">KAYOR</div>
+    <div style="text-align:center;margin-bottom:8px"><img src="assets/logo-kayor.jpg" alt="KAYOR" style="max-width:180px;max-height:100px;object-fit:contain" /></div>
     <div class="login-tagline">Brillez sans effort</div>
     <div class="form-group" style="margin-top:24px">
       <label class="form-label">Identifiant</label>
@@ -586,9 +586,9 @@
 <div class="modal-backdrop" id="modal-add-produit">
   <div class="modal modal-large">
     <div class="modal-header"><div class="modal-title">Ajouter un article au stock</div><button class="modal-close" onclick="closeModal('modal-add-produit')">✕</button></div>
-    <div class="form-row">
-      <div class="form-group"><label class="form-label">Reference (auto)</label><input class="form-input" id="p-ref" readonly style="background:var(--bg-secondary);color:var(--text-secondary);font-weight:600" /></div>
-      <div class="form-group"><label class="form-label">Designation *</label><input class="form-input" placeholder="Collier, bracelet..." id="p-nom" /></div>
+    <div class="form-group" style="margin-bottom:12px">
+      <label class="form-label">Designation *</label>
+      <input class="form-input" placeholder="ex: Collier or 18k, Bracelet argent..." id="p-nom" />
     </div>
     <!-- Type de bijou EN PREMIER -->
     <div class="form-group" style="margin-bottom:12px">
@@ -597,7 +597,7 @@
         <option value="">— Choisir le type —</option>
       </select>
     </div>
-    <!-- Champs Or (conditionnels) -->
+    <!-- Champs Or conditionnels : Provenance → Carat → Poids -->
     <div id="p-or-fields" style="display:none;margin-bottom:12px">
       <div class="form-row">
         <div class="form-group">
@@ -614,25 +614,32 @@
           </select>
         </div>
         <div class="form-group">
-          <label class="form-label">Poids unitaire (g)</label>
-          <input class="form-input" type="number" step="0.01" placeholder="0,00" id="p-poids" oninput="syncPoidsOr('p')" />
+          <label class="form-label">Poids global (g) *</label>
+          <input class="form-input" type="number" step="0.01" min="0" placeholder="0,00" id="p-poids" oninput="syncPoidsOr('p')" />
         </div>
       </div>
       <div id="p-carat-badge" class="carat-badge" style="display:none;margin-bottom:8px"></div>
     </div>
-    <!-- Poids pour types sans or -->
+    <!-- Poids simple pour types sans or -->
     <div id="p-poids-simple" style="display:none;margin-bottom:12px">
-      <div class="form-group">
-        <label class="form-label">Poids unitaire (g)</label>
-        <input class="form-input" type="number" step="0.01" placeholder="0,00" id="p-poids-s" />
+      <div class="form-group" style="max-width:200px">
+        <label class="form-label">Poids global (g) *</label>
+        <input class="form-input" type="number" step="0.01" min="0" placeholder="0,00" id="p-poids-s" />
       </div>
     </div>
+    <input type="hidden" id="p-ref" value="" />
     <input type="hidden" id="p-type" value="autre" />
-    <!-- Qte + Prix + Seuil -->
+    <!-- Seuil alerte -->
     <div class="form-row">
-      <div class="form-group"><label class="form-label">Quantite</label><input class="form-input" type="number" min="0" placeholder="0" id="p-qty" /></div>
-      <div class="form-group"><label class="form-label">Prix unitaire (F CFA)</label><input class="form-input" type="number" min="0" placeholder="0" id="p-prix" /></div>
-      <div class="form-group"><label class="form-label">Seuil alerte</label><input class="form-input" type="number" min="0" placeholder="5" id="p-seuil" /></div>
+      <div class="form-group" style="max-width:160px">
+        <label class="form-label">Nombre d'articles</label>
+        <input class="form-input" type="number" min="1" placeholder="1" id="p-qty" value="1" />
+        <span class="form-hint">Informatif uniquement</span>
+      </div>
+      <div class="form-group" style="max-width:200px">
+        <label class="form-label">Seuil alerte (g)</label>
+        <input class="form-input" type="number" step="0.01" min="0" placeholder="50" id="p-seuil" />
+      </div>
     </div>
     <div class="modal-actions">
       <button class="btn btn-secondary" onclick="closeModal('modal-add-produit')">Annuler</button>
@@ -682,16 +689,24 @@
         <strong id="s-stock-poids" style="font-size:16px;color:var(--success-text)">—</strong>
       </div>
     </div>
-    <!-- Poids + Motif -->
+    <!-- Poids + Nombre articles -->
     <div class="form-row">
       <div class="form-group">
         <label class="form-label">Poids a sortir (g) *</label>
         <input class="form-input" type="number" step="0.01" min="0" placeholder="0,00" id="s-poids" oninput="previewSortie()" />
       </div>
       <div class="form-group">
-        <label class="form-label">Motif *</label>
+        <label class="form-label">Nombre d'articles</label>
+        <input class="form-input" type="number" min="0" placeholder="0" id="s-qty" />
+        <span class="form-hint">Informatif uniquement</span>
+      </div>
+    </div>
+    <!-- Motif (optionnel) + champ libre -->
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Motif</label>
         <select class="form-input" id="s-motif">
-          <option value="">— Choisir —</option>
+          <option value="">— Optionnel —</option>
           <option>Don / cadeau</option>
           <option>Casse / defaut fabrication</option>
           <option>Perte / vol</option>
@@ -700,10 +715,10 @@
           <option>Autre</option>
         </select>
       </div>
-    </div>
-    <div class="form-group" style="margin-bottom:12px">
-      <label class="form-label">Commentaire</label>
-      <input class="form-input" type="text" placeholder="Precisions..." id="s-commentaire" />
+      <div class="form-group">
+        <label class="form-label">Precisions (optionnel)</label>
+        <input class="form-input" type="text" placeholder="Details supplementaires..." id="s-commentaire" />
+      </div>
     </div>
     <div class="modal-actions">
       <button class="btn btn-secondary" onclick="closeModal('modal-add-sortie')">Annuler</button>
@@ -1153,5 +1168,33 @@
 <div class="toast" id="toast"></div>
 <script src="js/data.js"></script>
 <script src="js/app.js"></script>
+
+<!-- MODAL AJUSTER STOCK -->
+<div class="modal-backdrop" id="modal-ajust-stock">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">Ajuster le stock</div>
+      <button class="modal-close" onclick="closeModal('modal-ajust-stock')">✕</button>
+    </div>
+    <input type="hidden" id="ajust-stock-ref" />
+    <div id="ajust-stock-nom" style="font-weight:600;font-size:15px;margin-bottom:14px;color:var(--text-primary)">—</div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Poids global (g)</label>
+        <input class="form-input" type="number" step="0.01" min="0" placeholder="0,00" id="ajust-stock-poids" />
+        <span class="form-hint" id="ajust-stock-poids-actuel"></span>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Nombre d'articles</label>
+        <input class="form-input" type="number" min="0" placeholder="0" id="ajust-stock-qty" />
+        <span class="form-hint" id="ajust-stock-qty-actuel"></span>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeModal('modal-ajust-stock')">Annuler</button>
+      <button class="btn btn-primary" onclick="validerAjustStock()">Enregistrer</button>
+    </div>
+  </div>
+</div>
 </body>
 </html>
