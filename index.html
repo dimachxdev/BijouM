@@ -99,6 +99,8 @@
       <button class="nav-item" data-section="historique" data-perm="historique"><span class="nav-icon">◷</span> Historique connexions</button>
       <button class="nav-item" data-section="comptes_users" data-perm="historique"><span class="nav-icon">⊛</span> Gestion comptes</button>
       <button class="nav-item" data-section="rapport_jour" data-perm="all"><span class="nav-icon">◈</span> Rapport journalier</button>
+      <div class="nav-section-label" style="margin-top:8px">Données</div>
+      <button class="nav-item" data-section="sauvegarde" data-perm="sauvegarde"><span class="nav-icon">⬡</span> Sauvegarde &amp; Import</button>
     </nav>
 
     <div class="sidebar-footer">
@@ -277,7 +279,7 @@
       <input class="search-bar" type="text" placeholder="Rechercher un client..." id="client-search" />
       <div class="card"><div class="table-wrap">
         <table>
-          <thead><tr><th>Client</th><th>Téléphone</th><th>Total achats</th><th>Restant dû</th><th>Nb ventes</th><th>Niveau</th><th>Dernière visite</th></tr></thead>
+          <thead><tr><th>Client</th><th>Téléphone</th><th>Total achats</th><th>Restant dû</th><th>Nb ventes</th><th>Niveau</th><th>Dernière visite</th><th>Portail</th></tr></thead>
           <tbody id="clients-body"></tbody>
         </table>
       </div></div>
@@ -375,6 +377,148 @@
           <div class="card-header"><span class="card-title">Connexions du jour</span></div>
           <div id="rj-detail-connexions"></div>
         </div>
+      </div>
+    </section>
+
+    <!-- SAUVEGARDE & IMPORT -->
+    <section class="section" id="sauvegarde">
+      <div class="page-header">
+        <div><h1 class="page-title">Sauvegarde &amp; Import</h1><p class="page-sub">Exportez, restaurez et importez vos données</p></div>
+      </div>
+      <div class="two-col" style="margin-bottom:0">
+        <div class="card">
+          <div class="card-header"><span class="card-title">&#x2B07; Sauvegarde complète (JSON)</span></div>
+          <div class="card-body">
+            <p style="color:var(--text-secondary);font-size:13px;margin-bottom:16px">Exporte toutes les données (ventes, stock, clients, décaissements…) dans un fichier <code>.json</code>. Idéal pour une sauvegarde quotidienne ou un transfert vers un autre appareil.</p>
+            <button class="btn btn-primary" onclick="exporterSauvegardeJSON()">&#x2B07; Exporter la sauvegarde</button>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header"><span class="card-title">&#x2B06; Restauration JSON</span></div>
+          <div class="card-body">
+            <p style="color:var(--text-secondary);font-size:13px;margin-bottom:16px">Restaure toutes les données depuis un fichier <code>.json</code> exporté précédemment. <strong style="color:var(--danger-text)">Attention : remplace toutes les données actuelles.</strong></p>
+            <label class="btn btn-secondary" style="cursor:pointer;display:inline-flex;align-items:center;gap:6px">
+              &#x2B06; Choisir un fichier JSON
+              <input type="file" accept=".json" style="display:none" onchange="importerSauvegardeJSON(this)">
+            </label>
+          </div>
+        </div>
+      </div>
+      <!-- Sauvegarde automatique fichier -->
+      <div class="card" style="margin-top:16px">
+        <div class="card-header"><span class="card-title">Sauvegarde automatique fichier</span></div>
+        <div class="card-body">
+          <p style="color:var(--text-secondary);font-size:13px;margin-bottom:14px">
+            Autorise l'application à écrire <code>kayor_data.json</code> dans un dossier de votre choix à chaque enregistrement.
+            Ce fichier sera inclus automatiquement dans le ZIP envoyé par email.
+            <strong>(Nécessite Google Chrome)</strong>
+          </p>
+          <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:10px">
+            <button class="btn btn-primary" id="btn-activer-autobackup" onclick="activerSauvegardeAuto()">&#x2713; Activer</button>
+            <button class="btn btn-danger small" id="btn-desactiver-autobackup" onclick="desactiverSauvegardeAuto()" style="display:none">Désactiver</button>
+            <span id="autobackup-status" style="font-size:13px;color:var(--text-tertiary)">Non activée</span>
+          </div>
+          <div id="autobackup-last-ts" style="font-size:12px;color:var(--text-tertiary)"></div>
+        </div>
+      </div>
+
+      <!-- Configuration sauvegarde Windows -->
+      <div class="card" style="margin-top:16px">
+        <div class="card-header"><span class="card-title">&#x1F5A5; Planification Windows — Lundi 08h00</span></div>
+        <div class="card-body">
+          <p style="color:var(--text-secondary);font-size:13px;margin-bottom:16px">
+            Trois fichiers ont été créés dans votre dossier projet pour automatiser l'envoi hebdomadaire par email.
+          </p>
+          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;margin-bottom:16px">
+            <div style="padding:12px;background:var(--bg-secondary);border-radius:var(--radius-md)">
+              <div style="font-weight:600;font-size:13px;margin-bottom:4px">1. config_backup.json</div>
+              <div style="font-size:12px;color:var(--text-secondary)">Remplissez votre email Gmail, email destinataire et mot de passe d'application.</div>
+            </div>
+            <div style="padding:12px;background:var(--bg-secondary);border-radius:var(--radius-md)">
+              <div style="font-weight:600;font-size:13px;margin-bottom:4px">2. configurer_backup.bat</div>
+              <div style="font-size:12px;color:var(--text-secondary)">Clic droit → "Exécuter en tant qu'administrateur" pour installer la tâche planifiée.</div>
+            </div>
+            <div style="padding:12px;background:var(--bg-secondary);border-radius:var(--radius-md)">
+              <div style="font-weight:600;font-size:13px;margin-bottom:4px">3. backup_kayor.ps1</div>
+              <div style="font-size:12px;color:var(--text-secondary)">Script exécuté automatiquement chaque lundi. Compresse le dossier et envoie par email.</div>
+            </div>
+          </div>
+          <div style="padding:12px;background:#fef9e7;border:1px solid #f9ca24;border-radius:var(--radius-md);font-size:12px;color:#7d6608">
+            <strong>Mot de passe d'application Gmail :</strong> myaccount.google.com → Sécurité → Validation en 2 étapes → Mots de passe des applications → Créer pour "Messagerie / Windows".
+          </div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:16px">
+        <div class="card-header"><span class="card-title">Import CSV par module</span></div>
+        <div class="card-body">
+          <p style="color:var(--text-secondary);font-size:13px;margin-bottom:20px">Exportez les données de chaque module en CSV (compatible Excel), ou importez un fichier CSV pour ajouter des données.</p>
+          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:16px">
+            <div style="padding:16px;border:1px solid var(--border-light);border-radius:var(--radius-md)">
+              <div style="font-weight:600;margin-bottom:4px">Clients</div>
+              <div style="font-size:12px;color:var(--text-secondary);margin-bottom:12px">Nom, Téléphone, Email, Adresse</div>
+              <div style="display:flex;gap:8px;flex-wrap:wrap">
+                <button class="btn btn-secondary small" onclick="exporterModuleCSV('clients')">&#x2B07; Exporter</button>
+                <label class="btn btn-primary small" style="cursor:pointer">&#x2B06; Importer<input type="file" accept=".csv,.txt" style="display:none" onchange="importerCSV('clients',this)"></label>
+              </div>
+            </div>
+            <div style="padding:16px;border:1px solid var(--border-light);border-radius:var(--radius-md)">
+              <div style="font-weight:600;margin-bottom:4px">Stock &amp; Inventaire</div>
+              <div style="font-size:12px;color:var(--text-secondary);margin-bottom:12px">Réf, Nom, Carat, Type, Poids, Qté, Prix, Seuil</div>
+              <div style="display:flex;gap:8px;flex-wrap:wrap">
+                <button class="btn btn-secondary small" onclick="exporterModuleCSV('stock')">&#x2B07; Exporter</button>
+                <label class="btn btn-primary small" style="cursor:pointer">&#x2B06; Importer<input type="file" accept=".csv,.txt" style="display:none" onchange="importerCSV('stock',this)"></label>
+              </div>
+            </div>
+            <div style="padding:16px;border:1px solid var(--border-light);border-radius:var(--radius-md)">
+              <div style="font-weight:600;margin-bottom:4px">Ventes</div>
+              <div style="font-size:12px;color:var(--text-secondary);margin-bottom:12px">Date, Client, Description, Local(g), Importé(g), Carat, Montant, Acompte</div>
+              <div style="display:flex;gap:8px;flex-wrap:wrap">
+                <button class="btn btn-secondary small" onclick="exporterModuleCSV('ventes')">&#x2B07; Exporter</button>
+                <label class="btn btn-primary small" style="cursor:pointer">&#x2B06; Importer<input type="file" accept=".csv,.txt" style="display:none" onchange="importerCSV('ventes',this)"></label>
+              </div>
+            </div>
+            <div style="padding:16px;border:1px solid var(--border-light);border-radius:var(--radius-md)">
+              <div style="font-weight:600;margin-bottom:4px">Décaissements</div>
+              <div style="font-size:12px;color:var(--text-secondary);margin-bottom:12px">Date, Catégorie, Description, Montant</div>
+              <div style="display:flex;gap:8px;flex-wrap:wrap">
+                <button class="btn btn-secondary small" onclick="exporterModuleCSV('decaissements')">&#x2B07; Exporter</button>
+                <label class="btn btn-primary small" style="cursor:pointer">&#x2B06; Importer<input type="file" accept=".csv,.txt" style="display:none" onchange="importerCSV('decaissements',this)"></label>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <!-- Configuration EmailJS -->
+      <div class="card" style="margin-top:16px">
+        <div class="card-header" style="display:flex;justify-content:space-between;align-items:center">
+          <span class="card-title">✉ Configuration EmailJS — Reçus clients</span>
+          <a href="client.html" target="_blank" class="btn btn-primary small">&#x2197; Portail client</a>
+        </div>
+        <div class="card-body">
+          <p style="color:var(--text-secondary);font-size:13px;margin-bottom:16px">Nécessaire pour envoyer les reçus de dépôt par email aux clients. Créez un compte gratuit sur <strong>emailjs.com</strong>, puis remplissez les champs ci-dessous.</p>
+          <div class="form-row">
+            <div class="form-group"><label class="form-label">Service ID</label><input class="form-input" type="text" id="ejs-service" placeholder="service_xxxxxxx" /></div>
+            <div class="form-group"><label class="form-label">Template ID</label><input class="form-input" type="text" id="ejs-template" placeholder="template_xxxxxxx" /></div>
+            <div class="form-group"><label class="form-label">Public Key</label><input class="form-input" type="text" id="ejs-pubkey" placeholder="xxxxxxxxxxxxxxxxxxxx" /></div>
+          </div>
+          <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+            <button class="btn btn-primary" onclick="sauvegarderEmailJS()">Enregistrer la configuration</button>
+            <span id="ejs-status" style="font-size:13px;color:var(--text-tertiary)"></span>
+          </div>
+          <div style="margin-top:14px;padding:12px;background:#fef9e7;border:1px solid #f9ca24;border-radius:var(--radius-md);font-size:12px;color:#7d6608">
+            <strong>Variables du template EmailJS à utiliser :</strong><br>
+            <code>{{to_name}}</code> · <code>{{to_email}}</code> · <code>{{depot_montant}}</code> · <code>{{nouveau_solde}}</code> · <code>{{objectif}}</code> · <code>{{progression}}</code> · <code>{{bijou_cible}}</code> · <code>{{date_depot}}</code> · <code>{{note_depot}}</code>
+          </div>
+        </div>
+      </div>
+
+      <div class="card" id="import-log-card" style="display:none;margin-top:16px">
+        <div class="card-header" style="display:flex;justify-content:space-between;align-items:center">
+          <span class="card-title">Résultat de l'opération</span>
+          <button class="btn btn-secondary small" onclick="document.getElementById('import-log-card').style.display='none'">Fermer</button>
+        </div>
+        <div class="card-body" id="import-log"></div>
       </div>
     </section>
 
@@ -785,6 +929,10 @@
       <div class="form-group"><label class="form-label">Email</label><input class="form-input" type="email" placeholder="email@exemple.com" id="c-email" /></div>
       <div class="form-group"><label class="form-label">Adresse</label><input class="form-input" placeholder="Quartier, ville" id="c-adresse" /></div>
     </div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Code PIN client (4 chiffres)</label><input class="form-input" type="password" maxlength="4" inputmode="numeric" placeholder="••••" id="c-pin" style="letter-spacing:6px;font-size:18px" /></div>
+      <div class="form-group" style="display:flex;align-items:flex-end"><p style="font-size:12px;color:var(--text-tertiary);margin-bottom:8px">Permet au client de se connecter sur le portail client avec son téléphone + ce PIN.</p></div>
+    </div>
     <div class="modal-actions">
       <button class="btn btn-secondary" onclick="closeModal('modal-add-client')">Annuler</button>
       <button class="btn btn-primary" onclick="ajouterClient()">Enregistrer</button>
@@ -865,10 +1013,12 @@
         <button type="button" class="btn-add-client-inline" onclick="ouvrirMiniClient('ba-client')">+ Nouveau client</button>
       </div>
     </div>
-    <div class="form-group" style="margin-bottom:12px"><label class="form-label">Bijou réservé *</label>
-      <select class="form-input" id="ba-article" onchange="remplirPrixBijouArr()"><option value="">— Choisir un article en stock —</option></select>
+    <div class="form-group" style="margin-bottom:12px">
+      <label class="form-label">Bijou réservé *</label>
+      <input class="form-input" type="text" id="ba-article" placeholder="Ex : Collier or 22k, bague diamant solitaire 18k..." />
     </div>
     <div class="form-row">
+      <div class="form-group"><label class="form-label">Poids (g)</label><input class="form-input" type="number" min="0" step="0.01" placeholder="0.00" id="ba-poids" /></div>
       <div class="form-group"><label class="form-label">Prix total (F CFA) *</label><input class="form-input" type="number" min="0" id="ba-prix" oninput="calcBijouArrRestant()" /></div>
       <div class="form-group"><label class="form-label">Arrhes versées *</label><input class="form-input" type="number" min="0" placeholder="0" id="ba-arrhes" oninput="calcBijouArrRestant()" /></div>
     </div>

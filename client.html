@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>KAYOR — Espace Client</title>
+  <link rel="stylesheet" href="css/style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+  <style>
+    /* ── Page de connexion client ── */
+    .client-login-wrap {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--bg-secondary);
+      padding: 24px;
+    }
+    .client-login-box {
+      background: var(--bg-primary);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-lg);
+      padding: 40px 36px;
+      width: 100%;
+      max-width: 400px;
+    }
+    .client-login-logo {
+      text-align: center;
+      margin-bottom: 28px;
+    }
+    .client-login-logo .brand { font-size: 26px; font-weight: 800; color: var(--accent); letter-spacing: -0.5px; }
+    .client-login-logo .brand-sub { font-size: 12px; color: var(--text-tertiary); margin-top: 2px; }
+    .client-login-title { font-size: 18px; font-weight: 700; color: var(--text-primary); margin-bottom: 4px; text-align:center; }
+    .client-login-sub   { font-size: 13px; color: var(--text-secondary); margin-bottom: 24px; text-align:center; }
+    .pin-inputs { display: flex; gap: 10px; justify-content: center; margin: 8px 0 20px; }
+    .pin-input {
+      width: 54px; height: 58px; text-align: center; font-size: 22px; font-weight: 700;
+      border: 2px solid var(--border-light); border-radius: var(--radius-md);
+      background: var(--bg-secondary); color: var(--text-primary);
+      outline: none; transition: border-color .2s;
+    }
+    .pin-input:focus { border-color: var(--accent); }
+
+    /* ── Dashboard client ── */
+    .client-app { min-height: 100vh; background: var(--bg-secondary); }
+    .client-header {
+      background: var(--bg-primary);
+      border-bottom: 1px solid var(--border-light);
+      padding: 0 24px;
+      height: 60px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .client-header .brand { font-size: 18px; font-weight: 800; color: var(--accent); }
+    .client-header .user-greeting { font-size: 14px; color: var(--text-secondary); }
+    .client-main { max-width: 720px; margin: 0 auto; padding: 24px 16px; }
+    .client-section-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .8px; color: var(--text-tertiary); margin: 24px 0 10px; }
+    .progress-wrap { height: 10px; background: var(--border-light); border-radius: 99px; overflow: hidden; margin: 10px 0; }
+    .progress-fill { height: 100%; background: var(--accent); border-radius: 99px; transition: width .6s ease; }
+    .depot-amount-row { display: flex; gap: 10px; flex-wrap: wrap; margin: 12px 0; }
+    .depot-quick-btn {
+      flex: 1; min-width: 80px; padding: 10px 8px; background: var(--bg-secondary);
+      border: 1.5px solid var(--border-light); border-radius: var(--radius-md);
+      font-size: 13px; font-weight: 600; cursor: pointer; color: var(--text-primary);
+      transition: border-color .15s, background .15s; text-align: center;
+    }
+    .depot-quick-btn:hover, .depot-quick-btn.selected { border-color: var(--accent); background: var(--accent-light, #eeedfe); color: var(--accent); }
+    .mvt-row { display: flex; justify-content: space-between; align-items: center; padding: 9px 0; border-bottom: .5px solid var(--border-light); font-size: 13px; }
+    .mvt-row:last-child { border-bottom: none; }
+    .mvt-amount.credit { color: var(--success-text); font-weight: 600; }
+    .mvt-amount.debit  { color: var(--danger-text);  font-weight: 600; }
+    .badge-encours { background: #fef3c7; color: #92400e; border-radius: 99px; padding: 2px 10px; font-size: 11px; font-weight: 600; }
+    .badge-solde   { background: var(--success-bg); color: var(--success-text); border-radius: 99px; padding: 2px 10px; font-size: 11px; font-weight: 600; }
+    .no-account-box { text-align: center; padding: 40px 20px; color: var(--text-tertiary); font-size: 14px; }
+    @media (max-width: 480px) { .client-login-box { padding: 28px 20px; } .pin-input { width: 46px; height: 52px; font-size: 20px; } }
+  </style>
+</head>
+<body>
+
+<!-- ══════════════════════════════════════════
+     PAGE CONNEXION CLIENT
+══════════════════════════════════════════ -->
+<div id="page-login" class="client-login-wrap">
+  <div class="client-login-box">
+    <div class="client-login-logo">
+      <div class="brand">KAYOR</div>
+      <div class="brand-sub">Bijouterie &amp; Joaillerie</div>
+    </div>
+    <div class="client-login-title">Espace Client</div>
+    <div class="client-login-sub">Connectez-vous pour accéder à votre compte</div>
+
+    <div class="form-group">
+      <label class="form-label">Numéro de téléphone</label>
+      <input class="form-input" type="tel" id="cl-tel" placeholder="77 XXX XX XX" autocomplete="off" />
+    </div>
+    <div class="form-group">
+      <label class="form-label">Code PIN (4 chiffres)</label>
+      <div class="pin-inputs">
+        <input class="pin-input" type="password" maxlength="1" inputmode="numeric" id="pin1" />
+        <input class="pin-input" type="password" maxlength="1" inputmode="numeric" id="pin2" />
+        <input class="pin-input" type="password" maxlength="1" inputmode="numeric" id="pin3" />
+        <input class="pin-input" type="password" maxlength="1" inputmode="numeric" id="pin4" />
+      </div>
+    </div>
+    <div id="login-error" style="color:var(--danger-text);font-size:13px;text-align:center;margin-bottom:12px;display:none"></div>
+    <button class="btn btn-primary" style="width:100%" onclick="doClientLogin()">Se connecter</button>
+    <div style="text-align:center;margin-top:16px;font-size:12px;color:var(--text-tertiary)">
+      Code PIN oublié ? Contactez la boutique.
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════
+     DASHBOARD CLIENT
+══════════════════════════════════════════ -->
+<div id="page-dashboard" class="client-app" style="display:none">
+  <header class="client-header">
+    <span class="brand">KAYOR</span>
+    <span class="user-greeting">Bonjour, <strong id="dash-client-prenom"></strong></span>
+    <button class="btn btn-secondary small" onclick="doClientLogout()">Déconnexion</button>
+  </header>
+
+  <div class="client-main">
+
+    <!-- ── Comptes épargne ── -->
+    <div class="client-section-title">Mes comptes épargne bijoux</div>
+    <div id="dash-comptes-epargne"></div>
+
+    <!-- ── Bijoux en arrhes ── -->
+    <div class="client-section-title">Mes bijoux en réservation</div>
+    <div id="dash-bijoux-arr"></div>
+
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════
+     MODAL DÉPÔT
+══════════════════════════════════════════ -->
+<div class="modal-backdrop" id="modal-depot">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">Faire un dépôt</div>
+      <button class="modal-close" onclick="closeDepotModal()">✕</button>
+    </div>
+    <div style="margin-bottom:14px">
+      <div style="font-size:13px;color:var(--text-secondary);margin-bottom:4px">Compte</div>
+      <div style="font-weight:600;font-size:15px" id="depot-compte-nom"></div>
+      <div style="font-size:13px;color:var(--success-text);margin-top:2px">Solde actuel : <strong id="depot-solde-actuel"></strong></div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Montant (F CFA) *</label>
+      <input class="form-input" type="number" min="0" id="depot-montant" placeholder="Ex : 50 000" oninput="onDepotMontantChange()" />
+    </div>
+    <div class="depot-amount-row" id="depot-quick-btns">
+      <div class="depot-quick-btn" onclick="setDepotQuick(10000)">10 000</div>
+      <div class="depot-quick-btn" onclick="setDepotQuick(25000)">25 000</div>
+      <div class="depot-quick-btn" onclick="setDepotQuick(50000)">50 000</div>
+      <div class="depot-quick-btn" onclick="setDepotQuick(100000)">100 000</div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Note (optionnel)</label>
+      <input class="form-input" type="text" id="depot-note" placeholder="Ex : Dépôt mensuel" />
+    </div>
+    <div id="depot-error" style="color:var(--danger-text);font-size:13px;margin-bottom:10px;display:none"></div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeDepotModal()">Annuler</button>
+      <button class="btn btn-primary" id="btn-confirmer-depot" onclick="confirmerDepot()">Confirmer le dépôt</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════
+     MODAL REÇU
+══════════════════════════════════════════ -->
+<div class="modal-backdrop" id="modal-recu">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">Reçu de dépôt</div>
+      <button class="modal-close" onclick="closeRecuModal()">✕</button>
+    </div>
+    <div id="recu-content" style="font-size:13px;line-height:1.8"></div>
+    <div class="modal-actions" style="flex-wrap:wrap;gap:8px">
+      <button class="btn btn-secondary" onclick="closeRecuModal()">Fermer</button>
+      <button class="btn btn-secondary" onclick="imprimerRecu()">🖨 Imprimer</button>
+      <button class="btn btn-primary" id="btn-envoyer-email" onclick="envoyerRecuEmail()">✉ Envoyer par email</button>
+    </div>
+  </div>
+</div>
+
+<div id="client-toast" style="position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(80px);background:var(--text-primary);color:#fff;padding:10px 20px;border-radius:99px;font-size:13px;font-weight:500;transition:transform .3s;z-index:9999;pointer-events:none"></div>
+
+<script src="js/data.js"></script>
+<script src="js/client.js"></script>
+</body>
+</html>

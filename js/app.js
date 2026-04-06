@@ -39,6 +39,7 @@ function save() {
     connexions:'connexions', counters:'counters'
   };
   Object.keys(keyMap).forEach(k => localStorage.setItem('marjan_'+keyMap[k], JSON.stringify(STATE[k])));
+  ecrireBackupAuto();
 }
 function nextId(prefix, key) { STATE.counters[key]++; save(); return prefix+'-'+String(STATE.counters[key]).padStart(4,'0'); }
 
@@ -163,6 +164,7 @@ function renderSection(id) {
   if(id==='compte_client') renderComptesClients();
   if(id==='bijou_arr')     renderBijouxArr();
   if(id==='historique')    renderHistorique();
+  if(id==='sauvegarde')    renderSauvegarde();
 }
 
 // ============================================
@@ -175,7 +177,7 @@ function openModal(id) {
   if(id==='modal-add-achat-client') { peuplerClientSelect('ac-client'); peuplerTypeBijou('ac-type-bijou'); document.getElementById('ac-date').value=today(); var orf=document.getElementById('ac-or-fields');if(orf)orf.style.display='none'; var sf=document.getElementById('ac-poids-simple');if(sf)sf.style.display='none'; }
   if(id==='modal-add-decaiss')      { prepDecaiss(); }
   if(id==='modal-add-compte-client'){ peuplerClientSelect('cc-client'); document.getElementById('cc-date').value=today(); }
-  if(id==='modal-add-bijou-arr')    { peuplerClientSelect('ba-client'); peuplerArticleSelect('ba-article'); document.getElementById('ba-date').value=today(); }
+  if(id==='modal-add-bijou-arr')    { peuplerClientSelect('ba-client'); document.getElementById('ba-date').value=today(); document.getElementById('ba-article').value=''; document.getElementById('ba-poids').value=''; document.getElementById('ba-prix').value=''; document.getElementById('ba-arrhes').value=''; document.getElementById('ba-restant-disp').value=''; document.getElementById('ba-echeance').value=''; }
   document.getElementById(id).classList.add('show');
 }
 function closeModal(id) { document.getElementById(id)?.classList.remove('show'); }
@@ -360,7 +362,7 @@ function afficherInfoCarat(selectId, badgeId) {
   if(!code){badge.style.display='none';return;}
   const c=getCarat(code); if(!c){badge.style.display='none';return;}
   badge.style.display='flex';
-  badge.innerHTML=`<span class="carat-dot" style="background:${c.couleur}"></span><span class="carat-code">${c.label}</span><span class="carat-purete">${c.purete}</span><span class="carat-desc">${c.origine==='local'?'Or fabriqué localement':'Or importé'}</span>`;
+  badge.innerHTML=`<span class="carat-dot" style="background:${c.couleur}"></span><span class="carat-code">${c.label}</span><span class="carat-desc">${c.origine==='local'?'Or fabriqué localement':'Or importé'}</span>`;
 }
 
 function peuplerFiltreCarat(){
@@ -996,16 +998,43 @@ function renderClients(f=''){
   const qn2=normalizeStr(q);const data=STATE.clients.filter(c=>c.nom.toLowerCase().includes(q)||normalizeStr(c.tel||'').includes(qn2)||(c.email||'').toLowerCase().includes(q));
   document.getElementById('clients-count-label').textContent=`${STATE.clients.length} clients`;
   const stats={};STATE.ventes.forEach(v=>{if(!stats[v.client])stats[v.client]={total:0,restant:0,nb:0,derniere:''};stats[v.client].total+=(v.montant||0);stats[v.client].restant+=(v.restant||0);stats[v.client].nb+=1;if(!stats[v.client].derniere||v.date>stats[v.client].derniere)stats[v.client].derniere=v.date;});
-  document.getElementById('clients-body').innerHTML=data.map(c=>{const s=stats[c.nom]||{total:0,restant:0,nb:0,derniere:''};const t=tier(s.total);const d=s.derniere===today()?"Aujourd'hui":s.derniere?fmtDate(s.derniere):'—';return`<tr><td><div style="display:flex;align-items:center;gap:10px"><div style="width:32px;height:32px;border-radius:50%;background:var(--info-bg);color:var(--info-text);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:600;flex-shrink:0">${ini(c.nom)}</div><div><div style="font-size:13px;font-weight:500">${c.nom}</div><div style="font-size:11px;color:var(--text-tertiary)">${c.tel}</div></div></div></td><td>${c.tel}</td><td><strong>${fmt(s.total)}</strong></td><td>${s.restant>0?`<span class="stock-badge stock-low">${fmt(s.restant)}</span>`:'<span style="color:var(--success-text);font-size:12px">Soldé</span>'}</td><td>${s.nb}</td><td><span class="tier-badge ${t.cls}">${t.label}</span></td><td style="font-size:12px;color:var(--text-secondary)">${d}</td></tr>`;}).join('');
+  const clientsPins=loadLS('marjan_clients_pin',{});
+  document.getElementById('clients-body').innerHTML=data.map(c=>{const s=stats[c.nom]||{total:0,restant:0,nb:0,derniere:''};const t=tier(s.total);const d=s.derniere===today()?"Aujourd'hui":s.derniere?fmtDate(s.derniere):'—';const hasPIN=!!clientsPins[c.id];return`<tr><td><div style="display:flex;align-items:center;gap:10px"><div style="width:32px;height:32px;border-radius:50%;background:var(--info-bg);color:var(--info-text);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:600;flex-shrink:0">${ini(c.nom)}</div><div><div style="font-size:13px;font-weight:500">${c.nom}</div><div style="font-size:11px;color:var(--text-tertiary)">${c.tel}</div></div></div></td><td>${c.tel}</td><td><strong>${fmt(s.total)}</strong></td><td>${s.restant>0?`<span class="stock-badge stock-low">${fmt(s.restant)}</span>`:'<span style="color:var(--success-text);font-size:12px">Soldé</span>'}</td><td>${s.nb}</td><td><span class="tier-badge ${t.cls}">${t.label}</span></td><td style="font-size:12px;color:var(--text-secondary)">${d}</td><td>${isAdmin()?`<button class="btn small ${hasPIN?'btn-secondary':'btn-primary'}" onclick="modifierPinClient('${c.id}')" title="${hasPIN?'Modifier le PIN':'Définir un PIN'}">${hasPIN?'🔑 PIN':'+ PIN'}</button>`:''}</td></tr>`;}).join('');
 }
 document.getElementById('client-search')?.addEventListener('input',function(){renderClients(this.value);});
 document.getElementById('cc-search')?.addEventListener('input',function(){renderComptesClients(this.value);});
 function ajouterClient(){
-  const nom=document.getElementById('c-nom').value.trim(),tel=document.getElementById('c-tel').value.trim(),email=document.getElementById('c-email').value.trim(),adresse=document.getElementById('c-adresse').value.trim();
+  const nom=document.getElementById('c-nom').value.trim(),tel=document.getElementById('c-tel').value.trim(),email=document.getElementById('c-email').value.trim(),adresse=document.getElementById('c-adresse').value.trim(),pin=document.getElementById('c-pin').value.trim();
   if(!nom||!tel){showToast('⚠ Nom et téléphone obligatoires.');return;}
   if(STATE.clients.find(c=>c.tel===tel)){showToast('⚠ Ce numéro existe déjà.');return;}
-  const id=nextId('CL','cl');STATE.clients.unshift({id,nom,tel,email,adresse});save();renderClients();closeModal('modal-add-client');['c-nom','c-tel','c-email','c-adresse'].forEach(x=>document.getElementById(x).value='');showToast(`✓ Client "${nom}" ajouté.`);
+  if(pin&&(pin.length!==4||!/^\d{4}$/.test(pin))){showToast('⚠ Le PIN doit être exactement 4 chiffres.');return;}
+  const id=nextId('CL','cl');
+  STATE.clients.unshift({id,nom,tel,email,adresse});
+  if(pin){ const pins=loadLS('marjan_clients_pin',{}); pins[id]=pin; localStorage.setItem('marjan_clients_pin',JSON.stringify(pins)); }
+  save();renderClients();closeModal('modal-add-client');['c-nom','c-tel','c-email','c-adresse','c-pin'].forEach(x=>document.getElementById(x).value='');showToast(`✓ Client "${nom}" ajouté.`);
 }
+function modifierPinClient(clientId){
+  const pin=prompt('Nouveau code PIN (4 chiffres) pour ce client :');
+  if(pin===null)return;
+  if(!/^\d{4}$/.test(pin)){showToast('⚠ Le PIN doit être exactement 4 chiffres.');return;}
+  const pins=loadLS('marjan_clients_pin',{});pins[clientId]=pin;localStorage.setItem('marjan_clients_pin',JSON.stringify(pins));
+  showToast('✓ PIN mis à jour.');
+}
+function sauvegarderEmailJS(){
+  const s=document.getElementById('ejs-service').value.trim(),t=document.getElementById('ejs-template').value.trim(),p=document.getElementById('ejs-pubkey').value.trim();
+  if(!s||!t||!p){showToast('⚠ Tous les champs EmailJS sont requis.');return;}
+  localStorage.setItem('marjan_emailjs',JSON.stringify({serviceId:s,templateId:t,publicKey:p}));
+  document.getElementById('ejs-status').textContent='✓ Configuration sauvegardée.';document.getElementById('ejs-status').style.color='var(--success-text)';
+  showToast('✓ Configuration EmailJS enregistrée.');
+}
+function loadEmailJSConfig(){
+  const cfg=loadLS('marjan_emailjs',{});
+  if(cfg.serviceId) document.getElementById('ejs-service').value=cfg.serviceId;
+  if(cfg.templateId) document.getElementById('ejs-template').value=cfg.templateId;
+  if(cfg.publicKey) document.getElementById('ejs-pubkey').value=cfg.publicKey;
+  if(cfg.serviceId) { document.getElementById('ejs-status').textContent='✓ Configuré.'; document.getElementById('ejs-status').style.color='var(--success-text)'; }
+}
+function renderSauvegarde(){ loadEmailJSConfig(); }
 
 // ============================================
 // COMPTES CLIENTS (épargne)
@@ -1113,7 +1142,7 @@ function renderBijouxArr(){
             <span class="stock-badge ${ec?(overdue?'stock-out':'stock-low'):'stock-ok'}">${ec?(overdue?'Échéance dépassée':'En cours'):'Soldé'}</span>
             <span class="ref-code">#${ba.id}</span>
           </div>
-          <div style="font-size:13px;color:var(--text-secondary)">${ba.article}</div>
+          <div style="font-size:13px;color:var(--text-secondary)">${ba.article}${ba.poids?` <span style="font-size:11px;color:var(--text-tertiary);margin-left:6px">${ba.poids}g</span>`:''}</div>
           <div style="font-size:12px;color:var(--text-tertiary);margin-top:2px">Réservé le ${fmtDate(ba.date)} · Échéance : ${fmtDate(ba.dateEcheance)}</div>
         </div>
         <div style="text-align:right;flex-shrink:0">
@@ -1131,13 +1160,12 @@ function renderBijouxArr(){
   }).join('');
 }
 function enregistrerBijouArr(){
-  const date=document.getElementById('ba-date').value,client=document.getElementById('ba-client').value,ref=document.getElementById('ba-article').value,prix=parseInt(document.getElementById('ba-prix').value)||0,arrhes=parseInt(document.getElementById('ba-arrhes').value)||0,echeance=document.getElementById('ba-echeance').value;
-  if(!date||!client||!ref||prix<=0||arrhes<=0||!echeance){showToast('⚠ Tous les champs sont obligatoires.');return;}
+  const date=document.getElementById('ba-date').value,client=document.getElementById('ba-client').value,article=document.getElementById('ba-article').value.trim(),poids=parseFloat(document.getElementById('ba-poids').value)||0,prix=parseInt(document.getElementById('ba-prix').value)||0,arrhes=parseInt(document.getElementById('ba-arrhes').value)||0,echeance=document.getElementById('ba-echeance').value;
+  if(!date||!client||!article||prix<=0||arrhes<=0||!echeance){showToast('⚠ Tous les champs sont obligatoires.');return;}
   if(arrhes>prix){showToast('⚠ Les arrhes ne peuvent pas dépasser le prix.');return;}
   if(echeance<=date){showToast('⚠ L\'échéance doit être après la date de réservation.');return;}
-  const stock=STATE.stock.find(i=>i.ref===ref);const articleLabel=stock?`${ref} — ${stock.nom}`:ref;
   const id=nextId('BA','ba');
-  STATE.bijouxArr.unshift({id,date,client,article:articleLabel,prixTotal:prix,arrhesVerse:arrhes,restantDu:prix-arrhes,dateEcheance:echeance,statut:'en_cours',mouvements:[{date,montant:arrhes,note:'Arrhes initiales'}]});
+  STATE.bijouxArr.unshift({id,date,client,article,poids,prixTotal:prix,arrhesVerse:arrhes,restantDu:prix-arrhes,dateEcheance:echeance,statut:'en_cours',mouvements:[{date,montant:arrhes,note:'Arrhes initiales'}]});
   save();closeModal('modal-add-bijou-arr');renderBijouxArr();renderDashboard();showToast(`✓ Réservation ${id} créée.`);
 }
 function openPaiementArr(id){document.getElementById('paiement-arr-id').value=id;document.getElementById('paiement-arr-date').value=today();document.getElementById('paiement-arr-montant').value='';document.getElementById('paiement-arr-note').value='';document.getElementById('modal-paiement-arr').classList.add('show');}
@@ -1154,8 +1182,7 @@ function enregistrerPaiementArr(){
 function retournerStockArr(id){
   const ba=STATE.bijouxArr.find(b=>b.id===id);if(!ba)return;
   if(!confirm(`Retourner le bijou en stock ? Les arrhes versées (${fmt(ba.arrhesVerse)}) seront considérées comme perdues par le client.`))return;
-  const ref=ba.article.split(' — ')[0];const stock=STATE.stock.find(i=>i.ref===ref);if(stock)stock.qty+=1;
-  ba.statut='retour_stock';save();renderBijouxArr();renderStocks();renderDashboard();showToast('Bijou retourné en stock.');
+  ba.statut='retour_stock';save();renderBijouxArr();renderDashboard();showToast('Réservation annulée — bijou remis disponible.');
 }
 
 // ============================================
@@ -1884,7 +1911,7 @@ function afficherFacture(id) {
   const v=STATE.ventes.find(x=>x.id===id); if(!v)return;
   const c=getCarat(v.carat);
   const numFac=genNumFacture(v.id);
-  const caratLabel=c?`${c.label} (${c.purete})`:v.carat?.toUpperCase()||'—';
+  const caratLabel=c?c.label:v.carat?.toUpperCase()||'—';
   const typeBijouLabel=(v.typeBijou&&TYPES_BIJOUX.find(t=>t.code===v.typeBijou)?.label)||'';
   const cl=STATE.clients.find(x=>x.nom===v.client)||{};
   const restant=v.restant||0;
@@ -2146,10 +2173,271 @@ ${content}</body></html>`);
 })();
 
 // ============================================
+// SAUVEGARDE & IMPORT
+// ============================================
+function renderSauvegarde() { /* section statique */ }
+
+function exporterSauvegardeJSON() {
+  const backup = {
+    _meta: {
+      app: 'KAYOR - Gestion Bijouterie',
+      version: '4',
+      date: new Date().toISOString(),
+      exportePar: STATE.currentUser?.nom || '—'
+    },
+    users:          STATE.users,
+    ventes:         STATE.ventes,
+    clients:        STATE.clients,
+    stock:          STATE.stock,
+    sorties:        STATE.sorties,
+    decaissements:  STATE.decaissements,
+    achats:         STATE.achats || [],
+    achatsClients:  STATE.achatsClients,
+    comptesClients: STATE.comptesClients,
+    bijouxArr:      STATE.bijouxArr,
+    connexions:     STATE.connexions,
+    counters:       STATE.counters
+  };
+  downloadFile('sauvegarde_kayor_' + today() + '.json', JSON.stringify(backup, null, 2), 'application/json');
+  showToast('✓ Sauvegarde exportée.');
+}
+
+function importerSauvegardeJSON(input) {
+  const file = input.files[0];
+  if (!file) return;
+  if (!isAdmin()) { showToast('⛔ Action réservée à l\'administrateur.'); input.value = ''; return; }
+  if (!confirm('Restaurer depuis "' + file.name + '" ?\n\nToutes les données actuelles seront remplacées. Cette action est irréversible.')) { input.value = ''; return; }
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const d = JSON.parse(e.target.result);
+      if (!d.ventes || !d.clients || !d.stock) throw new Error('Fichier invalide : données manquantes.');
+      if (d.users)          STATE.users          = d.users;
+      if (d.ventes)         STATE.ventes         = d.ventes;
+      if (d.clients)        STATE.clients        = d.clients;
+      if (d.stock)          STATE.stock          = d.stock;
+      if (d.sorties)        STATE.sorties        = d.sorties;
+      if (d.decaissements)  STATE.decaissements  = d.decaissements;
+      if (d.achatsClients)  STATE.achatsClients  = d.achatsClients;
+      if (d.comptesClients) STATE.comptesClients = d.comptesClients;
+      if (d.bijouxArr)      STATE.bijouxArr      = d.bijouxArr;
+      if (d.connexions)     STATE.connexions     = d.connexions;
+      if (d.counters)       STATE.counters       = d.counters;
+      save();
+      afficherLogImport('success', [
+        'Restauration réussie depuis : ' + file.name,
+        'Date de sauvegarde : ' + (d._meta?.date ? new Date(d._meta.date).toLocaleString('fr-FR') : '—'),
+        'Ventes : ' + d.ventes.length,
+        'Clients : ' + d.clients.length,
+        'Articles en stock : ' + d.stock.length,
+        'Décaissements : ' + d.decaissements.length,
+      ]);
+      showToast('✓ Données restaurées avec succès.');
+    } catch(err) {
+      showToast('⛔ Erreur : ' + err.message);
+      afficherLogImport('error', ['Échec restauration : ' + err.message]);
+    }
+    input.value = '';
+  };
+  reader.readAsText(file, 'UTF-8');
+}
+
+function exporterModuleCSV(module) {
+  let header, rows;
+  if (module === 'clients') {
+    header = ['Nom','Telephone','Email','Adresse'];
+    rows = STATE.clients.map(c => [c.nom, c.tel||'', c.email||'', c.adresse||'']);
+  } else if (module === 'stock') {
+    header = ['Reference','Nom','Carat','Type','Poids_g','Quantite','Prix_unitaire','Seuil'];
+    rows = STATE.stock.map(s => [s.ref, s.nom, s.carat||'', s.type||'', s.poids||0, s.qty||0, s.prix||0, s.seuil||0]);
+  } else if (module === 'ventes') {
+    header = ['Date','Client','Description','Or_local_g','Or_importe_g','Carat','Montant','Acompte','Restant'];
+    rows = STATE.ventes.map(v => [v.date, v.client, v.description||'', v.local||0, v.importe||0, v.carat||'', v.montant||0, v.acompte||0, v.restant||0]);
+  } else if (module === 'decaissements') {
+    header = ['Date','Categorie','Description','Montant'];
+    rows = STATE.decaissements.map(d => [d.date, d.categorie||'', d.description||'', d.montant||0]);
+  } else return;
+  const csv = [header, ...rows].map(r => r.map(x => '"' + String(x).replace(/"/g,'""') + '"').join(',')).join('\n');
+  downloadFile(module + '_kayor_' + today() + '.csv', csv, 'text/csv');
+  showToast('✓ Export CSV ' + module + ' (' + rows.length + ' lignes).');
+}
+
+function parseCSV(text) {
+  return text.replace(/\r\n/g,'\n').replace(/\r/g,'\n').split('\n').filter(l=>l.trim()).map(line=>{
+    const cols=[]; let cur='', inQ=false;
+    for (let i=0;i<line.length;i++) {
+      const ch=line[i];
+      if (ch==='"') { inQ=!inQ; }
+      else if (ch===','&&!inQ) { cols.push(cur.trim()); cur=''; }
+      else cur+=ch;
+    }
+    cols.push(cur.trim()); return cols;
+  });
+}
+
+function importerCSV(module, input) {
+  const file = input.files[0]; if (!file) return;
+  if (!isAdmin()) { showToast('⛔ Action réservée à l\'administrateur.'); input.value=''; return; }
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const rows = parseCSV(e.target.result);
+      if (rows.length < 2) throw new Error('Fichier vide ou sans données.');
+      const data = rows.slice(1).filter(r=>r.some(c=>c.trim()));
+      let ajouts=0, erreurs=[];
+
+      if (module==='clients') {
+        data.forEach((row,i)=>{
+          const nom=row[0]?.trim(); if(!nom){erreurs.push('Ligne '+(i+2)+' : Nom manquant');return;}
+          if(STATE.clients.find(c=>c.nom.toLowerCase()===nom.toLowerCase())){erreurs.push('Ligne '+(i+2)+' : "'+nom+'" déjà existant (ignoré)');return;}
+          STATE.counters.cl=(STATE.counters.cl||0)+1;
+          STATE.clients.push({id:'CL-'+String(STATE.counters.cl).padStart(3,'0'),nom,tel:row[1]?.trim()||'',email:row[2]?.trim()||'',adresse:row[3]?.trim()||''});
+          ajouts++;
+        });
+      } else if (module==='stock') {
+        data.forEach((row,i)=>{
+          const nom=row[1]?.trim(); if(!nom){erreurs.push('Ligne '+(i+2)+' : Nom manquant');return;}
+          STATE.counters.stk=(STATE.counters.stk||0)+1;
+          const ref=row[0]?.trim()||'BJX-'+String(STATE.counters.stk).padStart(4,'0');
+          if(STATE.stock.find(s=>s.ref===ref)){erreurs.push('Ligne '+(i+2)+' : Réf "'+ref+'" déjà existante (ignorée)');return;}
+          STATE.stock.push({ref,nom,carat:row[2]?.trim()||'18k-local',type:row[3]?.trim()||'local',poids:parseFloat(row[4])||0,qty:parseInt(row[5])||0,prix:parseFloat(row[6])||0,seuil:parseInt(row[7])||2});
+          ajouts++;
+        });
+      } else if (module==='ventes') {
+        data.forEach((row,i)=>{
+          const client=row[1]?.trim(), montant=parseFloat(row[6])||0;
+          if(!client||!montant){erreurs.push('Ligne '+(i+2)+' : Client ou montant manquant');return;}
+          STATE.counters.v=(STATE.counters.v||0)+1;
+          const acompte=parseFloat(row[7])||montant;
+          STATE.ventes.push({id:'V-'+String(STATE.counters.v).padStart(4,'0'),date:row[0]?.trim()||today(),client,description:row[2]?.trim()||'',local:parseFloat(row[3])||0,importe:parseFloat(row[4])||0,carat:row[5]?.trim()||'',montant,acompte,restant:montant-acompte});
+          ajouts++;
+        });
+      } else if (module==='decaissements') {
+        data.forEach((row,i)=>{
+          const montant=parseFloat(row[3])||0; if(!montant){erreurs.push('Ligne '+(i+2)+' : Montant manquant');return;}
+          STATE.counters.d=(STATE.counters.d||0)+1;
+          STATE.decaissements.push({id:'D-'+String(STATE.counters.d).padStart(4,'0'),date:row[0]?.trim()||today(),categorie:row[1]?.trim()||'Frais divers',description:row[2]?.trim()||'',montant,saisiPar:STATE.currentUser?.login||'import'});
+          ajouts++;
+        });
+      }
+
+      save();
+      afficherLogImport(erreurs.length?'warn':'success', [
+        'Module : '+module.charAt(0).toUpperCase()+module.slice(1)+' — Fichier : '+file.name,
+        ajouts+' ligne(s) importée(s) avec succès.',
+        ...erreurs
+      ]);
+      showToast('✓ Import terminé : '+ajouts+' ligne(s) ajoutée(s).');
+    } catch(err) {
+      showToast('⛔ Erreur CSV : '+err.message);
+      afficherLogImport('error',['Échec import '+module+' : '+err.message]);
+    }
+    input.value='';
+  };
+  reader.readAsText(file,'UTF-8');
+}
+
+function afficherLogImport(type, msgs) {
+  const card=document.getElementById('import-log-card'), log=document.getElementById('import-log');
+  if(!card||!log) return;
+  const colors={success:'var(--success-text)',error:'var(--danger-text)',warn:'#854f0b'};
+  const icons={success:'✓',error:'⛔',warn:'⚠'};
+  log.innerHTML=msgs.map((m,i)=>`<div style="font-size:13px;padding:4px 0;${i===0?'font-weight:600;color:'+colors[type]+';':'color:var(--text-secondary)'}">${i===0?(icons[type]+' '):''}${m}</div>`).join('');
+  card.style.display='';
+}
+
+// ============================================
+// SAUVEGARDE AUTOMATIQUE FICHIER (File System Access API)
+// ============================================
+let _autoBackupDirHandle = null;
+
+function _idbOpen() {
+  return new Promise((res,rej)=>{const r=indexedDB.open('kayor_fs',1);r.onupgradeneeded=e=>e.target.result.createObjectStore('handles');r.onsuccess=e=>res(e.target.result);r.onerror=()=>rej(r.error);});
+}
+function _idbGet(db,key) {
+  return new Promise((res,rej)=>{const tx=db.transaction('handles','readonly');const r=tx.objectStore('handles').get(key);r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error);});
+}
+function _idbSet(db,key,val) {
+  return new Promise((res,rej)=>{const tx=db.transaction('handles','readwrite');tx.objectStore('handles').put(val,key);tx.oncomplete=res;tx.onerror=()=>rej(tx.error);});
+}
+function _idbDel(db,key) {
+  return new Promise((res,rej)=>{const tx=db.transaction('handles','readwrite');tx.objectStore('handles').delete(key);tx.oncomplete=res;tx.onerror=()=>rej(tx.error);});
+}
+
+async function _initAutoBackup() {
+  if (!window.showDirectoryPicker) return;
+  try {
+    const db = await _idbOpen();
+    const handle = await _idbGet(db, 'backup_dir');
+    if (!handle) return;
+    const perm = await handle.queryPermission({ mode:'readwrite' });
+    if (perm === 'granted') { _autoBackupDirHandle = handle; _majStatutAutoBackup(true); }
+    else { _majStatutAutoBackup(false, 'Permission expirée — cliquez Activer'); }
+  } catch(e) { /* silencieux */ }
+}
+
+async function activerSauvegardeAuto() {
+  if (!window.showDirectoryPicker) { showToast('⛔ Fonctionnalité non supportée par votre navigateur (Chrome requis).'); return; }
+  try {
+    const handle = await window.showDirectoryPicker({ mode:'readwrite', startIn:'desktop' });
+    _autoBackupDirHandle = handle;
+    const db = await _idbOpen();
+    await _idbSet(db, 'backup_dir', handle);
+    await ecrireBackupAuto(true);
+    _majStatutAutoBackup(true, handle.name);
+    showToast('✓ Sauvegarde automatique activée — dossier : ' + handle.name);
+  } catch(e) { if (e.name !== 'AbortError') showToast('⛔ ' + e.message); }
+}
+
+async function desactiverSauvegardeAuto() {
+  _autoBackupDirHandle = null;
+  try { const db = await _idbOpen(); await _idbDel(db, 'backup_dir'); } catch(e) {}
+  _majStatutAutoBackup(false);
+  showToast('Sauvegarde automatique désactivée.');
+}
+
+async function ecrireBackupAuto(force) {
+  if (!_autoBackupDirHandle) return;
+  try {
+    const perm = await _autoBackupDirHandle.requestPermission({ mode:'readwrite' });
+    if (perm !== 'granted') return;
+    const fh = await _autoBackupDirHandle.getFileHandle('kayor_data.json', { create:true });
+    const w  = await fh.createWritable();
+    await w.write(JSON.stringify({
+      _meta:{ app:'KAYOR', date:new Date().toISOString() },
+      ventes:STATE.ventes, clients:STATE.clients, stock:STATE.stock,
+      sorties:STATE.sorties, decaissements:STATE.decaissements,
+      achatsClients:STATE.achatsClients, comptesClients:STATE.comptesClients,
+      bijouxArr:STATE.bijouxArr, counters:STATE.counters
+    }, null, 2));
+    await w.close();
+    const ts = document.getElementById('autobackup-last-ts');
+    if (ts) ts.textContent = 'Dernière écriture : ' + new Date().toLocaleTimeString('fr-FR');
+  } catch(e) { console.warn('Auto-backup fichier :', e.message); }
+}
+
+function _majStatutAutoBackup(actif, nom) {
+  const statusEl = document.getElementById('autobackup-status');
+  const btnAct   = document.getElementById('btn-activer-autobackup');
+  const btnDeact = document.getElementById('btn-desactiver-autobackup');
+  if (!statusEl) return;
+  if (actif) {
+    statusEl.innerHTML = '<span style="color:var(--success-text);font-weight:600">✓ Activée</span> — kayor_data.json mis à jour à chaque enregistrement' + (nom ? ' (dossier : '+nom+')' : '');
+    if (btnAct)   btnAct.style.display   = 'none';
+    if (btnDeact) btnDeact.style.display = '';
+  } else {
+    statusEl.innerHTML = '<span style="color:var(--text-tertiary)">' + (nom || 'Non activée') + '</span>';
+    if (btnAct)   btnAct.style.display   = '';
+    if (btnDeact) btnDeact.style.display = 'none';
+  }
+}
+
+// ============================================
 // INIT
 // ============================================
 (function init(){
   calculerCumuls();
   const rdEl=document.getElementById('rapport-date');
   if(rdEl) rdEl.value=today();
+  _initAutoBackup();
 })();
