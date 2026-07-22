@@ -5,8 +5,8 @@
  * CONFIGURATION : Remplacer les deux lignes ci-dessous
  */
 
-const SUPABASE_URL = 'VOTRE_URL_ICI';       // ex: https://xxxx.supabase.co
-const SUPABASE_KEY = 'VOTRE_CLE_ANON_ICI';  // commence par eyJhbGci...
+const SUPABASE_URL = 'https://yflvtquowzvghwxyvuah.supabase.co';       // ex: https://xxxx.supabase.co
+const SUPABASE_KEY = 'https://yflvtquowzvghwxyvuah.supabase.co/rest/v1/';  // commence par eyJhbGci...
 
 const _supa = {
   headers: {
