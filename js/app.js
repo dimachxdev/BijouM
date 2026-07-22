@@ -83,22 +83,22 @@ function doLogin() {
   errEl.style.display='none';
   STATE.currentUser = user;
 
-  // Enregistrer la connexion
-  enregistrerConnexion(user, 'connexion');
-
-  document.getElementById('login-screen').style.display='none';
-  document.getElementById('main-app').style.display='block';
-  const role = ROLES[user.role];
-  document.getElementById('user-avatar').textContent = user.nom.split(' ').slice(0,2).map(p=>p[0]).join('').toUpperCase();
-  document.getElementById('user-name').textContent = user.nom;
-  document.getElementById('user-role-badge').textContent = role.label;
-  document.getElementById('user-role-badge').style.background = role.bg;
-  document.getElementById('user-role-badge').style.color = role.color;
-  // Topbar mobile badge
-  const tb = document.getElementById('topbar-role-badge');
-  if (tb) { tb.textContent = role.label; tb.style.background = role.bg; tb.style.color = role.color; }
-  buildNav();
-  renderDashboard();
+  // Charger les données depuis Supabase
+  chargerDonnees().then(function() {
+    enregistrerConnexion(user, 'connexion');
+    document.getElementById('login-screen').style.display='none';
+    document.getElementById('main-app').style.display='block';
+    const role = ROLES[user.role];
+    document.getElementById('user-avatar').textContent = user.nom.split(' ').slice(0,2).map(p=>p[0]).join('').toUpperCase();
+    document.getElementById('user-name').textContent = user.nom;
+    document.getElementById('user-role-badge').textContent = role.label;
+    document.getElementById('user-role-badge').style.background = role.bg;
+    document.getElementById('user-role-badge').style.color = role.color;
+    const tb = document.getElementById('topbar-role-badge');
+    if (tb) { tb.textContent = role.label; tb.style.background = role.bg; tb.style.color = role.color; }
+    buildNav();
+    renderDashboard();
+  });
 }
 
 function doLogout() {
