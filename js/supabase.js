@@ -5,8 +5,8 @@
  * CONFIGURATION : Remplacer les deux lignes ci-dessous
  */
 
-const SUPABASE_URL = 'https://yflvtquowzvghwxyvuah.supabase.co';       // ex: https://xxxx.supabase.co
-const SUPABASE_KEY = 'https://yflvtquowzvghwxyvuah.supabase.co/rest/v1/';  // commence par eyJhbGci...
+const SUPABASE_URL = 'https://yflvtquowzvghwxyvuah.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_3EBGFxeT8B8cys54IZj3Nw_ZTS-4ZR1';
 
 const _supa = {
   headers: {
