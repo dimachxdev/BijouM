@@ -20,7 +20,9 @@ const _supa = {
     return r.json();
   },
   async upsert(table, data) {
-    const body = JSON.stringify(Array.isArray(data) ? data : [data]);
+    const rows = Array.isArray(data) ? data : [data];
+    const body = JSON.stringify(rows);
+    console.log('SUPABASE UPSERT', table, rows.length, 'lignes');
     const r = await fetch(SUPABASE_URL + '/rest/v1/' + table, {
       method: 'POST',
       headers: Object.assign({}, this.headers, { 'Prefer': 'resolution=merge-duplicates,return=representation' }),
@@ -29,9 +31,12 @@ const _supa = {
     if (!r.ok) {
       const t = await r.text();
       console.error('SUPABASE ERREUR upsert ' + table + ' (' + r.status + '):', t);
+      console.error('Body envoyé:', body.substring(0, 500));
       throw new Error(table + ': ' + r.status + ' — ' + t);
     }
-    return r.json();
+    const result = await r.json();
+    console.log('SUPABASE OK', table, '->', result.length || 0, 'lignes');
+    return result;
   },
   async deleteRow(table, id) {
     const r = await fetch(SUPABASE_URL + '/rest/v1/' + table + '?id=eq.' + encodeURIComponent(id), {
