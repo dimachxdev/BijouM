@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>Debug Supabase KAYOR</title>
+<style>
+body{font-family:monospace;background:#1a1916;color:#fff;padding:20px}
+button{background:#C9A84C;color:#000;border:none;padding:10px 20px;font-weight:bold;cursor:pointer;margin:5px;border-radius:4px}
+.ok{color:#4caf50}.err{color:#f44336}
+pre{background:#2d2b27;padding:12px;border-radius:4px;white-space:pre-wrap;word-break:break-all;font-size:11px;margin:6px 0}
+</style>
+</head>
+<body>
+<h2 style="color:#C9A84C">Debug Supabase KAYOR</h2>
+<button onclick="testClients()">Test INSERT clients</button>
+<button onclick="testVentes()">Test INSERT ventes</button>
+<button onclick="testCompteurs()">Test UPSERT compteurs</button>
+<button onclick="testSelect()">Test SELECT tous</button>
+<div id="log"></div>
+<script>
+const URL = 'https://yflvtquowzvghwxyvuah.supabase.co';
+const KEY = 'sb_publishable_3EBGFxeT8B8cys54IZj3Nw_ZTS-4ZR1';
+const H = {
+  'Content-Type':'application/json',
+  'apikey': KEY,
+  'Authorization': 'Bearer ' + KEY,
+  'Prefer': 'resolution=merge-duplicates,return=representation'
+};
+
+function log(msg, cls) {
+  const d = document.getElementById('log');
+  const div = document.createElement('div');
+  div.innerHTML = '<pre class="'+(cls||'')+'">'+(new Date().toLocaleTimeString())+' — '+msg+'</pre>';
+  d.prepend(div);
+}
+
+async function post(table, data) {
+  const r = await fetch(URL+'/rest/v1/'+table, {
+    method:'POST', headers:H, body:JSON.stringify([data])
+  });
+  const txt = await r.text();
+  if(r.ok) log('OK '+table+' ('+r.status+')\n'+txt, 'ok');
+  else log('ERREUR '+table+' ('+r.status+')\nBody envoyé: '+JSON.stringify(data, null, 2)+'\nRéponse: '+txt, 'err');
+}
+
+async function testClients() {
+  await post('clients', {id:'TEST-CLI-001', nom:'Test Client', tel:'77 000 00 00', email:null, adresse:null});
+}
+
+async function testVentes() {
+  await post('ventes', {
+    id:'TEST-V-001', date:'2025-04-05', client:'Test Client',
+    description:'Test vente', type_bijou:'or', carat:'18k-local',
+    poids:10.5, local:10.5, importe:0, paiement:'especes',
+    montant:50000, acompte:50000, restant:0,
+    num_facture:'FAC-0001', compte_client_id:null, note_complement:null
+  });
+}
+
+async function testCompteurs() {
+  await post('compteurs', {cle:'test', valeur:1});
+}
+
+async function testSelect() {
+  const tables = ['clients','ventes','stock','compteurs','comptes_clients'];
+  for(const t of tables) {
+    const r = await fetch(URL+'/rest/v1/'+t+'?select=*&limit=1', {
+      headers:{...H, 'Prefer':''}
+    });
+    const txt = await r.text();
+    if(r.ok) log('SELECT '+t+' OK: '+txt.substring(0,100), 'ok');
+    else log('SELECT '+t+' ERREUR '+r.status+': '+txt, 'err');
+  }
+}
+</script>
+</body>
+</html>
