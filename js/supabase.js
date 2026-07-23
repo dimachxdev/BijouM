@@ -143,14 +143,20 @@ async function _db(label, fn) {
 
 async function saveVente(v) {
   await _db('saveVente', async function() {
-    await _supa.upsert('ventes', {
-      id:v.id, date:v.date, client:v.client, description:v.description,
-      type_bijou:v.typeBijou||null, carat:v.carat||null, poids:v.poids||0,
-      local:v.local||0, importe:v.importe||0, paiement:v.paiement,
-      montant:v.montant, acompte:v.acompte, restant:v.restant,
-      num_facture:v.numFacture||null, compte_client_id:v.compteClientId||null,
-      note_complement:v.noteComplement||null
-    });
+    // Colonnes de base (toujours présentes)
+    var row = {
+      id:v.id, date:v.date, client:v.client||null,
+      description:v.description||null, type_bijou:v.typeBijou||null,
+      carat:v.carat||null, poids:v.poids||0,
+      local:v.local||0, importe:v.importe||0,
+      paiement:v.paiement||null,
+      montant:v.montant||0, acompte:v.acompte||0, restant:v.restant||0
+    };
+    // Colonnes optionnelles — ajoutées seulement si elles ont une valeur
+    if (v.numFacture)      row.num_facture      = v.numFacture;
+    if (v.compteClientId)  row.compte_client_id = v.compteClientId;
+    if (v.noteComplement)  row.note_complement  = v.noteComplement;
+    await _supa.upsert('ventes', row);
     await saveCompteurs(['v','fac']);
   });
 }
