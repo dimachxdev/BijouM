@@ -176,7 +176,7 @@ function openModal(id) {
   if(id==='modal-add-achat-client') { peuplerClientSelect('ac-client'); peuplerTypeBijou('ac-type-bijou'); document.getElementById('ac-date').value=today(); var orf=document.getElementById('ac-or-fields');if(orf)orf.style.display='none'; var sf=document.getElementById('ac-poids-simple');if(sf)sf.style.display='none'; }
   if(id==='modal-add-decaiss')      { prepDecaiss(); }
   if(id==='modal-add-compte-client'){ peuplerClientSelect('cc-client'); document.getElementById('cc-date').value=today(); }
-  if(id==='modal-add-bijou-arr')    { peuplerClientSelect('ba-client'); peuplerArticleSelect('ba-article'); document.getElementById('ba-date').value=today(); }
+  if(id==='modal-add-bijou-arr')    { peuplerClientSelect('ba-client'); peuplerStockSelect('ba-article'); document.getElementById('ba-date').value=today(); }
   document.getElementById(id).classList.add('show');
 }
 function closeModal(id) { document.getElementById(id)?.classList.remove('show'); }
@@ -552,7 +552,7 @@ function enregistrerVente(){
   const desc=document.getElementById('v-description').value.trim();
   const local=parseFloat(document.getElementById('v-local').value)||0;
   const importe=parseFloat(document.getElementById('v-importe').value)||0;
-  const poids=parseFloat(document.getElementById('v-poids-or')&&document.getElementById('v-poids-or').style.display!=='none'?document.getElementById('v-poids-or').value:(document.getElementById('v-poids-simple-input')&&document.getElementById('v-poids-simple-input').value)||0)||0;
+  const poidsEl=document.getElementById('v-poids-vente');const poids=parseFloat(poidsEl&&poidsEl.value)||0;
   const carat=document.getElementById('v-carat').value;
   const typeBijou=(document.getElementById('v-type-bijou')&&document.getElementById('v-type-bijou').value)||'';
   const paiement=(document.getElementById('v-paiement')&&document.getElementById('v-paiement').value)||'especes';
@@ -1101,6 +1101,7 @@ function supprimerCC(id){if(!confirm('Supprimer ce compte ?'))return;STATE.compt
 // ============================================
 function remplirPrixBijouArr(){
   const sel=document.getElementById('ba-article');const opt=sel.options[sel.selectedIndex];
+  const stockItem=getStockItem(sel.value);
   if(opt?.dataset.prix){document.getElementById('ba-prix').value=opt.dataset.prix;calcBijouArrRestant();}
 }
 function calcBijouArrRestant(){
@@ -1726,6 +1727,92 @@ function validerComplementCC() {
   closeModal('modal-nouvelle-vente');
   renderJournal(); renderDashboard(); renderComptesClients();
   showToast('Vente '+id+' — Compte: '+fmt(soldeUtilise)+' + Complement: '+fmt(montantComp));
+}
+
+
+// ============================================
+// LIAISON STOCK → VENTE / SORTIE / ARRHES
+// ============================================
+function peuplerStockSelect(selId, filtreDispoMin) {
+  var sel = document.getElementById(selId); if(!sel) return;
+  var curVal = sel.value;
+  sel.innerHTML = '<option value="">— Choisir un article en stock —</option>';
+  var minPoids = filtreDispoMin || 0;
+  STATE.stock
+    .filter(function(s){ return (s.poidsTotalG||0) > minPoids; })
+    .sort(function(a,b){ return (a.nom||'').localeCompare(b.nom||''); })
+    .forEach(function(s) {
+      var o = document.createElement('option');
+      o.value = s.ref;
+      var typeLbl = TYPES_BIJOUX.find(function(t){return t.code===s.typeBijou;});
+      var label = s.nom
+        + ' — ' + (typeLbl?typeLbl.label:(s.typeBijou||''))
+        + (s.carat?' '+s.carat.toUpperCase():'')
+        + (s.provenance?' ('+s.provenance+')':'')
+        + ' — ' + (s.poidsTotalG||0).toFixed(2) + 'g dispo';
+      o.textContent = label;
+      if(s.ref === curVal) o.selected = true;
+      sel.appendChild(o);
+    });
+}
+
+function getStockItem(ref) {
+  return STATE.stock.find(function(s){ return s.ref === ref; });
+}
+
+function afficherInfoStock(stockItem, labelId, dispoId, infoId) {
+  var info = document.getElementById(infoId);
+  if (!stockItem || !info) { if(info) info.style.display='none'; return; }
+  var typeLbl = TYPES_BIJOUX.find(function(t){return t.code===stockItem.typeBijou;});
+  var label = (typeLbl?typeLbl.label:stockItem.typeBijou||'')
+    + (stockItem.carat?' — '+stockItem.carat.toUpperCase():'')
+    + (stockItem.provenance?' ('+stockItem.provenance+')':'');
+  if(document.getElementById(labelId)) document.getElementById(labelId).textContent = label;
+  if(document.getElementById(dispoId)) {
+    document.getElementById(dispoId).textContent = (stockItem.poidsTotalG||0).toFixed(2)+'g disponible';
+    document.getElementById(dispoId).style.color = (stockItem.poidsTotalG||0) > 0 ? 'var(--success-text)' : 'var(--danger-text)';
+  }
+  info.style.display = 'block';
+}
+
+// Sélection article pour VENTE
+function onSelectStockVente(prefix) {
+  var ref = document.getElementById('v-stock-ref') && document.getElementById('v-stock-ref').value;
+  var s = getStockItem(ref);
+  afficherInfoStock(s, 'v-stock-label', 'v-stock-dispo', 'v-stock-info');
+  if (s) {
+    // Remplir les champs cachés
+    document.getElementById('v-type-bijou').value  = s.typeBijou || '';
+    document.getElementById('v-carat').value       = s.carat || '';
+    document.getElementById('v-provenance').value  = s.provenance || '';
+    document.getElementById('v-local').value       = s.provenance==='local'?(s.poidsTotalG||0):0;
+    document.getElementById('v-importe').value     = s.provenance==='importe'?(s.poidsTotalG||0):0;
+    // Pré-remplir description si vide
+    var desc = document.getElementById('v-description');
+    if (desc && !desc.value) desc.value = s.nom;
+  }
+}
+
+// Sélection article pour SORTIE
+function onSelectStockSortie() {
+  var ref = document.getElementById('s-stock-ref') && document.getElementById('s-stock-ref').value;
+  var s = getStockItem(ref);
+  afficherInfoStock(s, 's-stock-label', 's-stock-poids', 's-stock-info');
+  document.getElementById('s-type-bijou').value  = s ? (s.typeBijou||'') : '';
+  document.getElementById('s-carat').value       = s ? (s.carat||'') : '';
+  document.getElementById('s-provenance').value  = s ? (s.provenance||'') : '';
+  document.getElementById('s-poids').value       = '';
+}
+
+function checkPoidsVente() {
+  var ref = document.getElementById('v-stock-ref') && document.getElementById('v-stock-ref').value;
+  var s = getStockItem(ref);
+  var poids = parseFloat(document.getElementById('v-poids-vente') && document.getElementById('v-poids-vente').value) || 0;
+  var dispoEl = document.getElementById('v-stock-dispo');
+  if (s && dispoEl) {
+    var ok = poids <= (s.poidsTotalG||0);
+    dispoEl.style.color = ok ? 'var(--success-text)' : 'var(--danger-text)';
+  }
 }
 
 

@@ -454,45 +454,33 @@
       </div>
       <div style="font-size:11px;color:var(--text-secondary);margin-top:4px">Le montant sera automatiquement deduit du compte epargne.</div>
     </div>
-    <!-- Type bijou en premier -->
-    <div class="form-group" style="margin-bottom:12px">
-      <label class="form-label">Type de bijou *</label>
-      <select class="form-input" id="v-type-bijou" onchange="onChangeTypeBijou('v')">
-        <option value="">— Choisir le type —</option>
+    <!-- Sélecteur article stock -->
+    <div class="form-group" style="margin-bottom:8px">
+      <label class="form-label">Article en stock *</label>
+      <select class="form-input" id="v-stock-ref" onchange="onSelectStockVente('v')">
+        <option value="">— Choisir un article en stock —</option>
       </select>
     </div>
-    <!-- Champs Or : visibles seulement si type avec or -->
-    <div id="v-or-fields" style="display:none">
-      <div class="form-row">
-        <div class="form-group">
-          <label class="form-label">Provenance *</label>
-          <select class="form-input" id="v-provenance" onchange="onChangeProvenance('v')">
-            <option value="local">Local</option>
-            <option value="importe">Importe</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label class="form-label">Carat</label>
-          <select class="form-input" id="v-carat" onchange="afficherInfoCarat('v-carat','v-carat-badge')">
-            <option value="">— Choisir —</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label class="form-label">Poids (g)</label>
-          <input class="form-input" type="number" step="0.01" min="0" placeholder="0,00" id="v-poids-or" oninput="syncPoidsOr('v')" />
-        </div>
-      </div>
-      <div id="v-carat-badge" class="carat-badge" style="display:none;margin-bottom:12px"></div>
-    </div>
-    <!-- Poids pour types sans or -->
-    <div id="v-poids-simple" style="display:none;margin-bottom:12px">
-      <div class="form-group" style="max-width:200px">
-        <label class="form-label">Poids (g)</label>
-        <input class="form-input" type="number" step="0.01" min="0" placeholder="0,00" id="v-poids-simple-input" />
+    <!-- Info stock sélectionné -->
+    <div id="v-stock-info" style="display:none;margin-bottom:12px;padding:10px 14px;background:var(--bg-secondary);border-radius:var(--radius-md)">
+      <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px">
+        <span style="font-size:12px;color:var(--text-secondary)" id="v-stock-label">—</span>
+        <span style="font-size:13px;font-weight:700;color:var(--success-text)" id="v-stock-dispo">—</span>
       </div>
     </div>
+    <!-- Poids à vendre -->
+    <div class="form-group" style="margin-bottom:12px;max-width:200px">
+      <label class="form-label">Poids vendu (g) *</label>
+      <input class="form-input" type="number" step="0.01" min="0" placeholder="0,00" id="v-poids-vente" oninput="checkPoidsVente()" />
+    </div>
+    <!-- Champs cachés pour compatibilité -->
+    <input type="hidden" id="v-type-bijou" value="" />
+    <input type="hidden" id="v-carat" value="" />
     <input type="hidden" id="v-local" value="0" />
     <input type="hidden" id="v-importe" value="0" />
+    <input type="hidden" id="v-poids-or" value="" />
+    <input type="hidden" id="v-poids-simple-input" value="" />
+    <input type="hidden" id="v-provenance" value="" />
     <div class="form-row-3">
       <div class="form-group"><label class="form-label">Montant (F CFA) *</label><input class="form-input" type="number" min="0" placeholder="0" id="v-montant" oninput="calcRestant('v-montant','v-acompte','v-restant-disp')" /></div>
       <div class="form-group"><label class="form-label">Acompte (F CFA)</label><input class="form-input" type="number" min="0" placeholder="Laisser vide = soldé" id="v-acompte" oninput="calcRestant('v-montant','v-acompte','v-restant-disp')" /></div>
@@ -657,38 +645,23 @@
       <label class="form-label">Date *</label>
       <input class="form-input" type="date" id="s-date" style="max-width:200px" />
     </div>
-    <!-- Type de bijou -->
-    <div class="form-group" style="margin-bottom:12px">
-      <label class="form-label">Type de bijou *</label>
-      <select class="form-input" id="s-type-bijou" onchange="onChangeSortieType()">
-        <option value="">— Choisir —</option>
+    <!-- Sélecteur article stock -->
+    <div class="form-group" style="margin-bottom:8px">
+      <label class="form-label">Article en stock *</label>
+      <select class="form-input" id="s-stock-ref" onchange="onSelectStockSortie()">
+        <option value="">— Choisir un article en stock —</option>
       </select>
-    </div>
-    <!-- Champs Or -->
-    <div id="s-or-fields" style="display:none;margin-bottom:12px">
-      <div class="form-row">
-        <div class="form-group">
-          <label class="form-label">Provenance</label>
-          <select class="form-input" id="s-provenance" onchange="onChangeSortieProv()">
-            <option value="local">Local</option>
-            <option value="importe">Importe</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label class="form-label">Carat</label>
-          <select class="form-input" id="s-carat" onchange="onChangeSortieCarat()">
-            <option value="">— Choisir —</option>
-          </select>
-        </div>
-      </div>
     </div>
     <!-- Stock disponible -->
     <div id="s-stock-info" style="display:none;margin-bottom:12px;padding:10px 14px;background:var(--bg-secondary);border-radius:var(--radius-md)">
-      <div style="display:flex;justify-content:space-between;align-items:center">
-        <span style="font-size:13px;color:var(--text-secondary)">Stock disponible</span>
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px">
+        <span style="font-size:12px;color:var(--text-secondary)" id="s-stock-label">—</span>
         <strong id="s-stock-poids" style="font-size:16px;color:var(--success-text)">—</strong>
       </div>
     </div>
+    <input type="hidden" id="s-type-bijou" value="" />
+    <input type="hidden" id="s-carat" value="" />
+    <input type="hidden" id="s-provenance" value="" />
     <!-- Poids + Nombre articles -->
     <div class="form-row">
       <div class="form-group">
