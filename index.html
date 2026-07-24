@@ -838,10 +838,18 @@
         <button type="button" class="btn-add-client-inline" onclick="ouvrirMiniClient('ba-client')">+ Nouveau client</button>
       </div>
     </div>
-    <div class="form-group" style="margin-bottom:12px"><label class="form-label">Bijou réservé *</label>
+    <div class="form-group" style="margin-bottom:8px"><label class="form-label">Bijou réservé *</label>
       <select class="form-input" id="ba-article" onchange="remplirPrixBijouArr()"><option value="">— Choisir un article en stock —</option></select>
     </div>
+    <!-- Info stock -->
+    <div id="ba-stock-info" style="display:none;margin-bottom:12px;padding:10px 14px;background:var(--bg-secondary);border-radius:var(--radius-md)">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px">
+        <span style="font-size:12px;color:var(--text-secondary)" id="ba-stock-label">—</span>
+        <strong style="font-size:14px;color:var(--success-text)" id="ba-stock-dispo">—</strong>
+      </div>
+    </div>
     <div class="form-row">
+      <div class="form-group"><label class="form-label">Poids réservé (g)</label><input class="form-input" type="number" step="0.01" min="0" placeholder="0,00" id="ba-poids" /></div>
       <div class="form-group"><label class="form-label">Prix total (F CFA) *</label><input class="form-input" type="number" min="0" id="ba-prix" oninput="calcBijouArrRestant()" /></div>
       <div class="form-group"><label class="form-label">Arrhes versées *</label><input class="form-input" type="number" min="0" placeholder="0" id="ba-arrhes" oninput="calcBijouArrRestant()" /></div>
     </div>

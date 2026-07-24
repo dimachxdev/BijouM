@@ -1102,6 +1102,12 @@ function supprimerCC(id){if(!confirm('Supprimer ce compte ?'))return;STATE.compt
 function remplirPrixBijouArr(){
   const sel=document.getElementById('ba-article');const opt=sel.options[sel.selectedIndex];
   const stockItem=getStockItem(sel.value);
+  // Afficher info stock
+  afficherInfoStock(stockItem,'ba-stock-label','ba-stock-dispo','ba-stock-info');
+  if(stockItem){
+    var prixEl=document.getElementById('ba-prix');
+    if(prixEl&&!prixEl.value) prixEl.value=stockItem.prix||'';
+  }
   if(opt?.dataset.prix){document.getElementById('ba-prix').value=opt.dataset.prix;calcBijouArrRestant();}
 }
 function calcBijouArrRestant(){
@@ -1145,10 +1151,28 @@ function enregistrerBijouArr(){
   if(!date||!client||!ref||prix<=0||arrhes<=0||!echeance){showToast('⚠ Tous les champs sont obligatoires.');return;}
   if(arrhes>prix){showToast('⚠ Les arrhes ne peuvent pas dépasser le prix.');return;}
   if(echeance<=date){showToast('⚠ L\'échéance doit être après la date de réservation.');return;}
-  const stock=STATE.stock.find(i=>i.ref===ref);const articleLabel=stock?`${ref} — ${stock.nom}`:ref;
+  const stockBA=STATE.stock.find(i=>i.ref===ref);
+  if(!stockBA||(stockBA.poidsTotalG||0)<=0){showToast('Article non disponible en stock.');return;}
+  const articleLabel=stockBA?`${ref} — ${stockBA.nom}`:ref;
   const id=nextId('BA','ba');
-  STATE.bijouxArr.unshift({id,date,client,article:articleLabel,prixTotal:prix,arrhesVerse:arrhes,restantDu:prix-arrhes,dateEcheance:echeance,statut:'en_cours',mouvements:[{date,montant:arrhes,note:'Arrhes initiales'}]});
-  save();closeModal('modal-add-bijou-arr');renderBijouxArr();renderDashboard();showToast(`✓ Réservation ${id} créée.`);
+  // Stocker le ref stock + poids dans l'arrhes pour la liaison
+  const poidsBA=parseFloat(document.getElementById('ba-poids')&&document.getElementById('ba-poids').value)||0;
+  STATE.bijouxArr.unshift({
+    id,date,client,article:articleLabel,
+    stockRef:ref, typeBijou:stockBA.typeBijou, carat:stockBA.carat,
+    poids:poidsBA||0,
+    prixTotal:prix,arrhesVerse:arrhes,restantDu:prix-arrhes,
+    dateEcheance:echeance,statut:'en_cours',
+    mouvements:[{date,montant:arrhes,note:'Arrhes initiales'}]
+  });
+  // Déduire du stock si poids renseigné
+  if(poidsBA>0 && stockBA){
+    stockBA.poidsTotalG=Math.max(0,(stockBA.poidsTotalG||0)-poidsBA);
+    saveStockBatch([stockBA]);
+  }
+  save();saveBijouArr(STATE.bijouxArr[0]);
+  closeModal('modal-add-bijou-arr');renderBijouxArr();renderDashboard();renderStocks();
+  showToast('Reservation '+id+' creee.');
 }
 function openPaiementArr(id){document.getElementById('paiement-arr-id').value=id;document.getElementById('paiement-arr-date').value=today();document.getElementById('paiement-arr-montant').value='';document.getElementById('paiement-arr-note').value='';document.getElementById('modal-paiement-arr').classList.add('show');}
 function enregistrerPaiementArr(){
@@ -1163,6 +1187,11 @@ function enregistrerPaiementArr(){
 }
 function retournerStockArr(id){
   const ba=STATE.bijouxArr.find(b=>b.id===id);if(!ba)return;
+  // Remettre le poids en stock
+  if(ba.stockRef && ba.poids>0){
+    const s=STATE.stock.find(x=>x.ref===ba.stockRef);
+    if(s){ s.poidsTotalG=(s.poidsTotalG||0)+ba.poids; saveStockBatch([s]); renderStocks(); }
+  }
   if(!confirm(`Retourner le bijou en stock ? Les arrhes versées (${fmt(ba.arrhesVerse)}) seront considérées comme perdues par le client.`))return;
   const ref=ba.article.split(' — ')[0];const stock=STATE.stock.find(i=>i.ref===ref);if(stock)stock.qty+=1;
   ba.statut='retour_stock';save();renderBijouxArr();renderStocks();renderDashboard();showToast('Bijou retourné en stock.');
@@ -1238,20 +1267,49 @@ function enregistrerAchatClient(){
 
 function _sauvegarderReprise(date,client,desc,carat,typeBijou,poids,localVal,importeVal,prix,note,photo){
   const id=nextId('AC','ac');
-  STATE.achatsClients.unshift({
+  const reprise={
     id, date, client, description:desc, carat, typeBijou, poids,
     local:localVal||0, importe:importeVal||0,
     prixPropose:prix, note, photo: photo||null,
     saisiPar:STATE.currentUser?.role||'admin'
-  });
+  };
+  STATE.achatsClients.unshift(reprise);
+
+  // ── Alimenter le stock avec l'article repris ──────────────────
+  if(poids>0 && typeBijou){
+    // Chercher si un article du même type+carat existe déjà
+    var prov = localVal>0?'local':(importeVal>0?'importe':'');
+    var existing = STATE.stock.find(function(s){
+      return s.typeBijou===typeBijou && s.carat===carat && s.provenance===prov;
+    });
+    if(existing){
+      // Ajouter au stock existant
+      existing.poidsTotalG=(existing.poidsTotalG||0)+poids;
+      saveStockBatch([existing]);
+    } else {
+      // Créer un nouvel article en stock
+      STATE.counters.stk=(STATE.counters.stk||0)+1;
+      var newRef='STK-'+String(STATE.counters.stk).padStart(4,'0');
+      var newStock={
+        ref:newRef, nom:'Reprise — '+desc,
+        typeBijou:typeBijou, carat:carat||'', provenance:prov,
+        type:prov||typeBijou, poids:poids, poidsTotalG:poids,
+        qty:1, prix:prix, seuil:50
+      };
+      STATE.stock.unshift(newStock);
+      saveStock(newStock);
+    }
+    renderStocks();
+  }
+
   save();
+  saveReprise(reprise);
   closeModal('modal-add-achat-client');
-  // Reset champs
   ['ac-description','ac-note'].forEach(x=>document.getElementById(x).value='');
   document.getElementById('ac-photo').value='';
   document.getElementById('ac-photo-preview').style.display='none';
   renderAchatsClients();renderDashboard();
-  showToast(`✓ Reprise ${id} enregistrée — ${fmt(prix)}`);
+  showToast('Reprise '+id+' enregistree — '+fmt(prix)+' — Stock mis a jour');
 }
 
 function supprimerAchatClient(id){
