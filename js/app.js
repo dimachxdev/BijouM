@@ -31,7 +31,7 @@ const PAIEMENT_LABELS = {
   'carte':'Carte', 'livraison':'Livraison', 'compte':'Compte'
 };
 
-// save() reste pour compatibilité locale (mode offline)
+// save() : localStorage + flag Supabase
 function save() {
   const keyMap = {
     users:'users', ventes:'ventes', clients:'clients', stock:'stock',
@@ -42,6 +42,17 @@ function save() {
   Object.keys(keyMap).forEach(k => localStorage.setItem('marjan_'+keyMap[k], JSON.stringify(STATE[k])));
 }
 function nextId(prefix, key) { STATE.counters[key]++; save(); return prefix+'-'+String(STATE.counters[key]).padStart(4,'0'); }
+
+// ── Wrappers save + Supabase pour chaque entité ────────────────────────────
+function saveAndSyncVente(v)          { save(); saveVente(v); }
+function saveAndSyncStock(items)       { save(); saveStockBatch(Array.isArray(items)?items:[items]); }
+function saveAndSyncSortie(s)          { save(); saveSortie(s); }
+function saveAndSyncDecaissement(d)    { save(); saveDecaissement(d); }
+function saveAndSyncClient(c)          { save(); saveClient(c); }
+function saveAndSyncCC(cc)             { save(); saveCompteClient(cc); }
+function saveAndSyncReprise(r)         { save(); saveReprise(r); }
+function saveAndSyncBijouArr(ba)       { save(); saveBijouArr(ba); }
+function saveAndSyncConnexion(cn)      { save(); saveConnexion(cn); }
 
 // ============================================
 // PERMISSIONS
@@ -682,7 +693,7 @@ function sauvegarderVente(){
   document.getElementById('edit-v-carat').disabled=false;
 
   Object.assign(v,{date,client,description:desc,local,importe,carat,typeBijou,montant,acompte,restant:montant-acompte});
-  save();closeModal('modal-edit-vente');renderJournal();renderDashboard();
+  saveAndSyncVente(v);closeModal('modal-edit-vente');renderJournal();renderDashboard();
   showToast('✓ Vente mise à jour.');
 }
 
@@ -804,7 +815,7 @@ function validerAjustStock(){
   const qty=parseInt(document.getElementById('ajust-stock-qty').value)||0;
   const i=STATE.stock.find(x=>x.ref===ref); if(!i) return;
   i.poidsTotalG=poids; i.poids=poids; i.qty=qty;
-  save();saveStockBatch([i]); // Supabase async
+  saveAndSyncStock([i]);
   closeModal('modal-ajust-stock');renderStocks();
   showToast('Stock ajuste — '+poids+'g / '+qty+' article'+(qty>1?'s':''));
 }
@@ -935,9 +946,8 @@ function enregistrerSortie(){
   var labelType=typeBijou+(carat?' — '+carat.toUpperCase():'')+(prov?' ('+prov+')':'');
   const sortieObj={id,date,typeBijou:labelType,carat:carat||'—',poids:poidsSort,nbArticles:nbArticles||0,motif,commentaire,validePar:'admin'};
   STATE.sorties.unshift(sortieObj);
-  save();
-  saveSortie(sortieObj); // Supabase async
-  saveStockBatch(STATE.stock); // sync stock
+  saveAndSyncSortie(sortieObj);
+  saveAndSyncStock(STATE.stock);
   closeModal('modal-add-sortie');renderSorties();renderStocks();renderDashboard();
   showToast('Sortie '+id+' — '+poidsSort+'g enregistree.');
 }
@@ -1065,7 +1075,7 @@ function creerCompteClient(){
   if(!client||!date||depot<=0){showToast('⚠ Client, date et dépôt initial sont obligatoires.');return;}
   const id=nextId('CC','cc');
   STATE.comptesClients.push({id,client,dateOuverture:date,solde:depot,actif:true,mouvements:[{date,type:'depot',montant:depot,note:'Ouverture compte'}]});
-  save();closeModal('modal-add-compte-client');renderComptesClients();renderDashboard();showToast(`✓ Compte ${id} créé pour ${client}.`);
+  saveAndSyncCC(STATE.comptesClients[0]);closeModal('modal-add-compte-client');renderComptesClients();renderDashboard();showToast(`✓ Compte ${id} créé pour ${client}.`);
 }
 function openDepotCC(id){
   const cc=STATE.comptesClients.find(c=>c.id===id); if(!cc)return;
@@ -1085,7 +1095,7 @@ function ajouterDepotCC(){
   if(!date||montant<=0){showToast('⚠ Date et montant obligatoires.');return;}
   const cc=STATE.comptesClients.find(c=>c.id===id);if(!cc)return;
   cc.solde+=montant;cc.mouvements.push({date,type:'depot',montant,note});
-  save();closeModal('modal-depot-cc');renderComptesClients();renderDashboard();showToast(`✓ Dépôt de ${fmt(montant)} ajouté.`);
+  saveAndSyncCC(cc);closeModal('modal-depot-cc');renderComptesClients();renderDashboard();showToast(`✓ Dépôt de ${fmt(montant)} ajouté.`);
 }
 function cloturerCC(id){
   const cc=STATE.comptesClients.find(c=>c.id===id);if(!cc)return;
@@ -1183,7 +1193,7 @@ function enregistrerPaiementArr(){
   ba.arrhesVerse+=montant;ba.restantDu-=montant;ba.mouvements.push({date,montant,note});
   if(ba.restantDu===0){ba.statut='solde';showToast(`✓ Bijou entièrement soldé ! Paiement de ${fmt(montant)} enregistré.`);}
   else{showToast(`✓ Paiement de ${fmt(montant)} enregistré. Restant : ${fmt(ba.restantDu)}`);}
-  save();closeModal('modal-paiement-arr');renderBijouxArr();renderDashboard();
+  saveAndSyncBijouArr(ba);closeModal('modal-paiement-arr');renderBijouxArr();renderDashboard();
 }
 function retournerStockArr(id){
   const ba=STATE.bijouxArr.find(b=>b.id===id);if(!ba)return;
@@ -1192,6 +1202,7 @@ function retournerStockArr(id){
     const s=STATE.stock.find(x=>x.ref===ba.stockRef);
     if(s){ s.poidsTotalG=(s.poidsTotalG||0)+ba.poids; saveStockBatch([s]); renderStocks(); }
   }
+  save();
   if(!confirm(`Retourner le bijou en stock ? Les arrhes versées (${fmt(ba.arrhesVerse)}) seront considérées comme perdues par le client.`))return;
   const ref=ba.article.split(' — ')[0];const stock=STATE.stock.find(i=>i.ref===ref);if(stock)stock.qty+=1;
   ba.statut='retour_stock';save();renderBijouxArr();renderStocks();renderDashboard();showToast('Bijou retourné en stock.');
