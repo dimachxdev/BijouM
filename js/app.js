@@ -586,7 +586,7 @@ function enregistrerVente(){
 
   // Validations
   if(!date||!client||!stockRef||montant<=0){showToast('Date, client, article en stock et montant sont obligatoires.');return;}
-  if(poids<=0&&nbArticlesV<=0){showToast('Saisissez le poids vendu ou le nombre d\'articles.');return;}
+  // Poids OU nb articles suffit — les deux sont optionnels individuellement
   if(acompte>montant){showToast('Acompte ne peut pas depasser le montant.');return;}
   if(stockItem){
     if(poids>0 && poids>(stockItem.poidsTotalG||0)){showToast('Poids insuffisant (dispo: '+(stockItem.poidsTotalG||0).toFixed(2)+'g)');return;}
@@ -928,38 +928,41 @@ function renderSorties(){
 function enregistrerSortie(){
   if(!isAdmin()){showToast('Seul l\'administrateur peut effectuer des sorties.');return;}
   var date        = document.getElementById('s-date').value;
-  var typeBijou   = document.getElementById('s-type-bijou')&&document.getElementById('s-type-bijou').value||'';
-  var hasOr       = TYPES_AVEC_OR_CODES.indexOf(typeBijou)>=0;
-  var carat       = hasOr?(document.getElementById('s-carat')&&document.getElementById('s-carat').value||''):'';
-  var prov        = hasOr?(document.getElementById('s-provenance')&&document.getElementById('s-provenance').value||''):'';
+  var stockRef    = document.getElementById('s-stock-ref')&&document.getElementById('s-stock-ref').value||'';
+  var stockItem   = getStockItem(stockRef);
+  var typeBijou   = stockItem?(stockItem.typeBijou||''):(document.getElementById('s-type-bijou')&&document.getElementById('s-type-bijou').value||'');
+  var carat       = stockItem?(stockItem.carat||''):(document.getElementById('s-carat')&&document.getElementById('s-carat').value||'');
   var motif       = document.getElementById('s-motif').value;
   var commentaire = document.getElementById('s-commentaire').value;
   var nbArticles  = parseInt(document.getElementById('s-qty')&&document.getElementById('s-qty').value)||0;
   var poidsSort   = parseFloat(document.getElementById('s-poids')&&document.getElementById('s-poids').value)||0;
-  if(!date||!typeBijou||poidsSort<=0){showToast('Date, type de bijou et poids sont obligatoires.');return;}
-  // Déduire du stock les unités correspondantes
-  // Déduction directe par ref stock
-  var stockSortie = getStockItem(stockRef);
-  if(stockSortie){
-    if(poidsSort>0){
-      stockSortie.poidsTotalG = Math.max(0,(stockSortie.poidsTotalG||0)-poidsSort);
-    }
-    if(nbArticles>0){
-      stockSortie.qty = Math.max(0,(stockSortie.qty||0)-nbArticles);
-      // Recalc poids si poids unitaire connu et poids non renseigné
-      if(poidsSort<=0 && stockSortie.poids>0){
-        stockSortie.poidsTotalG = Math.max(0, stockSortie.qty * stockSortie.poids);
-      }
-    }
+
+  if(!date||!stockRef){showToast('Date et article en stock sont obligatoires.');return;}
+  if(poidsSort<=0&&nbArticles<=0){showToast('Saisissez le poids à sortir ou le nombre d\'articles.');return;}
+  if(stockItem){
+    if(poidsSort>0&&poidsSort>(stockItem.poidsTotalG||0)){showToast('Poids insuffisant (dispo: '+(stockItem.poidsTotalG||0).toFixed(2)+'g)');return;}
+    if(nbArticles>0&&nbArticles>(stockItem.qty||0)){showToast('Nombre insuffisant (dispo: '+(stockItem.qty||0)+')');return;}
   }
+
+  // Déduction directe par ref stock
+  var stockSortie = stockItem;
+  if(stockSortie){
+    if(poidsSort>0)  stockSortie.poidsTotalG = Math.max(0,(stockSortie.poidsTotalG||0)-poidsSort);
+    if(nbArticles>0) stockSortie.qty         = Math.max(0,(stockSortie.qty||0)-nbArticles);
+    if(nbArticles>0&&poidsSort<=0&&stockSortie.poids>0)
+      stockSortie.poidsTotalG = Math.max(0, stockSortie.qty * stockSortie.poids);
+    saveAndSyncStock([stockSortie]);
+  }
+
   var id=nextId('S','s');
   var labelType=(stockItem?stockItem.nom:typeBijou)+(carat?' — '+carat.toUpperCase():'');
   const sortieObj={id,date,stockRef:stockRef||'',typeBijou:labelType,carat:carat||'—',poids:poidsSort,nbArticles:nbArticles||0,motif,commentaire,validePar:'admin'};
   STATE.sorties.unshift(sortieObj);
   saveAndSyncSortie(sortieObj);
   closeModal('modal-add-sortie');renderSorties();renderStocks();renderDashboard();
-  showToast('Sortie '+id+' — '+poidsSort+'g enregistree.');
+  showToast('Sortie '+id+' — '+(poidsSort?poidsSort+'g':'')+(nbArticles?' '+nbArticles+' art.':''));
 }
+
 
 // ============================================
 // ACHATS
