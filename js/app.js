@@ -1056,13 +1056,14 @@ function renderComptesClients(filtre=''){
   document.getElementById('cc-list').innerHTML = ccFiltres.length===0
     ? '<div style="padding:24px;text-align:center;color:var(--text-tertiary);font-size:13px">Aucun compte ouvert</div>'
     : ccFiltres.map(cc=>{
+    const mvts = cc.mouvements || [];
     return`<div style="padding:16px 20px;border-bottom:0.5px solid var(--border-light)">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
         <div style="display:flex;align-items:center;gap:10px">
           <div style="width:38px;height:38px;border-radius:50%;background:var(--info-bg);color:var(--info-text);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;flex-shrink:0">${ini(cc.client)}</div>
           <div>
             <div style="font-size:14px;font-weight:600">${cc.client}</div>
-            <div style="font-size:12px;color:var(--text-secondary)">Ouvert le ${fmtDate(cc.dateOuverture)} · ${cc.mouvements.length} dépôt${cc.mouvements.length>1?'s':''}</div>
+            <div style="font-size:12px;color:var(--text-secondary)">Ouvert le ${fmtDate(cc.dateOuverture)} · ${mvts.length} dépôt${mvts.length>1?'s':''}</div>
           </div>
         </div>
         <div style="text-align:right">
@@ -1072,7 +1073,7 @@ function renderComptesClients(filtre=''){
       </div>
       <div style="margin-bottom:12px;background:var(--bg-secondary);border-radius:var(--radius-md);padding:10px 12px">
         <div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.4px;color:var(--text-tertiary);margin-bottom:6px">Mouvements</div>
-        ${cc.mouvements.slice().reverse().slice(0,8).map(m=>`<div style="display:flex;justify-content:space-between;font-size:12px;padding:4px 0;border-bottom:0.5px solid var(--border-light)"><span style="color:var(--text-secondary)">${fmtDate(m.date)} — ${m.note}</span><span style="font-weight:600;color:${m.type==='retrait'?'var(--danger-text)':'var(--success-text)'}">${m.type==='retrait'?'- ':'+'}${fmt(m.montant)}</span></div>`).join('')}
+        ${mvts.slice().reverse().slice(0,8).map(m=>`<div style="display:flex;justify-content:space-between;font-size:12px;padding:4px 0;border-bottom:0.5px solid var(--border-light)"><span style="color:var(--text-secondary)">${fmtDate(m.date)} — ${m.note||''}</span><span style="font-weight:600;color:${m.type==='retrait'?'var(--danger-text)':'var(--success-text)'}">${m.type==='retrait'?'- ':'+'}${fmt(m.montant)}</span></div>`).join('')}
         ${(()=>{
           const vcc=STATE.ventes.filter(v=>v.client===cc.client&&v.compteClientId===cc.id);
           if(!vcc.length) return '';

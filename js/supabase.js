@@ -122,7 +122,17 @@ async function chargerDonnees() {
         local:r.local||0, importe:r.importe||0, prixPropose:r.prix||0,
         note:r.note, photo:r.photo };
     });
-    STATE.comptesClients = comptes;
+    // Mapper les comptes clients (snake_case → camelCase)
+    STATE.comptesClients = comptes.map(function(cc) {
+      return {
+        id:            cc.id,
+        client:        cc.client,
+        dateOuverture: cc.date_ouverture || cc.dateOuverture || null,
+        solde:         cc.solde || 0,
+        actif:         cc.actif !== false,
+        mouvements:    cc.mouvements || []
+      };
+    });
     STATE.bijouxArr      = arrhes;
     STATE.connexions     = connexions;
     if (Object.keys(countersObj).length) STATE.counters = countersObj;
