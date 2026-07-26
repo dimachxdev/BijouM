@@ -196,13 +196,28 @@ async function saveClient(c) {
 
 async function saveCompteClient(cc) {
   await _db('saveCompteClient', async function() {
+    // Sauvegarder le compte
     await _supa.upsert('comptes_clients', {
-      id:cc.id, client:cc.client, date_ouverture:cc.dateOuverture||null,
-      solde:cc.solde||0, actif:cc.actif!==false
+      id:cc.id, client:cc.client,
+      date_ouverture:cc.dateOuverture||null,
+      solde:cc.solde||0,
+      actif:cc.actif!==false
     });
+    // Sauvegarder les mouvements — DELETE puis INSERT pour éviter doublons
     if (cc.mouvements && cc.mouvements.length) {
-      await _supa.upsert('mouvements_cc', cc.mouvements.map(function(m) {
-        return { compte_id:cc.id, date:m.date, type:m.type, montant:m.montant, note:m.note||null };
+      // Supprimer les anciens mouvements de ce compte
+      await fetch(SUPABASE_URL+'/rest/v1/mouvements_cc?compte_id=eq.'+encodeURIComponent(cc.id), {
+        method:'DELETE', headers:H
+      });
+      // Réinsérer tous les mouvements
+      await _supa.upsert('mouvements_cc', cc.mouvements.map(function(m,i) {
+        return {
+          compte_id:cc.id,
+          date:m.date,
+          type:m.type,
+          montant:m.montant,
+          note:m.note||null
+        };
       }));
     }
     await saveCompteurs(['cc']);

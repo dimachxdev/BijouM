@@ -548,20 +548,24 @@ document.getElementById('filtre-carat')?.addEventListener('change',renderJournal
 document.getElementById('filtre-carat')?.addEventListener('input',renderJournal);
 
 function prepNouvelleVente(){
-  peuplerSelect('v-carat');
-  peuplerTypeBijou('v-type-bijou');
   peuplerClientSelect('v-client');
-  document.getElementById('v-date').value=today();
-  ['v-description','v-local','v-importe','v-montant','v-acompte'].forEach(id=>document.getElementById(id).value='');
+  peuplerStockSelect('v-stock-ref');
+  var vDate=document.getElementById('v-date'); if(vDate) vDate.value=today();
+  var vDesc=document.getElementById('v-description'); if(vDesc) vDesc.value='';
+  var vMont=document.getElementById('v-montant'); if(vMont) vMont.value='';
+  var vAc=document.getElementById('v-acompte'); if(vAc) vAc.value='';
+  var vPoids=document.getElementById('v-poids-vente'); if(vPoids) vPoids.value='';
+  var vNb=document.getElementById('v-nb-articles'); if(vNb) vNb.value='';
+  var vRest=document.getElementById('v-restant-disp'); if(vRest) vRest.value='—';
   var vp=document.getElementById('v-paiement'); if(vp) vp.value='especes';
   var cb=document.getElementById('v-compte-bloc'); if(cb) cb.style.display='none';
-  var of_=document.getElementById('v-or-fields'); if(of_) of_.style.display='none';
-  var vl=document.getElementById('v-local'); if(vl) vl.value='0';
-  var vi=document.getElementById('v-importe'); if(vi) vi.value='0';
-  var vps=document.getElementById('v-poids-simple-input'); if(vps) vps.value='';
-  var vpsd=document.getElementById('v-poids-simple'); if(vpsd) vpsd.style.display='none';
-  document.getElementById('v-restant-disp').value='—';
-  document.getElementById('v-carat-badge').style.display='none';
+  var si=document.getElementById('v-stock-info'); if(si) si.style.display='none';
+  ['v-type-bijou','v-carat','v-provenance'].forEach(function(id){
+    var el=document.getElementById(id); if(el) el.value='';
+  });
+  ['v-local','v-importe'].forEach(function(id){
+    var el=document.getElementById(id); if(el) el.value='0';
+  });
 }
 
 function enregistrerVente(){
@@ -833,18 +837,22 @@ function supprimerArticle(ref){if(!confirm('Supprimer '+ref+' ?'))return;STATE.s
 // SORTIES DE STOCK (admin only)
 // ============================================
 function prepSortie(){
-  peuplerTypeBijou('s-type-bijou');
-  document.getElementById('s-date').value=today();
-  document.getElementById('s-poids').value='';
-  if(document.getElementById('s-qty')) document.getElementById('s-qty').value='';
-  document.getElementById('s-or-fields').style.display='none';
-  document.getElementById('s-stock-info').style.display='none';
+  peuplerStockSelect('s-stock-ref');
+  var sDate=document.getElementById('s-date'); if(sDate) sDate.value=today();
+  var sPoids=document.getElementById('s-poids'); if(sPoids) sPoids.value='';
+  var sQty=document.getElementById('s-qty'); if(sQty) sQty.value='';
+  var sMotif=document.getElementById('s-motif'); if(sMotif) sMotif.value='';
+  var sCom=document.getElementById('s-commentaire'); if(sCom) sCom.value='';
+  var si=document.getElementById('s-stock-info'); if(si) si.style.display='none';
+  ['s-type-bijou','s-carat','s-provenance'].forEach(function(id){
+    var el=document.getElementById(id); if(el) el.value='';
+  });
 }
 
 function onChangeSortieType(){
   var type=document.getElementById('s-type-bijou').value;
   var hasOr=TYPES_AVEC_OR_CODES.indexOf(type)>=0;
-  document.getElementById('s-or-fields').style.display=hasOr?'block':'none';
+  var sof=document.getElementById('s-or-fields'); if(sof) sof.style.display=hasOr?'block':'none';
   document.getElementById('s-stock-info').style.display='none';
   document.getElementById('s-poids').value='';
   if(hasOr){
@@ -1042,7 +1050,7 @@ function ajouterClient(){
 // COMPTES CLIENTS (épargne)
 // ============================================
 function renderComptesClients(filtre=''){
-  const q = filtre.toLowerCase();
+  const q = filtre ? filtre.toLowerCase() : '';
   document.getElementById('cc-count-label').textContent=`${STATE.comptesClients.length} compte${STATE.comptesClients.length>1?'s':''} — épargne bijoux`;
   const qn3=normalizeStr(q);const ccFiltres = STATE.comptesClients.filter(cc => { if(!q) return true; const clCC=STATE.clients.find(c=>c.nom===cc.client); return cc.client.toLowerCase().includes(q)||normalizeStr(clCC?.tel||'').includes(qn3); });
   document.getElementById('cc-list').innerHTML = ccFiltres.length===0
@@ -1086,8 +1094,9 @@ function creerCompteClient(){
   const client=document.getElementById('cc-client').value,date=document.getElementById('cc-date').value,depot=parseInt(document.getElementById('cc-depot-init').value)||0;
   if(!client||!date||depot<=0){showToast('⚠ Client, date et dépôt initial sont obligatoires.');return;}
   const id=nextId('CC','cc');
-  STATE.comptesClients.push({id,client,dateOuverture:date,solde:depot,actif:true,mouvements:[{date,type:'depot',montant:depot,note:'Ouverture compte'}]});
-  saveAndSyncCC(STATE.comptesClients[0]);closeModal('modal-add-compte-client');renderComptesClients();renderDashboard();showToast(`✓ Compte ${id} créé pour ${client}.`);
+  const newCC={id,client,dateOuverture:date,solde:depot,actif:true,mouvements:[{date,type:'depot',montant:depot,note:'Ouverture compte'}]};
+  STATE.comptesClients.push(newCC);
+  saveAndSyncCC(newCC);closeModal('modal-add-compte-client');renderComptesClients();renderDashboard();showToast(`✓ Compte ${id} créé pour ${client}.`);
 }
 function openDepotCC(id){
   const cc=STATE.comptesClients.find(c=>c.id===id); if(!cc)return;
@@ -1107,7 +1116,7 @@ function ajouterDepotCC(){
   if(!date||montant<=0){showToast('⚠ Date et montant obligatoires.');return;}
   const cc=STATE.comptesClients.find(c=>c.id===id);if(!cc)return;
   cc.solde+=montant;cc.mouvements.push({date,type:'depot',montant,note});
-  saveAndSyncCC(cc);closeModal('modal-depot-cc');renderComptesClients();renderDashboard();showToast(`✓ Dépôt de ${fmt(montant)} ajouté.`);
+  saveAndSyncCC(cc);closeModal('modal-depot-cc');renderComptesClients();renderDashboard();showToast('Dépôt de '+fmt(montant)+' ajouté.');
 }
 function cloturerCC(id){
   const cc=STATE.comptesClients.find(c=>c.id===id);if(!cc)return;
@@ -1665,7 +1674,7 @@ var TYPES_FORCE_IMPORTE_18K = ['raika','extra'];
 function _getFieldIds(prefix) {
   // Retourne les IDs des champs selon le prefix
   var m = {
-    'v':      { type:'v-type-bijou',      carat:'v-carat',      local:'v-local',      importe:'v-importe',      badge:'v-carat-badge',      poids:'v-poids-or',      prov:'v-provenance',      simple:'v-poids-simple'   },
+    'v':      { type:'v-type-bijou',      carat:'v-carat',      local:'v-local',      importe:'v-importe',      badge:null,                poids:'v-poids-vente',   prov:'v-provenance',      simple:null               },
     'edit-v': { type:'edit-v-type-bijou', carat:'edit-v-carat', local:'edit-v-local', importe:'edit-v-importe', badge:'edit-v-carat-badge', poids:'edit-v-poids-or', prov:'edit-v-provenance', simple:null               },
     'ac':     { type:'ac-type-bijou',     carat:'ac-carat',     local:'ac-local',     importe:'ac-importe',     badge:'ac-carat-badge',     poids:'ac-poids',        prov:'ac-provenance',     simple:'ac-poids-simple'  },
     'p':      { type:'p-type-bijou',      carat:'p-carat',      local:null,           importe:null,             badge:'p-carat-badge',      poids:'p-poids',         prov:'p-provenance',      simple:'p-poids-simple'   },
