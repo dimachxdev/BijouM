@@ -45,7 +45,7 @@
 <!-- TOPBAR MOBILE -->
 <div class="topbar">
   <div class="topbar-logo"><span style="font-weight:700;font-size:16px;letter-spacing:1px;color:#C9A84C">KAYOR</span></div>
-  <div class="topbar-right"><span class="topbar-user-badge" id="topbar-role-badge"></span><button class="btn-logout-top" onclick="doLogout()" title="Déconnexion">⏻</button><button class="btn-menu" onclick="toggleDrawer()" aria-label="Menu">☰</button></div>
+  <div class="topbar-right"><span class="topbar-user-badge" id="topbar-role-badge"></span><button class="btn-logout-top" onclick="refreshAll()" title="Actualiser les données" style="margin-right:4px;font-size:16px">⟳</button><button class="btn-logout-top" onclick="doLogout()" title="Déconnexion">⏻</button><button class="btn-menu" onclick="toggleDrawer()" aria-label="Menu">☰</button></div>
 </div>
 
 <!-- OVERLAY DRAWER -->
@@ -109,7 +109,7 @@
           <div class="user-role-badge" id="user-role-badge">—</div>
         </div>
       </div>
-      <button class="btn-logout" onclick="doLogout()" title="Déconnexion">⏻</button>
+      <button class="btn-logout" onclick="refreshAll()" title="Actualiser" style="margin-right:4px">⟳</button><button class="btn-logout" onclick="doLogout()" title="Déconnexion">⏻</button>
     </div>
   </aside>
 

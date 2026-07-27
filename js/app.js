@@ -109,6 +109,8 @@ function doLogin() {
     if (tb) { tb.textContent = role.label; tb.style.background = role.bg; tb.style.color = role.color; }
     buildNav();
     renderDashboard();
+    startAutoRefresh();
+    startRealtime(); // WebSocket temps réel
   });
 }
 
@@ -1923,6 +1925,39 @@ function checkPoidsVente() {
     var ok = poids <= (s.poidsTotalG||0);
     dispoEl.style.color = ok ? 'var(--success-text)' : 'var(--danger-text)';
   }
+}
+
+
+// ============================================
+// ACTUALISATION GLOBALE DEPUIS SUPABASE
+// ============================================
+var _refreshTimer = null;
+
+async function refreshAll(silent) {
+  if(!silent) showToast('Actualisation en cours...');
+  try {
+    await chargerDonnees();
+    // Re-render la section active
+    var activeBtn = document.querySelector('.nav-item.active');
+    var section = activeBtn ? activeBtn.dataset.section : 'dashboard';
+    renderSection(section);
+    renderDashboard();
+    if(!silent) showToast('Données actualisées');
+  } catch(e) {
+    if(!silent) showToast('Erreur actualisation: ' + e.message);
+  }
+}
+
+// Auto-actualisation toutes les 60 secondes
+function startAutoRefresh() {
+  if(_refreshTimer) clearInterval(_refreshTimer);
+  _refreshTimer = setInterval(function(){
+    refreshAll(true); // silencieux
+  }, 60000);
+}
+
+function stopAutoRefresh() {
+  if(_refreshTimer) { clearInterval(_refreshTimer); _refreshTimer=null; }
 }
 
 
