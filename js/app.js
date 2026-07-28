@@ -43,16 +43,128 @@ function save() {
 }
 function nextId(prefix, key) { STATE.counters[key]++; save(); return prefix+'-'+String(STATE.counters[key]).padStart(4,'0'); }
 
-// ── Wrappers save + Supabase pour chaque entité ────────────────────────────
-function saveAndSyncVente(v)          { save(); saveVente(v); }
-function saveAndSyncStock(items)       { save(); saveStockBatch(Array.isArray(items)?items:[items]); }
-function saveAndSyncSortie(s)          { save(); saveSortie(s); }
-function saveAndSyncDecaissement(d)    { save(); saveDecaissement(d); }
-function saveAndSyncClient(c)          { save(); saveClient(c); }
-function saveAndSyncCC(cc)             { save(); saveCompteClient(cc); }
-function saveAndSyncReprise(r)         { save(); saveReprise(r); }
-function saveAndSyncBijouArr(ba)       { save(); saveBijouArr(ba); }
-function saveAndSyncConnexion(cn)      { save(); saveConnexion(cn); }
+// ── Wrappers save + Supabase : écriture → relecture → re-render ───────────
+
+async function saveAndSyncVente(v) {
+  save();
+  try {
+    await saveVente(v);
+    // Relire toutes les ventes depuis Supabase
+    var rows = await _supa.select('ventes', 'order=date.desc');
+    STATE.ventes = rows.map(mapVente);
+    save();
+    renderJournal(); renderDashboard();
+  } catch(e) { console.error('saveAndSyncVente:', e); }
+}
+
+async function saveAndSyncStock(items) {
+  save();
+  try {
+    await saveStockBatch(Array.isArray(items)?items:[items]);
+    // Relire tout le stock
+    var rows = await _supa.select('stock');
+    STATE.stock = rows.map(mapStock);
+    save();
+    renderStocks(); renderDashboard();
+  } catch(e) { console.error('saveAndSyncStock:', e); }
+}
+
+async function saveAndSyncSortie(s) {
+  save();
+  try {
+    await saveSortie(s);
+    var rows = await _supa.select('sorties', 'order=date.desc');
+    STATE.sorties = rows.map(mapSortie);
+    save();
+    renderSorties();
+    // Aussi relire le stock (déduit)
+    var stockRows = await _supa.select('stock');
+    STATE.stock = stockRows.map(mapStock);
+    save();
+    renderStocks(); renderDashboard();
+  } catch(e) { console.error('saveAndSyncSortie:', e); }
+}
+
+async function saveAndSyncDecaissement(d) {
+  save();
+  try {
+    await saveDecaissement(d);
+    var rows = await _supa.select('decaissements', 'order=date.desc');
+    STATE.decaissements = rows.map(mapDecaissement);
+    save();
+    renderDecaissements(); renderDashboard();
+  } catch(e) { console.error('saveAndSyncDecaissement:', e); }
+}
+
+async function saveAndSyncClient(c) {
+  save();
+  try {
+    await saveClient(c);
+    var rows = await _supa.select('clients');
+    STATE.clients = rows;
+    save();
+    if(typeof renderClients === 'function') renderClients();
+  } catch(e) { console.error('saveAndSyncClient:', e); }
+}
+
+async function saveAndSyncCC(cc) {
+  save();
+  try {
+    await saveCompteClient(cc);
+    // Relire comptes + mouvements
+    var comptes = await _supa.select('comptes_clients');
+    var mouvements = await _supa.select('mouvements_cc', 'order=id.asc');
+    comptes.forEach(function(c) {
+      c.mouvements = mouvements
+        .filter(function(m){ return m.compte_id === c.id; })
+        .map(function(m){ return {date:m.date,type:m.type,montant:m.montant,note:m.note}; });
+    });
+    STATE.comptesClients = comptes.map(mapCompte);
+    save();
+    renderComptesClients(); renderDashboard();
+  } catch(e) { console.error('saveAndSyncCC:', e); }
+}
+
+async function saveAndSyncReprise(r) {
+  save();
+  try {
+    await saveReprise(r);
+    var rows = await _supa.select('reprises', 'order=date.desc');
+    STATE.achatsClients = rows.map(mapReprise);
+    // Aussi relire le stock (reprise l'alimente)
+    var stockRows = await _supa.select('stock');
+    STATE.stock = stockRows.map(mapStock);
+    save();
+    renderAchatsClients(); renderStocks(); renderDashboard();
+  } catch(e) { console.error('saveAndSyncReprise:', e); }
+}
+
+async function saveAndSyncBijouArr(ba) {
+  save();
+  try {
+    await saveBijouArr(ba);
+    var arrhes = await _supa.select('bijoux_arrhes');
+    var mvts = await _supa.select('mouvements_arrhes');
+    arrhes.forEach(function(a){
+      a.mouvements = mvts.filter(function(m){ return m.arrhes_id===a.id; })
+        .map(function(m){ return {date:m.date,montant:m.montant,note:m.note}; });
+    });
+    STATE.bijouxArr = arrhes;
+    // Aussi relire le stock (arrhes le déduit)
+    var stockRows = await _supa.select('stock');
+    STATE.stock = stockRows.map(mapStock);
+    save();
+    renderBijouxArr(); renderStocks(); renderDashboard();
+  } catch(e) { console.error('saveAndSyncBijouArr:', e); }
+}
+
+async function saveAndSyncConnexion(cn) {
+  save();
+  try {
+    await saveConnexion(cn);
+  } catch(e) { console.error('saveAndSyncConnexion:', e); }
+}
+
 
 // ============================================
 // PERMISSIONS
