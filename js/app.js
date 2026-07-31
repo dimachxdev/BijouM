@@ -58,15 +58,27 @@ async function saveAndSyncVente(v) {
 }
 
 async function saveAndSyncStock(items) {
-  save();
+  save(); // localStorage immédiat
   try {
-    await saveStockBatch(Array.isArray(items)?items:[items]);
-    // Relire tout le stock
-    var rows = await _supa.select('stock');
-    STATE.stock = rows.map(mapStock);
-    save();
-    renderStocks(); renderDashboard();
-  } catch(e) { console.error('saveAndSyncStock:', e); }
+    var rows = Array.isArray(items) ? items : [items];
+    // Préparer les données à envoyer
+    var toUpsert = rows.map(function(s) {
+      return {
+        ref:s.ref, nom:s.nom, type_bijou:s.typeBijou||null,
+        carat:s.carat||null, provenance:s.provenance||null,
+        type:s.type||'autre', poids:s.poids||0,
+        poids_total_g:s.poidsTotalG||0, // ← poids ET qty envoyés
+        qty:s.qty||0, prix:s.prix||0, seuil:s.seuil||50
+      };
+    });
+    // Écrire dans Supabase et ATTENDRE la confirmation
+    await _supa.upsert('stock', toUpsert);
+    // Seulement après confirmation → relire depuis Supabase
+    await reloadStock();
+  } catch(e) {
+    console.error('saveAndSyncStock:', e);
+    showToast('Erreur sync stock: ' + e.message);
+  }
 }
 
 async function saveAndSyncSortie(s) {
@@ -680,7 +692,7 @@ function prepNouvelleVente(){
   });
 }
 
-function enregistrerVente(){
+async function enregistrerVente(){
   const date    = document.getElementById('v-date').value;
   const client  = document.getElementById('v-client').value;
   const desc    = document.getElementById('v-description').value.trim();
@@ -741,7 +753,7 @@ function enregistrerVente(){
     if(nbArticlesV>0 && poidsVente<=0 && stockItem.poids>0){
       stockItem.poidsTotalG = Math.max(0, stockItem.qty * stockItem.poids);
     }
-    saveAndSyncStock([stockItem]);
+    await saveAndSyncStock([stockItem]);
   }
   const venteObj={id,date,client,description:desc,local,importe,poids:poidsVente,carat,typeBijou,paiement,montant,acompte,restant:montant-acompte,compteClientId,numFacture};
   STATE.ventes.unshift(venteObj);
@@ -1052,7 +1064,7 @@ function renderSorties(){
   document.getElementById('sorties-perm-warning').style.display=isAdmin()?'none':'flex';
   document.getElementById('sorties-body').innerHTML=[...STATE.sorties].sort((a,b)=>b.date.localeCompare(a.date)).map(s=>`<tr><td style="white-space:nowrap;font-size:12px;color:var(--text-secondary)">${fmtDate(s.date)}</td><td>${s.typeBijou||s.ref||'—'}</td><td><span class="ref-code">${s.carat||'—'}</span></td><td style="text-align:center"><strong>${s.poids||s.qty||'—'}g</strong>${s.nbArticles?' <span style="font-size:10px;color:var(--text-tertiary)">'+s.nbArticles+' art.</span>':''}</td><td>${s.motif}${s.commentaire?` — <span style="color:var(--text-secondary)">${s.commentaire}</span>`:''}</td><td><span class="role-pill role-${s.validePar}">${s.validePar}</span></td></tr>`).join('');
 }
-function enregistrerSortie(){
+async function enregistrerSortie(){
   if(!isAdmin()){showToast('Seul l\'administrateur peut effectuer des sorties.');return;}
   var date        = document.getElementById('s-date').value;
   var stockRef    = document.getElementById('s-stock-ref')&&document.getElementById('s-stock-ref').value||'';
@@ -1078,7 +1090,7 @@ function enregistrerSortie(){
     if(nbArticles>0) stockSortie.qty         = Math.max(0,(stockSortie.qty||0)-nbArticles);
     if(nbArticles>0&&poidsSort<=0&&stockSortie.poids>0)
       stockSortie.poidsTotalG = Math.max(0, stockSortie.qty * stockSortie.poids);
-    saveAndSyncStock([stockSortie]);
+    await saveAndSyncStock([stockSortie]);
   }
 
   var id=nextId('S','s');
@@ -1319,7 +1331,7 @@ function renderBijouxArr(){
     </div>`;
   }).join('');
 }
-function enregistrerBijouArr(){
+async function enregistrerBijouArr(){
   const date=document.getElementById('ba-date').value,client=document.getElementById('ba-client').value,ref=document.getElementById('ba-article').value,prix=parseInt(document.getElementById('ba-prix').value)||0,arrhes=parseInt(document.getElementById('ba-arrhes').value)||0,echeance=document.getElementById('ba-echeance').value;
   if(!date||!client||!ref||prix<=0||arrhes<=0||!echeance){showToast('⚠ Tous les champs sont obligatoires.');return;}
   if(arrhes>prix){showToast('⚠ Les arrhes ne peuvent pas dépasser le prix.');return;}
@@ -1343,11 +1355,10 @@ function enregistrerBijouArr(){
   if((poidsBA>0||nbArticlesBA>0) && stockBA){
     if(poidsBA>0)      stockBA.poidsTotalG=Math.max(0,(stockBA.poidsTotalG||0)-poidsBA);
     if(nbArticlesBA>0) stockBA.qty=Math.max(0,(stockBA.qty||0)-nbArticlesBA);
-    saveAndSyncStock([stockBA]);
+    await saveAndSyncStock([stockBA]);
   }
   const baObj=STATE.bijouxArr[0];
   saveBijouArr(baObj).then(function(){closeModal('modal-add-bijou-arr');renderDashboard();showToast('Reservation '+id+' creee.');});
-  if(stockBA&&(poidsBA>0||nbArticlesBA>0)) saveStockBatch([stockBA]);
 }
 function openPaiementArr(id){document.getElementById('paiement-arr-id').value=id;document.getElementById('paiement-arr-date').value=today();document.getElementById('paiement-arr-montant').value='';document.getElementById('paiement-arr-note').value='';document.getElementById('modal-paiement-arr').classList.add('show');}
 function enregistrerPaiementArr(){
