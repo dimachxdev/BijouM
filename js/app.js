@@ -240,15 +240,13 @@ function enregistrerConnexion(user, action) {
   const heure = now.toLocaleTimeString('fr-FR', {hour:'2-digit', minute:'2-digit'});
   const date  = now.toISOString().split('T')[0];
   STATE.counters.cn = (STATE.counters.cn || 8) + 1;
-  STATE.connexions.unshift({
-    id:    'CN-' + String(STATE.counters.cn).padStart(4,'0'),
-    userId: user.id, nom: user.nom, role: user.role,
-    date, heure, action,
-    ip: '—',
-  });
-  // Garder max 200 entrées
+  const cnId = 'CN-' + String(STATE.counters.cn).padStart(4,'0');
+  const cnObj = { id:cnId, userId:user.id, nom:user.nom, role:user.role, date, heure, action, ip:'—' };
+  STATE.connexions.unshift(cnObj);
   if (STATE.connexions.length > 200) STATE.connexions = STATE.connexions.slice(0, 200);
   save();
+  // Sync Supabase
+  saveConnexion({ id:cnId, userId:user.id, nom:user.nom, role:user.role, date, heure, action });
 }
 
 function buildNav() {
@@ -819,7 +817,9 @@ function sauvegarderVente(){
   document.getElementById('edit-v-carat').disabled=false;
 
   Object.assign(v,{date,client,description:desc,local,importe,carat,typeBijou,montant,acompte,restant:montant-acompte});
-  saveAndSyncVente(v);closeModal('modal-edit-vente');renderJournal();renderDashboard();
+  save();
+  saveVente(v); // App → Supabase → App
+  closeModal('modal-edit-vente');
   showToast('✓ Vente mise à jour.');
 }
 
@@ -860,10 +860,12 @@ function ouvrirAjoutAcompte(id){
 }
 
 function supprimerVente(id){
-  if(!isAdmin()){showToast('⛔ Seul l\'administrateur peut supprimer une vente.');return;}
-  if(!confirm(`Supprimer la vente ${id} ? Cette action est irréversible.`))return;
-  STATE.ventes=STATE.ventes.filter(v=>v.id!==id);
-  save();renderJournal();renderDashboard();showToast('Vente supprimée.');
+  if(!isAdmin()){showToast('Suppression reservee admin.');return;}
+  if(!confirm('Supprimer la vente '+id+' ?'))return;
+  _supa.deleteRow('ventes',id)
+    .then(function(){return reloadVentes();})
+    .then(function(){showToast('Vente supprimee.');})
+    .catch(function(e){showToast('Erreur: '+e.message);});
 }
 
 function exporterJournalCSV(){
@@ -923,7 +925,8 @@ function ajouterProduit(){
   if(!nom||!typeBijouP||poids<=0){showToast('Designation, type de bijou et poids sont obligatoires.');return;}
   STATE.counters.stk++; ref='STK-'+String(STATE.counters.stk).padStart(4,'0');
   // Le stock est géré en poids total (g) — qty=poids pour compatibilité déduction
-  var stockObj={ref,nom,carat,type,typeBijou:typeBijouP,provenance:prov,poids:poids,qty:qty,poidsTotalG:poids,prix,seuil};STATE.stock.unshift(stockObj);save();saveStock(stockObj);renderStocks();closeModal('modal-add-produit');showToast('✓ Article ajouté.');
+  var stockObj={ref,nom,carat,type,typeBijou:typeBijouP,provenance:prov,poids:poids,qty:qty,poidsTotalG:poids,prix,seuil};STATE.stock.unshift(stockObj);
+  saveStock(stockObj).then(function(){closeModal('modal-add-produit');showToast('Article ajouté.');});
 }
 function ajusterStock(ref){
   const i=STATE.stock.find(x=>x.ref===ref); if(!i) return;
@@ -941,11 +944,13 @@ function validerAjustStock(){
   const qty=parseInt(document.getElementById('ajust-stock-qty').value)||0;
   const i=STATE.stock.find(x=>x.ref===ref); if(!i) return;
   i.poidsTotalG=poids; i.poids=poids; i.qty=qty;
-  saveAndSyncStock([i]);
-  closeModal('modal-ajust-stock');renderStocks();
+  saveStockBatch([i]); // write + reload
+  closeModal('modal-ajust-stock');
   showToast('Stock ajuste — '+poids+'g / '+qty+' article'+(qty>1?'s':''));
 }
-function supprimerArticle(ref){if(!confirm('Supprimer '+ref+' ?'))return;STATE.stock=STATE.stock.filter(i=>i.ref!==ref);save();renderStocks();showToast('Article supprimé.');}
+function supprimerArticle(ref){if(!confirm('Supprimer cet article ?'))return;
+  _supa.deleteRow('stock',ref).then(function(){reloadStock();}).catch(function(e){showToast('Erreur: '+e.message);});
+}
 
 // ============================================
 // SORTIES DE STOCK (admin only)
@@ -1111,7 +1116,7 @@ function enregistrerAchat(){
   STATE.achats.unshift({id,date,fournisseur:four,description:desc,carat,poids,prixUnitaire:Math.round(prixG),montantTotal:Math.round(poids*prixG),saisiPar:STATE.currentUser?.role||'admin'});
   save();closeModal('modal-add-achat');renderAchats();renderDashboard();showToast(`✓ Achat ${id} enregistré.`);
 }
-function supprimerAchat(id){if(!confirm('Supprimer cet achat ?'))return;STATE.achats=STATE.achats.filter(a=>a.id!==id);save();renderAchats();showToast('Achat supprimé.');}
+function supprimerAchat(id){if(!confirm('Supprimer ?'))return;STATE.achats=STATE.achats.filter(a=>a.id!==id);save();renderAchats();showToast('Achat supprimé.');}
 
 // ============================================
 // DÉCAISSEMENTS
@@ -1139,7 +1144,14 @@ function enregistrerDecaissement(){
   var decaisObj={id,date,categorie:cat,description:desc,montant,saisiPar:STATE.currentUser?.role||'admin'};STATE.decaissements.unshift(decaisObj);
   save();saveDecaissement(decaisObj);closeModal('modal-add-decaiss');renderDecaissements();renderDashboard();showToast(`✓ Décaissement ${id} enregistré.`);
 }
-function supprimerDecaiss(id){if(!isAdmin()){showToast('⛔ Seul l\'administrateur peut supprimer un décaissement.');return;}if(!confirm('Supprimer ce décaissement ?'))return;STATE.decaissements=STATE.decaissements.filter(d=>d.id!==id);save();renderDecaissements();showToast('Décaissement supprimé.');}
+function supprimerDecaiss(id){
+  if(!isAdmin())return;
+  if(!confirm('Supprimer ce decaissement ?'))return;
+  _supa.deleteRow('decaissements',id)
+    .then(function(){return reloadDecaissements();})
+    .then(function(){showToast('Decaissement supprime.');})
+    .catch(function(e){showToast('Erreur: '+e.message);});
+}
 
 // ============================================
 // CLIENTS
@@ -1211,7 +1223,7 @@ function creerCompteClient(){
   const id=nextId('CC','cc');
   const newCC={id,client,dateOuverture:date,solde:depot,actif:true,mouvements:[{date,type:'depot',montant:depot,note:'Ouverture compte'}]};
   STATE.comptesClients.push(newCC);
-  saveAndSyncCC(newCC);closeModal('modal-add-compte-client');renderComptesClients();renderDashboard();showToast(`✓ Compte ${id} créé pour ${client}.`);
+  saveCompteClient(newCC).then(function(){closeModal('modal-add-compte-client');renderDashboard();showToast('Compte '+id+' créé pour '+client+'.');});
 }
 function openDepotCC(id){
   const cc=STATE.comptesClients.find(c=>c.id===id); if(!cc)return;
@@ -1231,16 +1243,31 @@ function ajouterDepotCC(){
   if(!date||montant<=0){showToast('⚠ Date et montant obligatoires.');return;}
   const cc=STATE.comptesClients.find(c=>c.id===id);if(!cc)return;
   cc.solde+=montant;cc.mouvements.push({date,type:'depot',montant,note});
-  saveAndSyncCC(cc);closeModal('modal-depot-cc');renderComptesClients();renderDashboard();showToast('Dépôt de '+fmt(montant)+' ajouté.');
+  save();
+  saveCompteClient(cc); // App → Supabase → App
+  closeModal('modal-depot-cc');
 }
 function cloturerCC(id){
   const cc=STATE.comptesClients.find(c=>c.id===id);if(!cc)return;
   if(!confirm(`Clôturer le compte de ${cc.client} et créer une vente de ${fmt(cc.solde)} ?`))return;
   const vid=nextId('V','v');
-  STATE.ventes.unshift({id:vid,date:today(),client:cc.client,description:'Clôture compte épargne — solde encaissé',local:0,importe:0,carat:'18k',montant:cc.solde,acompte:cc.solde,restant:0});
-  cc.actif=false;save();renderComptesClients();renderJournal();showToast(`✓ Compte clôturé — vente ${vid} créée.`);
+  const venteCloture={id:vid,date:today(),client:cc.client,description:'Cloture compte epargne — solde encaisse',local:0,importe:0,carat:'',montant:cc.solde,acompte:cc.solde,restant:0};
+  STATE.ventes.unshift(venteCloture);
+  cc.actif=false;
+  save();
+  saveVente(venteCloture); // App → Supabase → App
+  saveCompteClient(cc);
+  showToast('Compte cloture — vente '+vid+' creee.');
 }
-function supprimerCC(id){if(!confirm('Supprimer ce compte ?'))return;STATE.comptesClients=STATE.comptesClients.filter(c=>c.id!==id);save();renderComptesClients();showToast('Compte supprimé.');}
+function supprimerCC(id){
+  if(!isAdmin())return;
+  if(!confirm('Supprimer ce compte ?'))return;
+  fetch(SUPABASE_URL+'/rest/v1/mouvements_cc?compte_id=eq.'+encodeURIComponent(id),{method:'DELETE',headers:_supa.headers})
+    .then(function(){return _supa.deleteRow('comptes_clients',id);})
+    .then(function(){return reloadComptes();})
+    .then(function(){showToast('Compte supprime.');})
+    .catch(function(e){showToast('Erreur: '+e.message);});
+}
 
 // ============================================
 // BIJOUX EN ARRHES
@@ -1318,9 +1345,9 @@ function enregistrerBijouArr(){
     if(nbArticlesBA>0) stockBA.qty=Math.max(0,(stockBA.qty||0)-nbArticlesBA);
     saveAndSyncStock([stockBA]);
   }
-  save();saveBijouArr(STATE.bijouxArr[0]);
-  closeModal('modal-add-bijou-arr');renderBijouxArr();renderDashboard();renderStocks();
-  showToast('Reservation '+id+' creee.');
+  const baObj=STATE.bijouxArr[0];
+  saveBijouArr(baObj).then(function(){closeModal('modal-add-bijou-arr');renderDashboard();showToast('Reservation '+id+' creee.');});
+  if(stockBA&&(poidsBA>0||nbArticlesBA>0)) saveStockBatch([stockBA]);
 }
 function openPaiementArr(id){document.getElementById('paiement-arr-id').value=id;document.getElementById('paiement-arr-date').value=today();document.getElementById('paiement-arr-montant').value='';document.getElementById('paiement-arr-note').value='';document.getElementById('modal-paiement-arr').classList.add('show');}
 function enregistrerPaiementArr(){
@@ -1331,23 +1358,23 @@ function enregistrerPaiementArr(){
   ba.arrhesVerse+=montant;ba.restantDu-=montant;ba.mouvements.push({date,montant,note});
   if(ba.restantDu===0){ba.statut='solde';showToast(`✓ Bijou entièrement soldé ! Paiement de ${fmt(montant)} enregistré.`);}
   else{showToast(`✓ Paiement de ${fmt(montant)} enregistré. Restant : ${fmt(ba.restantDu)}`);}
-  saveAndSyncBijouArr(ba);closeModal('modal-paiement-arr');renderBijouxArr();renderDashboard();
+  saveBijouArr(ba).then(function(){closeModal('modal-paiement-arr');});renderDashboard();
 }
 function retournerStockArr(id){
   const ba=STATE.bijouxArr.find(b=>b.id===id);if(!ba)return;
-  // Remettre le poids en stock
-  if(ba.stockRef && (ba.poids>0||ba.nbArticlesBA>0)){
+  if(!confirm('Retourner le bijou en stock ? Les arrhes versées ('+fmt(ba.arrhesVerse||0)+') seront perdues par le client.'))return;
+  // Remettre poids + articles en stock
+  if(ba.stockRef){
     const s=STATE.stock.find(x=>x.ref===ba.stockRef);
     if(s){
-      if(ba.poids>0)      s.poidsTotalG=(s.poidsTotalG||0)+ba.poids;
-      if(ba.nbArticlesBA>0) s.qty=(s.qty||0)+ba.nbArticlesBA;
-      saveAndSyncStock([s]); renderStocks();
+      if(ba.poids>0)           s.poidsTotalG=(s.poidsTotalG||0)+ba.poids;
+      if((ba.nbArticles||0)>0) s.qty=(s.qty||0)+ba.nbArticles;
+      saveStockBatch([s]); // App → Supabase → App
     }
   }
+  ba.statut='retour_stock';
   save();
-  if(!confirm(`Retourner le bijou en stock ? Les arrhes versées (${fmt(ba.arrhesVerse)}) seront considérées comme perdues par le client.`))return;
-  const ref=ba.article.split(' — ')[0];const stock=STATE.stock.find(i=>i.ref===ref);if(stock)stock.qty+=1;
-  ba.statut='retour_stock';save();renderBijouxArr();renderStocks();renderDashboard();showToast('Bijou retourné en stock.');
+  saveBijouArr(ba); // App → Supabase → App
 }
 
 // ============================================
@@ -1455,9 +1482,7 @@ function _sauvegarderReprise(date,client,desc,carat,typeBijou,poids,localVal,imp
     renderStocks();
   }
 
-  save();
-  saveReprise(reprise);
-  closeModal('modal-add-achat-client');
+  saveReprise(reprise).then(function(){closeModal('modal-add-achat-client');renderDashboard();});
   ['ac-description','ac-note'].forEach(x=>document.getElementById(x).value='');
   document.getElementById('ac-photo').value='';
   document.getElementById('ac-photo-preview').style.display='none';
@@ -1466,10 +1491,11 @@ function _sauvegarderReprise(date,client,desc,carat,typeBijou,poids,localVal,imp
 }
 
 function supprimerAchatClient(id){
-  if(!isAdmin()){showToast('⛔ Seul l\'administrateur peut supprimer.');return;}
-  if(!confirm('Supprimer ce rachat ?'))return;
+  if(!isAdmin()){showToast('Admin uniquement.');return;}
+  if(!confirm('Supprimer cette reprise ?'))return;
   STATE.achatsClients=STATE.achatsClients.filter(a=>a.id!==id);
-  save();renderAchatsClients();showToast('Reprise supprimée.');
+  save();
+  deleteReprise(id); // App → Supabase → App
 }
 
 // ============================================
@@ -1592,6 +1618,12 @@ function viderHistorique() {
   if (!isAdmin()) { showToast('⛔ Action réservée à l\'administrateur.'); return; }
   if (!confirm('Vider tout l\'historique des connexions ? Cette action est irréversible.')) return;
   STATE.connexions = [];
+  const lastCn = STATE.connexions[0];
+  if(lastCn) saveConnexion({
+    id:lastCn.id, userId:lastCn.userId||lastCn.user,
+    nom:lastCn.nom, role:lastCn.role,
+    date:lastCn.date, heure:lastCn.heure, action:lastCn.action
+  });
   save();
   renderHistorique();
   showToast('Historique vidé.');
@@ -1641,8 +1673,7 @@ function enregistrerMiniClient() {
   };
   STATE.clients.unshift(newClient);
   save();
-
-  // Mettre à jour tous les pickers clients ouverts
+  saveClient(newClient); // App→Supabase→App
   ['v-client','edit-v-client','cc-client','ba-client','ac-client'].forEach(selId => {
     // Picker style
     const searchEl = document.getElementById(selId+'-search');
@@ -1924,7 +1955,7 @@ function validerComplementCC() {
   STATE.counters.fac++;
   var numFacture = 'FAC-'+String(STATE.counters.fac).padStart(4,'0');
   var id = nextId('V','v');
-  STATE.ventes.unshift({
+  const venteComplement = {
     id, date, client: cc.client,
     description: desc, local:0, importe:0, carat, typeBijou,
     paiement: 'compte+'+paiementComp,
@@ -1932,12 +1963,11 @@ function validerComplementCC() {
     compteClientId: cc.id,
     numFacture,
     noteComplement: 'Compte: '+fmt(soldeUtilise)+' + '+paiementComp+': '+fmt(montantComp)
-  });
-  save();
-  closeModal('modal-complement-cc');
-  closeModal('modal-nouvelle-vente');
-  renderJournal(); renderDashboard(); renderComptesClients();
-  showToast('Vente '+id+' — Compte: '+fmt(soldeUtilise)+' + Complement: '+fmt(montantComp));
+  };
+  STATE.ventes.unshift(venteComplement);
+  saveVente(venteComplement);
+  Promise.all([saveVente(STATE.ventes[0]), saveCompteClient(cc)])
+    .then(function(){closeModal('modal-complement-cc');closeModal('modal-nouvelle-vente');showToast('Vente '+id+' — Compte: '+fmt(soldeUtilise)+' + Complement: '+fmt(montantComp));});
 }
 
 
@@ -2161,11 +2191,14 @@ function creerUtilisateur() {
   if (pass.length < 6)     { showToast('⚠ Mot de passe trop court (6 caractères minimum).'); return; }
   if (STATE.users.find(u => u.login === login)) { showToast('⚠ Ce login existe déjà.'); return; }
   STATE.counters.u = (STATE.counters.u || 3) + 1;
-  STATE.users.push({
+  var newUserObj = {
     id: 'U-' + String(STATE.counters.u).padStart(3,'0'),
     nom, login, password: pass, role, actif: true
-  });
+  };
+  STATE.users.push(newUserObj);
   save();
+  saveUtilisateur(newUserObj);
+  reloadUtilisateurs();
   renderGestionComptes();
   closeModal('modal-add-user');
   ['u-nom','u-login','u-password','u-password2'].forEach(id => document.getElementById(id).value = '');
@@ -2203,12 +2236,16 @@ function toggleUserActif(id) {
 }
 
 function supprimerUser(id) {
-  if(!isAdmin()){showToast('⛔ Admin uniquement.');return;}
+  if(!isAdmin()){showToast('Admin uniquement.');return;}
   const u=STATE.users.find(x=>x.id===id);
-  if(!u||id==='U-001'){showToast('⚠ Impossible de supprimer l\'admin principal.');return;}
-  if(!confirm(`Supprimer "${u.nom}" ?`))return;
-  STATE.users=STATE.users.filter(x=>x.id!==id);save();renderGestionComptes();
-  showToast(`Compte "${u.nom}" supprimé.`);
+  if(!u||id==='U-001'){showToast('Impossible de supprimer l\'admin principal.');return;}
+  if(!confirm('Supprimer "'+u.nom+'" ?'))return;
+  STATE.users=STATE.users.filter(x=>x.id!==id);
+  save();
+  deleteUtilisateur(id); // App→Supabase→App
+  reloadUtilisateurs();
+  renderGestionComptes();
+  showToast('Compte "'+u.nom+'" supprime.');
 }
 
 // ============================================

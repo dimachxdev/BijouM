@@ -887,3 +887,112 @@ async function nextIdSupa(prefix, key) {
   return prefix+'-'+String(STATE.counters[key]).padStart(4,'0');
 }
 
+// ============================================
+// SUPPRESSIONS → Supabase → reload → render
+// ============================================
+async function deleteVente(id) {
+  await _supa.deleteRow('ventes', id);
+  await reloadVentes();
+}
+async function deleteStock(ref) {
+  await _supa.deleteRow('stock', ref);
+  await reloadStock();
+}
+async function deleteSortie(id) {
+  await _supa.deleteRow('sorties', id);
+  await reloadSorties();
+}
+async function deleteDecaissement(id) {
+  await _supa.deleteRow('decaissements', id);
+  await reloadDecaissements();
+}
+async function deleteClient(id) {
+  await _supa.deleteRow('clients', id);
+  await reloadClients();
+}
+async function deleteCompteClient(id) {
+  // Supprimer les mouvements d'abord
+  await fetch(SUPABASE_URL+'/rest/v1/mouvements_cc?compte_id=eq.'+encodeURIComponent(id),
+    {method:'DELETE', headers:H});
+  await _supa.deleteRow('comptes_clients', id);
+  await reloadComptes();
+}
+async function deleteReprise(id) {
+  await _supa.deleteRow('reprises', id);
+  await reloadReprises();
+}
+async function deleteBijouArr(id) {
+  await fetch(SUPABASE_URL+'/rest/v1/mouvements_arrhes?arrhes_id=eq.'+encodeURIComponent(id),
+    {method:'DELETE', headers:H});
+  await _supa.deleteRow('bijoux_arrhes', id);
+  await reloadArrhes();
+}
+async function updateVente(v) {
+  await saveVente(v);
+}
+async function updateCC(cc) {
+  await saveCompteClient(cc);
+}
+async function updateBijouArr(ba) {
+  await saveBijouArr(ba);
+}
+async function updateStock(s) {
+  await saveStockBatch([s]);
+}
+
+// ============================================
+// SUPPRESSIONS AVEC RELECTURE
+// ============================================
+async function deleteVente(id) {
+  try {
+    await _supa.deleteRow('ventes', id);
+    await reloadVentes();
+  } catch(e) { console.error('deleteVente:', e); showToast('Erreur suppression: '+e.message); }
+}
+async function deleteStock(ref) {
+  try {
+    await _supa.deleteRow('stock', ref);
+    await reloadStock();
+  } catch(e) { console.error('deleteStock:', e); }
+}
+async function deleteDecaissement(id) {
+  try {
+    await _supa.deleteRow('decaissements', id);
+    await reloadDecaissements();
+  } catch(e) { console.error('deleteDecaissement:', e); }
+}
+async function deleteCompteClient(id) {
+  try {
+    await fetch(SUPABASE_URL+'/rest/v1/mouvements_cc?compte_id=eq.'+encodeURIComponent(id), {method:'DELETE',headers:H});
+    await _supa.deleteRow('comptes_clients', id);
+    await reloadComptes();
+  } catch(e) { console.error('deleteCC:', e); }
+}
+async function deleteReprise(id) {
+  try {
+    await _supa.deleteRow('reprises', id);
+    await reloadReprises();
+  } catch(e) { console.error('deleteReprise:', e); }
+}
+async function deleteUtilisateur(id) {
+  try {
+    await _supa.deleteRow('utilisateurs', id);
+  } catch(e) { console.error('deleteUser:', e); }
+}
+async function saveUtilisateur(u) {
+  try {
+    await _supa.upsert('utilisateurs', {
+      id:u.id, nom:u.nom, login:u.login,
+      password:u.password, role:u.role, actif:u.actif!==false
+    });
+  } catch(e) { console.error('saveUser:', e); }
+}
+
+async function reloadUtilisateurs() {
+  try {
+    var rows = await _supa.select('utilisateurs');
+    STATE.users = rows;
+    if(typeof renderGestionComptes==='function') renderGestionComptes();
+  } catch(e) { console.error('reloadUsers:', e); }
+}
+
