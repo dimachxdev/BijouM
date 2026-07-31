@@ -44,6 +44,18 @@ const _supa = {
     });
     if (!r.ok) throw new Error('DELETE ' + table + ': ' + r.status);
     return true;
+  },
+  async deleteRow(table, id) {
+    // Détecter si la clé primaire est 'ref' (stock) ou 'id'
+    var pkField = (table === 'stock') ? 'ref' : 'id';
+    var r = await fetch(SUPABASE_URL + '/rest/v1/' + table + '?' + pkField + '=eq.' + encodeURIComponent(id), {
+      method: 'DELETE', headers: H
+    });
+    if (!r.ok) {
+      var txt = await r.text();
+      throw new Error('DELETE ' + table + ' (' + r.status + '): ' + txt);
+    }
+    return true;
   }
 };
 
