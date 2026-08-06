@@ -714,7 +714,7 @@ async function enregistrerVente(){
 
   // Validations
   if(!date||!client||!stockRef||montant<=0){showToast('Date, client, article en stock et montant sont obligatoires.');return;}
-  // Poids OU nb articles suffit — les deux sont optionnels individuellement
+  if(poids<=0 && nbArticlesV<=0){showToast('Saisissez le poids vendu et/ou le nombre d\'articles.');return;}
   if(acompte>montant){showToast('Acompte ne peut pas depasser le montant.');return;}
   if(stockItem){
     if(poids>0 && poids>(stockItem.poidsTotalG||0)){showToast('Poids insuffisant (dispo: '+(stockItem.poidsTotalG||0).toFixed(2)+'g)');return;}
@@ -746,14 +746,9 @@ async function enregistrerVente(){
   var numFacture='FAC-'+String(STATE.counters.fac).padStart(4,'0');
   // Déduire poids ET nombre d'articles du stock (article exact via stockRef)
   const poidsVente = poids||0;
-  if(stockItem && (poidsVente>0 || nbArticlesV>0)){
-    if(poidsVente>0)     stockItem.poidsTotalG = Math.max(0,(stockItem.poidsTotalG||0)-poidsVente);
-    if(nbArticlesV>0)    stockItem.qty         = Math.max(0,(stockItem.qty||0)-nbArticlesV);
-    // Recalc poidsTotalG depuis qty si poids unitaire connu
-    if(nbArticlesV>0 && poidsVente<=0 && stockItem.poids>0){
-      stockItem.poidsTotalG = Math.max(0, stockItem.qty * stockItem.poids);
-    }
-    await saveAndSyncStock([stockItem]);
+  if(stockRef && (poidsVente>0 || nbArticlesV>0)){
+    var ok = await deduireStock(stockRef, poidsVente, nbArticlesV);
+    if(!ok) return;
   }
   const venteObj={id,date,client,description:desc,local,importe,poids:poidsVente,carat,typeBijou,paiement,montant,acompte,restant:montant-acompte,compteClientId,numFacture};
   STATE.ventes.unshift(venteObj);
@@ -1077,20 +1072,15 @@ async function enregistrerSortie(){
   var poidsSort   = parseFloat(document.getElementById('s-poids')&&document.getElementById('s-poids').value)||0;
 
   if(!date||!stockRef){showToast('Date et article en stock sont obligatoires.');return;}
-  if(poidsSort<=0&&nbArticles<=0){showToast('Saisissez le poids à sortir ou le nombre d\'articles.');return;}
+  if(poidsSort<=0&&nbArticles<=0){showToast('Saisissez le poids et/ou le nombre d\'articles.');return;}
   if(stockItem){
     if(poidsSort>0&&poidsSort>(stockItem.poidsTotalG||0)){showToast('Poids insuffisant (dispo: '+(stockItem.poidsTotalG||0).toFixed(2)+'g)');return;}
     if(nbArticles>0&&nbArticles>(stockItem.qty||0)){showToast('Nombre insuffisant (dispo: '+(stockItem.qty||0)+')');return;}
   }
 
-  // Déduction directe par ref stock
-  var stockSortie = stockItem;
-  if(stockSortie){
-    if(poidsSort>0)  stockSortie.poidsTotalG = Math.max(0,(stockSortie.poidsTotalG||0)-poidsSort);
-    if(nbArticles>0) stockSortie.qty         = Math.max(0,(stockSortie.qty||0)-nbArticles);
-    if(nbArticles>0&&poidsSort<=0&&stockSortie.poids>0)
-      stockSortie.poidsTotalG = Math.max(0, stockSortie.qty * stockSortie.poids);
-    await saveAndSyncStock([stockSortie]);
+  if(stockRef && (poidsSort>0 || nbArticles>0)){
+    var okS = await deduireStock(stockRef, poidsSort, nbArticles);
+    if(!okS) return;
   }
 
   var id=nextId('S','s');
@@ -1353,9 +1343,8 @@ async function enregistrerBijouArr(){
   });
   // Déduire du stock si poids renseigné
   if((poidsBA>0||nbArticlesBA>0) && stockBA){
-    if(poidsBA>0)      stockBA.poidsTotalG=Math.max(0,(stockBA.poidsTotalG||0)-poidsBA);
-    if(nbArticlesBA>0) stockBA.qty=Math.max(0,(stockBA.qty||0)-nbArticlesBA);
-    await saveAndSyncStock([stockBA]);
+    var okBA = await deduireStock(ref, poidsBA, nbArticlesBA);
+    if(!okBA) return;
   }
   const baObj=STATE.bijouxArr[0];
   saveBijouArr(baObj).then(function(){closeModal('modal-add-bijou-arr');renderDashboard();showToast('Reservation '+id+' creee.');});
@@ -1371,17 +1360,12 @@ function enregistrerPaiementArr(){
   else{showToast(`✓ Paiement de ${fmt(montant)} enregistré. Restant : ${fmt(ba.restantDu)}`);}
   saveBijouArr(ba).then(function(){closeModal('modal-paiement-arr');});renderDashboard();
 }
-function retournerStockArr(id){
+async function retournerStockArr(id){
   const ba=STATE.bijouxArr.find(b=>b.id===id);if(!ba)return;
   if(!confirm('Retourner le bijou en stock ? Les arrhes versées ('+fmt(ba.arrhesVerse||0)+') seront perdues par le client.'))return;
   // Remettre poids + articles en stock
-  if(ba.stockRef){
-    const s=STATE.stock.find(x=>x.ref===ba.stockRef);
-    if(s){
-      if(ba.poids>0)           s.poidsTotalG=(s.poidsTotalG||0)+ba.poids;
-      if((ba.nbArticles||0)>0) s.qty=(s.qty||0)+ba.nbArticles;
-      saveStockBatch([s]); // App → Supabase → App
-    }
+  if(ba.stockRef && (ba.poids>0 || ba.nbArticles>0)){
+    await reajouterStock(ba.stockRef, ba.poids||0, ba.nbArticles||0);
   }
   ba.statut='retour_stock';
   save();
@@ -2111,6 +2095,48 @@ function startAutoRefresh() {
 
 function stopAutoRefresh() {
   if(_refreshTimer) { clearInterval(_refreshTimer); _refreshTimer=null; }
+}
+
+
+// ============================================
+// DÉDUCTION/RESTITUTION STOCK CENTRALE
+// ============================================
+async function deduireStock(stockRef, poids, nbArticles) {
+  var s = getStockItem(stockRef);
+  if (!s) return true;
+
+  // Vérifier disponibilité
+  if (poids > 0 && poids > (s.poidsTotalG||0)) {
+    showToast('Poids insuffisant (dispo: '+(s.poidsTotalG||0).toFixed(2)+'g)');
+    return false;
+  }
+  if (nbArticles > 0 && nbArticles > (s.qty||0)) {
+    showToast('Articles insuffisants (dispo: '+(s.qty||0)+')');
+    return false;
+  }
+
+  // Déduire poids
+  if (poids > 0) s.poidsTotalG = Math.max(0, (s.poidsTotalG||0) - poids);
+
+  // Déduire qty
+  if (nbArticles > 0) s.qty = Math.max(0, (s.qty||0) - nbArticles);
+
+  // Recalc croisé si poids unitaire connu
+  if (poids > 0 && nbArticles <= 0 && (s.poids||0) > 0)
+    s.qty = Math.max(0, Math.floor(s.poidsTotalG / s.poids));
+  if (nbArticles > 0 && poids <= 0 && (s.poids||0) > 0)
+    s.poidsTotalG = Math.max(0, s.qty * s.poids);
+
+  await saveAndSyncStock([s]);
+  return true;
+}
+
+async function restituerStock(stockRef, poids, nbArticles) {
+  var s = getStockItem(stockRef);
+  if (!s) return;
+  if (poids > 0)      s.poidsTotalG = (s.poidsTotalG||0) + poids;
+  if (nbArticles > 0) s.qty         = (s.qty||0) + nbArticles;
+  await saveAndSyncStock([s]);
 }
 
 
