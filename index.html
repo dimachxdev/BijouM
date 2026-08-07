@@ -206,7 +206,7 @@
       </div>
       <div class="card"><div class="table-wrap">
         <table>
-          <thead><tr><th>Réf</th><th>Désignation</th><th>Carat</th><th>Type</th><th>Poids (g)</th><th>Qté</th><th>Prix unit.</th><th>Valeur stock</th><th>Statut</th><th>Actions</th></tr></thead>
+          <thead><tr><th>Réf</th><th>Désignation</th><th>Carat</th><th>Type</th><th>Poids total (g)</th><th>Nb articles</th><th>Prix unit.</th><th>Valeur stock</th><th>Statut</th><th>Actions</th></tr></thead>
           <tbody id="stock-body"></tbody>
         </table>
       </div></div>
@@ -1194,26 +1194,32 @@
 <div class="modal-backdrop" id="modal-ajust-stock">
   <div class="modal">
     <div class="modal-header">
-      <div class="modal-title">Ajuster le stock</div>
+      <div class="modal-title">Ajouter au stock</div>
       <button class="modal-close" onclick="closeModal('modal-ajust-stock')">✕</button>
     </div>
     <input type="hidden" id="ajust-stock-ref" />
-    <div id="ajust-stock-nom" style="font-weight:600;font-size:15px;margin-bottom:14px;color:var(--text-primary)">—</div>
+    <div id="ajust-stock-nom" style="font-weight:600;font-size:15px;margin-bottom:6px;color:var(--text-primary)">—</div>
+    <!-- Stock actuel -->
+    <div style="display:flex;gap:16px;margin-bottom:14px;padding:10px 14px;background:var(--bg-secondary);border-radius:var(--radius-md)">
+      <span style="font-size:12px;color:var(--text-secondary)" id="ajust-stock-poids-actuel">—</span>
+      <span style="font-size:12px;color:var(--text-secondary)" id="ajust-stock-qty-actuel">—</span>
+    </div>
+    <!-- Quantités à ajouter -->
     <div class="form-row">
       <div class="form-group">
-        <label class="form-label">Poids global (g)</label>
+        <label class="form-label">Poids à ajouter (g)</label>
         <input class="form-input" type="number" step="0.01" min="0" placeholder="0,00" id="ajust-stock-poids" />
-        <span class="form-hint" id="ajust-stock-poids-actuel"></span>
+        <span class="form-hint">S'ajoute au stock existant</span>
       </div>
       <div class="form-group">
-        <label class="form-label">Nombre d'articles</label>
+        <label class="form-label">Articles à ajouter</label>
         <input class="form-input" type="number" min="0" placeholder="0" id="ajust-stock-qty" />
-        <span class="form-hint" id="ajust-stock-qty-actuel"></span>
+        <span class="form-hint">S'ajoute au stock existant</span>
       </div>
     </div>
     <div class="modal-actions">
       <button class="btn btn-secondary" onclick="closeModal('modal-ajust-stock')">Annuler</button>
-      <button class="btn btn-primary" onclick="validerAjustStock()">Enregistrer</button>
+      <button class="btn btn-primary" onclick="validerAjustStock()">Ajouter au stock</button>
     </div>
   </div>
 </div>

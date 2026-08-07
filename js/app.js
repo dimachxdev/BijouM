@@ -888,12 +888,12 @@ function exporterJournalCSV(){
 function renderStocks(f=''){
   const q=f.toLowerCase();
   const data=STATE.stock.filter(i=>i.nom.toLowerCase().includes(q)||i.ref.toLowerCase().includes(q)||(i.carat||'').toLowerCase().includes(q));
-  const totalUnites=STATE.stock.reduce((s,i)=>s+i.qty,0);
-  const totalPoids=STATE.stock.reduce((s,i)=>s+(parseFloat(i.poids)||0)*i.qty,0);
-  document.getElementById('stock-count-label').textContent=STATE.stock.length+' references - '+totalUnites+' unites - '+totalPoids.toFixed(2)+'g total';
+  const totalUnites=STATE.stock.reduce((s,i)=>s+(i.qty||0),0);
+  const totalPoids=STATE.stock.reduce((s,i)=>s+(parseFloat(i.poidsTotalG)||0),0);
+  document.getElementById('stock-count-label').textContent=STATE.stock.length+' references — '+totalUnites+' articles — '+totalPoids.toFixed(2)+'g total';
 
   var byCarat={};
-  STATE.stock.forEach(function(i){ if(!i.carat||!i.qty)return; byCarat[i.carat]=(byCarat[i.carat]||0)+(parseFloat(i.poids)||0)*i.qty; });
+  STATE.stock.forEach(function(i){ if(!i.carat)return; byCarat[i.carat]=(byCarat[i.carat]||0)+(parseFloat(i.poidsTotalG)||0); });
   var caratMax=Math.max.apply(null,Object.values(byCarat).concat([0.01]));
   var rcEl=document.getElementById('stock-recap-carats');
   if(rcEl) rcEl.innerHTML=Object.keys(byCarat).length===0?'<p style="color:var(--text-tertiary);font-size:13px">Aucun poids enregistre</p>':
@@ -903,7 +903,7 @@ function renderStocks(f=''){
     }).join('');
 
   var byType={};
-  STATE.stock.forEach(function(i){ if(!i.qty)return; var k=i.type||'autre'; byType[k]=(byType[k]||0)+(parseFloat(i.poids)||0)*i.qty; });
+  STATE.stock.forEach(function(i){ var k=i.type||'autre'; byType[k]=(byType[k]||0)+(parseFloat(i.poidsTotalG)||0); });
   var typeMax=Math.max.apply(null,Object.values(byType).concat([0.01]));
   var rtEl=document.getElementById('stock-recap-types');
   if(rtEl) rtEl.innerHTML=Object.keys(byType).length===0?'<p style="color:var(--text-tertiary);font-size:13px">Aucun type enregistre</p>':
@@ -914,7 +914,7 @@ function renderStocks(f=''){
   document.getElementById('stock-body').innerHTML=data.map(item=>{
     const st=statutStock(item);const c=getCarat(item.carat);const dot=c?`<span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${c.couleur};margin-right:4px;vertical-align:middle"></span>`:'';
     const typeL={local:'Local',importe:'Importé',mixte:'Mixte',argent:'Argent',autre:'Autre'}[item.type]||item.type||'—';
-    return`<tr><td><span class="ref-code">${item.ref}</span></td><td>${item.nom}</td><td><span class="carat-pill">${dot}${(item.carat||'—').toUpperCase()}</span></td><td><span style="font-size:12px;color:var(--text-secondary)">${typeL}</span></td><td style="text-align:center">${item.poids?item.poids+'g':'—'}</td><td><strong>${item.qty}</strong></td><td>${fmt(item.prix)}</td><td>${fmt(item.qty*item.prix)}</td><td><span class="stock-badge ${st.cls}">${st.label}</span></td><td><div style="display:flex;gap:4px"><button class="btn small" onclick="ajusterStock('${item.ref}')">Ajuster</button><button class="btn small btn-danger" onclick="supprimerArticle('${item.ref}')">✕</button></div></td></tr>`;
+    return`<tr><td><span class="ref-code">${item.ref}</span></td><td>${item.nom}</td><td><span class="carat-pill">${dot}${(item.carat||'—').toUpperCase()}</span></td><td><span style="font-size:12px;color:var(--text-secondary)">${typeL}</span></td><td style="text-align:center;font-weight:600;color:var(--success-text)">${(item.poidsTotalG||0).toFixed(2)}g</td><td style="text-align:center"><strong>${item.qty||0}</strong></td><td>${fmt(item.prix)}</td><td>${fmt((item.qty||0)*item.prix)}</td><td><span class="stock-badge ${st.cls}">${st.label}</span></td><td><div style="display:flex;gap:4px"><button class="btn small" onclick="ajusterStock('${item.ref}')">Ajuster</button><button class="btn small btn-danger" onclick="supprimerArticle('${item.ref}')">✕</button></div></td></tr>`;
   }).join('');
 }
 document.getElementById('stock-search')?.addEventListener('input',function(){renderStocks(this.value);});
@@ -939,21 +939,24 @@ function ajusterStock(ref){
   const i=STATE.stock.find(x=>x.ref===ref); if(!i) return;
   document.getElementById('ajust-stock-ref').value=ref;
   document.getElementById('ajust-stock-nom').textContent=i.nom;
-  document.getElementById('ajust-stock-poids').value=i.poidsTotalG||i.poids||'';
-  document.getElementById('ajust-stock-qty').value=i.qty||'';
-  document.getElementById('ajust-stock-poids-actuel').textContent='Actuel : '+(i.poidsTotalG||i.poids||0)+'g';
-  document.getElementById('ajust-stock-qty-actuel').textContent='Actuel : '+(i.qty||0)+' article'+(i.qty>1?'s':'');
+  document.getElementById('ajust-stock-poids').value='';
+  document.getElementById('ajust-stock-qty').value='';
+  document.getElementById('ajust-stock-poids-actuel').textContent='Stock actuel : '+(i.poidsTotalG||0).toFixed(2)+'g';
+  document.getElementById('ajust-stock-qty-actuel').textContent='Stock actuel : '+(i.qty||0)+' article'+(i.qty>1?'s':'');
   document.getElementById('modal-ajust-stock').classList.add('show');
 }
-function validerAjustStock(){
+async function validerAjustStock(){
   const ref=document.getElementById('ajust-stock-ref').value;
-  const poids=parseFloat(document.getElementById('ajust-stock-poids').value)||0;
-  const qty=parseInt(document.getElementById('ajust-stock-qty').value)||0;
+  const ajoutPoids=parseFloat(document.getElementById('ajust-stock-poids').value)||0;
+  const ajoutQty=parseInt(document.getElementById('ajust-stock-qty').value)||0;
   const i=STATE.stock.find(x=>x.ref===ref); if(!i) return;
-  i.poidsTotalG=poids; i.poids=poids; i.qty=qty;
-  saveStockBatch([i]); // write + reload
+  if(ajoutPoids<=0&&ajoutQty<=0){showToast('Saisissez le poids et/ou le nombre d\'articles à ajouter.');return;}
+  // INCRÉMENTER — pas remplacer
+  i.poidsTotalG=(i.poidsTotalG||0)+ajoutPoids;
+  i.qty=(i.qty||0)+ajoutQty;
+  await saveAndSyncStock([i]);
   closeModal('modal-ajust-stock');
-  showToast('Stock ajuste — '+poids+'g / '+qty+' article'+(qty>1?'s':''));
+  showToast('Stock mis à jour — '+i.poidsTotalG.toFixed(2)+'g / '+i.qty+' article'+(i.qty>1?'s':''));
 }
 function supprimerArticle(ref){if(!confirm('Supprimer cet article ?'))return;
   _supa.deleteRow('stock',ref).then(function(){reloadStock();}).catch(function(e){showToast('Erreur: '+e.message);});
