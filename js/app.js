@@ -554,7 +554,8 @@ function renderDashboard(){
   document.getElementById('metric-restants').textContent=fmt(totalRestants);
   document.getElementById('metric-nb-restants').textContent=nbRestants+' client'+(nbRestants>1?'s':'');
   document.getElementById('metric-decaiss').textContent=fmt(soldeNet);
-  document.getElementById('metric-nb-decaiss').textContent=soldeNet>=0?'Solde positif':'Solde négatif';
+  document.getElementById('metric-nb-decaiss').textContent=
+    fmt(totalEncaisse)+' encaissé − '+fmt(totalDecaiss)+' décaissé';
   document.getElementById('metric-arrhes').textContent=fmt(totalArrhes);
   document.getElementById('metric-nb-arrhes').textContent=arrhesEnCours.length+' bijou'+(arrhesEnCours.length>1?'x':'');
 
@@ -1135,11 +1136,23 @@ function renderDecaissements(){
   const mois=STATE.decaissements.filter(d=>isMois(d.date));
   const totalAll=STATE.decaissements.reduce((s,d)=>s+(d.montant||0),0);
   const totalMois=mois.reduce((s,d)=>s+(d.montant||0),0);
-  const caVentes=STATE.ventes.filter(v=>isMois(v.date)).reduce((s,v)=>s+(v.montant||0),0);
+  // Encaissé réel = somme des acomptes reçus (pas montant total)
+  const encaisseMois=STATE.ventes.filter(v=>isMois(v.date)).reduce((s,v)=>s+(v.acompte||0),0);
+  const encaisseTotal=STATE.ventes.reduce((s,v)=>s+(v.acompte||0),0);
+  const soldeNetMois=encaisseMois-totalMois;
+  const soldeNetTotal=encaisseTotal-totalAll;
   document.getElementById('decaiss-count-label').textContent=`${STATE.decaissements.length} décaissement${STATE.decaissements.length>1?'s':''}`;
   document.getElementById('metric-decaiss-mois').textContent=fmt(totalMois);
   document.getElementById('metric-decaiss-all').textContent=fmt(totalAll);
-  document.getElementById('metric-solde-net').textContent=fmt(caVentes-totalMois);
+  // Solde net = encaissé − décaissé (sur tout)
+  const soldeEl=document.getElementById('metric-solde-net');
+  if(soldeEl){
+    soldeEl.textContent=fmt(soldeNetTotal);
+    soldeEl.style.color=soldeNetTotal>=0?'var(--success-text)':'var(--danger-text)';
+  }
+  // Sous-titre explicatif
+  const soldeSubEl=document.getElementById('metric-solde-net-sub');
+  if(soldeSubEl) soldeSubEl.textContent=fmt(encaisseTotal)+' encaissé − '+fmt(totalAll)+' décaissé';
   document.getElementById('decaiss-body').innerHTML=[...STATE.decaissements].sort((a,b)=>b.date.localeCompare(a.date)).map(d=>`<tr><td style="white-space:nowrap;font-size:12px;color:var(--text-secondary)">${fmtDate(d.date)}</td><td><span class="cat-badge">${d.categorie}</span></td><td>${d.description}</td><td style="font-weight:500;color:var(--danger-text)">${fmt(d.montant)}</td><td><span class="role-pill role-${d.saisiPar}">${d.saisiPar}</span></td><td><button class="btn small btn-danger" onclick="supprimerDecaiss('${d.id}')">✕</button></td></tr>`).join('');
 }
 function enregistrerDecaissement(){
