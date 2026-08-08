@@ -607,16 +607,18 @@ function renderJournal(){
     return true;
   });
 
-  // Calculs cumul bar (pour la barre de totaux uniquement, plus de colonne)
+  // Calculs cumul bar
   const tCumul    = STATE.ventes.reduce((s,v)=>s+(v.montant||0),0);
   const tEncaisse = STATE.ventes.reduce((s,v)=>s+(v.acompte||0),0);
+  const tDecaiss  = STATE.decaissements.reduce((s,d)=>s+(d.montant||0),0);
+  const tSoldeNet = tEncaisse - tDecaiss; // même calcul que dashboard
   const tRest     = STATE.ventes.reduce((s,v)=>s+(v.restant||0),0);
   const tLoc      = STATE.ventes.reduce((s,v)=>s+(parseFloat(v.local)||0),0);
   const tImp      = STATE.ventes.reduce((s,v)=>s+(parseFloat(v.importe)||0),0);
 
   document.getElementById('journal-count-label').textContent=`${STATE.ventes.length} ventes · ${ventes.length} affichées`;
   document.getElementById('montant-cumul').textContent   = fmt(tCumul);
-  document.getElementById('montant-encaisse').textContent= fmt(tEncaisse);
+  document.getElementById('montant-encaisse').textContent= fmt(tSoldeNet); // encaissé − décaissé
   document.getElementById('total-restants').textContent  = fmt(tRest);
   document.getElementById('poids-local-total').textContent  = tLoc.toFixed(2)+'g';
   document.getElementById('poids-importe-total').textContent= tImp.toFixed(2)+'g';
