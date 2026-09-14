@@ -80,7 +80,8 @@ function showPage(id){
   document.getElementById('page-login').style.display = 'none';
   document.getElementById('page-dashboard').style.display = 'none';
   var el = document.getElementById(id);
-  if(el) el.style.display = '';
+  if(!el) return;
+  el.style.display = (id === 'page-login') ? 'flex' : 'block';
 }
 
 // ─── PIN navigation ────────────────────────────────────────
