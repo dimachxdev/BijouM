@@ -1,196 +1,231 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>KAYOR — Espace Client</title>
-  <link rel="stylesheet" href="css/style.css" />
-  <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
-  <style>
-    /* ── Page de connexion client ── */
-    .client-login-wrap {
-      min-height: 100vh;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      background: var(--bg-secondary);
-      padding: 24px;
-    }
-    .client-login-box {
-      background: var(--bg-primary);
-      border-radius: var(--radius-lg);
-      box-shadow: var(--shadow-lg);
-      padding: 40px 36px;
-      width: 100%;
-      max-width: 400px;
-    }
-    .client-login-logo {
-      text-align: center;
-      margin-bottom: 28px;
-    }
-    .client-login-logo .brand { font-size: 26px; font-weight: 800; color: var(--accent); letter-spacing: -0.5px; }
-    .client-login-logo .brand-sub { font-size: 12px; color: var(--text-tertiary); margin-top: 2px; }
-    .client-login-title { font-size: 18px; font-weight: 700; color: var(--text-primary); margin-bottom: 4px; text-align:center; }
-    .client-login-sub   { font-size: 13px; color: var(--text-secondary); margin-bottom: 24px; text-align:center; }
-    .pin-inputs { display: flex; gap: 10px; justify-content: center; margin: 8px 0 20px; }
-    .pin-input {
-      width: 54px; height: 58px; text-align: center; font-size: 22px; font-weight: 700;
-      border: 2px solid var(--border-light); border-radius: var(--radius-md);
-      background: var(--bg-secondary); color: var(--text-primary);
-      outline: none; transition: border-color .2s;
-    }
-    .pin-input:focus { border-color: var(--accent); }
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>KAYOR — Espace Client</title>
+<style>
+:root{
+  --or:#C9A84C;--or2:#e8c96a;--or3:#a8872e;
+  --noir:#1A1916;--noir2:#252320;--noir3:#333;
+  --bg:#0f0e0c;--card:#1e1c19;--card2:#252320;
+  --text:#f0ead8;--sub:#a09070;--border:rgba(201,168,76,0.18);
+  --radius:14px;--shadow:0 4px 24px rgba(0,0,0,0.5);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;min-height:100vh}
 
-    /* ── Dashboard client ── */
-    .client-app { min-height: 100vh; background: var(--bg-secondary); }
-    .client-header {
-      background: var(--bg-primary);
-      border-bottom: 1px solid var(--border-light);
-      padding: 0 24px;
-      height: 60px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-    }
-    .client-header .brand { font-size: 18px; font-weight: 800; color: var(--accent); }
-    .client-header .user-greeting { font-size: 14px; color: var(--text-secondary); }
-    .client-main { max-width: 720px; margin: 0 auto; padding: 24px 16px; }
-    .client-section-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .8px; color: var(--text-tertiary); margin: 24px 0 10px; }
-    .progress-wrap { height: 10px; background: var(--border-light); border-radius: 99px; overflow: hidden; margin: 10px 0; }
-    .progress-fill { height: 100%; background: var(--accent); border-radius: 99px; transition: width .6s ease; }
-    .depot-amount-row { display: flex; gap: 10px; flex-wrap: wrap; margin: 12px 0; }
-    .depot-quick-btn {
-      flex: 1; min-width: 80px; padding: 10px 8px; background: var(--bg-secondary);
-      border: 1.5px solid var(--border-light); border-radius: var(--radius-md);
-      font-size: 13px; font-weight: 600; cursor: pointer; color: var(--text-primary);
-      transition: border-color .15s, background .15s; text-align: center;
-    }
-    .depot-quick-btn:hover, .depot-quick-btn.selected { border-color: var(--accent); background: var(--accent-light, #eeedfe); color: var(--accent); }
-    .mvt-row { display: flex; justify-content: space-between; align-items: center; padding: 9px 0; border-bottom: .5px solid var(--border-light); font-size: 13px; }
-    .mvt-row:last-child { border-bottom: none; }
-    .mvt-amount.credit { color: var(--success-text); font-weight: 600; }
-    .mvt-amount.debit  { color: var(--danger-text);  font-weight: 600; }
-    .badge-encours { background: #fef3c7; color: #92400e; border-radius: 99px; padding: 2px 10px; font-size: 11px; font-weight: 600; }
-    .badge-solde   { background: var(--success-bg); color: var(--success-text); border-radius: 99px; padding: 2px 10px; font-size: 11px; font-weight: 600; }
-    .no-account-box { text-align: center; padding: 40px 20px; color: var(--text-tertiary); font-size: 14px; }
-    @media (max-width: 480px) { .client-login-box { padding: 28px 20px; } .pin-input { width: 46px; height: 52px; font-size: 20px; } }
-  </style>
+/* ── LOGIN ── */
+#page-login{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
+.login-box{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:36px 32px;width:100%;max-width:400px;box-shadow:var(--shadow)}
+.logo-area{text-align:center;margin-bottom:28px}
+.logo-area img{width:72px;height:72px;object-fit:contain;border-radius:50%;border:2px solid var(--or)}
+.logo-area h1{font-size:20px;color:var(--or);margin-top:10px;letter-spacing:2px;text-transform:uppercase}
+.logo-area p{font-size:12px;color:var(--sub);margin-top:4px}
+.form-label{display:block;font-size:12px;color:var(--sub);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px}
+.form-input{width:100%;background:var(--noir2);border:1px solid var(--border);border-radius:8px;padding:11px 14px;color:var(--text);font-size:15px;outline:none;transition:border 0.2s}
+.form-input:focus{border-color:var(--or)}
+.form-group{margin-bottom:18px}
+.pin-row{display:flex;gap:10px;justify-content:center}
+.pin-digit{width:52px;height:60px;background:var(--noir2);border:2px solid var(--border);border-radius:10px;color:var(--or);font-size:28px;font-weight:700;text-align:center;outline:none;caret-color:var(--or);transition:border 0.2s}
+.pin-digit:focus{border-color:var(--or)}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;padding:11px 22px;border-radius:8px;border:none;cursor:pointer;font-size:14px;font-weight:600;transition:all 0.2s}
+.btn-primary{background:linear-gradient(135deg,var(--or),var(--or2));color:var(--noir);width:100%;padding:13px}
+.btn-primary:hover{opacity:.9;transform:translateY(-1px)}
+.btn-secondary{background:transparent;border:1px solid var(--border);color:var(--sub)}
+.btn-secondary:hover{border-color:var(--or);color:var(--or)}
+.login-error{background:rgba(244,67,54,.1);border:1px solid rgba(244,67,54,.3);color:#f44336;border-radius:8px;padding:10px 14px;font-size:13px;margin-bottom:14px;display:none}
+
+/* ── DASHBOARD ── */
+#page-dashboard{display:none;min-height:100vh;padding-bottom:40px}
+.dash-header{background:var(--card);border-bottom:1px solid var(--border);padding:16px 20px;display:flex;align-items:center;justify-content:space-between}
+.dash-logo{display:flex;align-items:center;gap:10px}
+.dash-logo img{width:36px;height:36px;border-radius:50%;border:1px solid var(--or)}
+.dash-logo span{color:var(--or);font-size:16px;font-weight:700;letter-spacing:1px}
+.dash-user{display:flex;align-items:center;gap:10px}
+.dash-user-name{font-size:13px;color:var(--sub)}
+.btn-logout{background:transparent;border:1px solid rgba(244,67,54,.3);color:#f44336;font-size:12px;padding:6px 12px;border-radius:6px;cursor:pointer}
+.dash-content{padding:20px;max-width:600px;margin:0 auto}
+.section-title{font-size:16px;font-weight:700;color:var(--or);margin:24px 0 12px;display:flex;align-items:center;gap:8px;text-transform:uppercase;letter-spacing:1px}
+
+/* ── CARDS ── */
+.cc-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:18px;margin-bottom:14px;box-shadow:var(--shadow)}
+.cc-card-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px}
+.cc-objet{font-size:13px;color:var(--sub)}
+.cc-solde{font-size:26px;font-weight:700;color:var(--or)}
+.cc-solde-label{font-size:11px;color:var(--sub);text-transform:uppercase;letter-spacing:1px}
+.progress-bar{height:6px;background:rgba(201,168,76,.15);border-radius:3px;overflow:hidden;margin:10px 0}
+.progress-fill{height:100%;background:linear-gradient(90deg,var(--or3),var(--or));border-radius:3px;transition:width 0.5s ease}
+.progress-label{font-size:11px;color:var(--sub);display:flex;justify-content:space-between}
+.mvt-list{margin-top:12px;border-top:1px solid var(--border);padding-top:12px}
+.mvt-item{display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid rgba(255,255,255,.04)}
+.mvt-item:last-child{border-bottom:none}
+.mvt-date{font-size:11px;color:var(--sub)}
+.mvt-note{font-size:12px;color:var(--text)}
+.mvt-amount{font-size:13px;font-weight:600;color:#4caf50}
+.mvt-amount.retrait{color:#f44336}
+.btn-depot{margin-top:14px;width:100%;background:rgba(201,168,76,.1);border:1px solid rgba(201,168,76,.3);color:var(--or);font-size:13px;padding:10px;border-radius:8px;cursor:pointer;font-weight:600;transition:all .2s}
+.btn-depot:hover{background:rgba(201,168,76,.2)}
+
+/* ── ARRHES ── */
+.arr-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:18px;margin-bottom:14px}
+.arr-article{font-size:15px;font-weight:600;color:var(--text);margin-bottom:4px}
+.arr-meta{font-size:12px;color:var(--sub);display:flex;gap:12px;flex-wrap:wrap;margin-bottom:10px}
+.badge{display:inline-block;padding:2px 10px;border-radius:20px;font-size:11px;font-weight:600;text-transform:uppercase}
+.badge-green{background:rgba(76,175,80,.1);color:#4caf50;border:1px solid rgba(76,175,80,.2)}
+.badge-or{background:rgba(201,168,76,.1);color:var(--or);border:1px solid rgba(201,168,76,.2)}
+.badge-red{background:rgba(244,67,54,.1);color:#f44336;border:1px solid rgba(244,67,54,.2)}
+.amounts-row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin:10px 0}
+.amount-box{background:var(--noir2);border-radius:8px;padding:8px 10px;text-align:center}
+.amount-box .val{font-size:14px;font-weight:700;color:var(--or)}
+.amount-box .lbl{font-size:10px;color:var(--sub);text-transform:uppercase}
+
+/* ── MODAL DEPOT ── */
+.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:100;display:none;align-items:center;justify-content:center;padding:16px}
+.modal-bg.open{display:flex}
+.modal-box{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);width:100%;max-width:420px;padding:24px;box-shadow:var(--shadow)}
+.modal-title{font-size:17px;font-weight:700;color:var(--or);margin-bottom:20px}
+.quick-amounts{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+.qa-btn{background:var(--noir2);border:1px solid var(--border);color:var(--sub);border-radius:6px;padding:7px 14px;font-size:13px;cursor:pointer;transition:all .2s}
+.qa-btn:hover,.qa-btn.active{border-color:var(--or);color:var(--or);background:rgba(201,168,76,.1)}
+.modal-actions{display:flex;gap:10px;margin-top:18px}
+.modal-actions .btn{flex:1}
+
+/* ── RECU ── */
+.recu-table{width:100%;border-collapse:collapse;margin:14px 0}
+.recu-table td{padding:8px 0;border-bottom:1px solid var(--border);font-size:13px}
+.recu-table td:first-child{color:var(--sub)}
+.recu-table td:last-child{text-align:right;font-weight:600;color:var(--text)}
+.recu-total td{border-bottom:none!important;color:var(--or)!important;font-size:15px!important}
+
+/* ── EMPTY ── */
+.empty-state{text-align:center;padding:40px 20px;color:var(--sub)}
+.empty-state .icon{font-size:40px;margin-bottom:10px}
+
+/* ── LOADING ── */
+#loading-overlay{position:fixed;inset:0;background:rgba(15,14,12,.95);z-index:999;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:14px}
+.spinner{width:44px;height:44px;border:3px solid rgba(201,168,76,.2);border-top-color:var(--or);border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.loading-text{color:var(--or);font-size:13px;letter-spacing:2px}
+
+/* ── TOAST ── */
+#toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(80px);background:var(--card2);color:var(--text);padding:11px 20px;border-radius:8px;font-size:13px;font-weight:500;box-shadow:var(--shadow);border:1px solid var(--border);transition:transform .3s;z-index:999;pointer-events:none;white-space:nowrap}
+#toast.show{transform:translateX(-50%) translateY(0)}
+</style>
 </head>
 <body>
 
-<!-- ══════════════════════════════════════════
-     PAGE CONNEXION CLIENT
-══════════════════════════════════════════ -->
-<div id="page-login" class="client-login-wrap">
-  <div class="client-login-box">
-    <div class="client-login-logo">
-      <div class="brand">KAYOR</div>
-      <div class="brand-sub">Bijouterie &amp; Joaillerie</div>
-    </div>
-    <div class="client-login-title">Espace Client</div>
-    <div class="client-login-sub">Connectez-vous pour accéder à votre compte</div>
+<!-- Loading -->
+<div id="loading-overlay">
+  <div class="spinner"></div>
+  <div class="loading-text">CHARGEMENT…</div>
+</div>
 
+<!-- Toast -->
+<div id="toast"></div>
+
+<!-- ═══════════════════════════════════════
+     PAGE LOGIN
+══════════════════════════════════════════ -->
+<div id="page-login" style="display:none">
+  <div class="login-box">
+    <div class="logo-area">
+      <img src="assets/logo-kayor.jpg" onerror="this.style.display='none'" />
+      <h1>KAYOR</h1>
+      <p>Espace Client — Connexion</p>
+    </div>
+    <div id="login-error" class="login-error"></div>
     <div class="form-group">
       <label class="form-label">Numéro de téléphone</label>
-      <input class="form-input" type="tel" id="cl-tel" placeholder="77 XXX XX XX" autocomplete="off" />
+      <input class="form-input" type="tel" id="login-tel" placeholder="77 XXX XX XX"
+        onkeydown="if(event.key==='Enter')document.getElementById('pin-1').focus()" />
     </div>
     <div class="form-group">
-      <label class="form-label">Code PIN (4 chiffres)</label>
-      <div class="pin-inputs">
-        <input class="pin-input" type="password" maxlength="1" inputmode="numeric" id="pin1" />
-        <input class="pin-input" type="password" maxlength="1" inputmode="numeric" id="pin2" />
-        <input class="pin-input" type="password" maxlength="1" inputmode="numeric" id="pin3" />
-        <input class="pin-input" type="password" maxlength="1" inputmode="numeric" id="pin4" />
+      <label class="form-label" style="text-align:center;display:block;margin-bottom:10px">Code PIN</label>
+      <div class="pin-row">
+        <input class="pin-digit" type="password" inputmode="numeric" maxlength="1" id="pin-1" onkeyup="pinNav(this,'pin-2',null)" />
+        <input class="pin-digit" type="password" inputmode="numeric" maxlength="1" id="pin-2" onkeyup="pinNav(this,'pin-3','pin-1')" />
+        <input class="pin-digit" type="password" inputmode="numeric" maxlength="1" id="pin-3" onkeyup="pinNav(this,'pin-4','pin-2')" />
+        <input class="pin-digit" type="password" inputmode="numeric" maxlength="1" id="pin-4" onkeyup="pinNav(this,null,'pin-3',true)" />
       </div>
     </div>
-    <div id="login-error" style="color:var(--danger-text);font-size:13px;text-align:center;margin-bottom:12px;display:none"></div>
-    <button class="btn btn-primary" style="width:100%" onclick="doClientLogin()">Se connecter</button>
-    <div style="text-align:center;margin-top:16px;font-size:12px;color:var(--text-tertiary)">
-      Code PIN oublié ? Contactez la boutique.
+    <button class="btn btn-primary" onclick="doLogin()">Se connecter</button>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════
+     PAGE DASHBOARD
+══════════════════════════════════════════ -->
+<div id="page-dashboard">
+  <div class="dash-header">
+    <div class="dash-logo">
+      <img src="assets/logo-kayor.jpg" onerror="this.style.display='none'" />
+      <span>KAYOR</span>
+    </div>
+    <div class="dash-user">
+      <span class="dash-user-name" id="dash-client-nom"></span>
+      <button class="btn-logout" onclick="doLogout()">Déconnexion</button>
     </div>
   </div>
-</div>
 
-<!-- ══════════════════════════════════════════
-     DASHBOARD CLIENT
-══════════════════════════════════════════ -->
-<div id="page-dashboard" class="client-app" style="display:none">
-  <header class="client-header">
-    <span class="brand">KAYOR</span>
-    <span class="user-greeting">Bonjour, <strong id="dash-client-prenom"></strong></span>
-    <button class="btn btn-secondary small" onclick="doClientLogout()">Déconnexion</button>
-  </header>
+  <div class="dash-content">
+    <!-- Comptes épargne -->
+    <div class="section-title">◈ Comptes Épargne</div>
+    <div id="comptes-list"></div>
 
-  <div class="client-main">
-
-    <!-- ── Comptes épargne ── -->
-    <div class="client-section-title">Mes comptes épargne bijoux</div>
-    <div id="dash-comptes-epargne"></div>
-
-    <!-- ── Bijoux en arrhes ── -->
-    <div class="client-section-title">Mes bijoux en réservation</div>
-    <div id="dash-bijoux-arr"></div>
-
+    <!-- Bijoux en arrhes -->
+    <div class="section-title">◈ Bijoux Réservés</div>
+    <div id="arrhes-list"></div>
   </div>
 </div>
 
-<!-- ══════════════════════════════════════════
+<!-- ═══════════════════════════════════════
      MODAL DÉPÔT
 ══════════════════════════════════════════ -->
-<div class="modal-backdrop" id="modal-depot">
-  <div class="modal">
-    <div class="modal-header">
-      <div class="modal-title">Faire un dépôt</div>
-      <button class="modal-close" onclick="closeDepotModal()">✕</button>
-    </div>
-    <div style="margin-bottom:14px">
-      <div style="font-size:13px;color:var(--text-secondary);margin-bottom:4px">Compte</div>
-      <div style="font-weight:600;font-size:15px" id="depot-compte-nom"></div>
-      <div style="font-size:13px;color:var(--success-text);margin-top:2px">Solde actuel : <strong id="depot-solde-actuel"></strong></div>
+<div class="modal-bg" id="modal-depot">
+  <div class="modal-box">
+    <div class="modal-title">Effectuer un dépôt</div>
+    <input type="hidden" id="depot-compte-id" />
+    <div class="form-group">
+      <label class="form-label">Montant rapide</label>
+      <div class="quick-amounts">
+        <button class="qa-btn" onclick="setMontantDepot(10000)">10 000</button>
+        <button class="qa-btn" onclick="setMontantDepot(25000)">25 000</button>
+        <button class="qa-btn" onclick="setMontantDepot(50000)">50 000</button>
+        <button class="qa-btn" onclick="setMontantDepot(100000)">100 000</button>
+      </div>
     </div>
     <div class="form-group">
-      <label class="form-label">Montant (F CFA) *</label>
-      <input class="form-input" type="number" min="0" id="depot-montant" placeholder="Ex : 50 000" oninput="onDepotMontantChange()" />
-    </div>
-    <div class="depot-amount-row" id="depot-quick-btns">
-      <div class="depot-quick-btn" onclick="setDepotQuick(10000)">10 000</div>
-      <div class="depot-quick-btn" onclick="setDepotQuick(25000)">25 000</div>
-      <div class="depot-quick-btn" onclick="setDepotQuick(50000)">50 000</div>
-      <div class="depot-quick-btn" onclick="setDepotQuick(100000)">100 000</div>
+      <label class="form-label">Montant (FCFA)</label>
+      <input class="form-input" type="number" id="depot-montant" placeholder="Ex : 50000" min="1000" oninput="clearQA()" />
     </div>
     <div class="form-group">
       <label class="form-label">Note (optionnel)</label>
-      <input class="form-input" type="text" id="depot-note" placeholder="Ex : Dépôt mensuel" />
+      <input class="form-input" type="text" id="depot-note" placeholder="Dépôt mensuel..." />
     </div>
-    <div id="depot-error" style="color:var(--danger-text);font-size:13px;margin-bottom:10px;display:none"></div>
     <div class="modal-actions">
-      <button class="btn btn-secondary" onclick="closeDepotModal()">Annuler</button>
-      <button class="btn btn-primary" id="btn-confirmer-depot" onclick="confirmerDepot()">Confirmer le dépôt</button>
+      <button class="btn btn-secondary" onclick="closeModal('modal-depot')">Annuler</button>
+      <button class="btn btn-primary" onclick="confirmerDepot()">Confirmer</button>
     </div>
   </div>
 </div>
 
-<!-- ══════════════════════════════════════════
+<!-- ═══════════════════════════════════════
      MODAL REÇU
 ══════════════════════════════════════════ -->
-<div class="modal-backdrop" id="modal-recu">
-  <div class="modal">
-    <div class="modal-header">
-      <div class="modal-title">Reçu de dépôt</div>
-      <button class="modal-close" onclick="closeRecuModal()">✕</button>
-    </div>
-    <div id="recu-content" style="font-size:13px;line-height:1.8"></div>
-    <div class="modal-actions" style="flex-wrap:wrap;gap:8px">
-      <button class="btn btn-secondary" onclick="closeRecuModal()">Fermer</button>
-      <button class="btn btn-secondary" onclick="imprimerRecu()">🖨 Imprimer</button>
-      <button class="btn btn-primary" id="btn-envoyer-email" onclick="envoyerRecuEmail()">✉ Envoyer par email</button>
+<div class="modal-bg" id="modal-recu">
+  <div class="modal-box">
+    <div class="modal-title">Reçu de dépôt</div>
+    <table class="recu-table" id="recu-table"></table>
+    <div class="modal-actions" style="margin-top:14px">
+      <button class="btn btn-secondary" onclick="closeModal('modal-recu')">Fermer</button>
+      <button class="btn btn-primary" id="btn-send-email" onclick="envoyerRecu()">📧 Recevoir par email</button>
     </div>
   </div>
 </div>
 
-<div id="client-toast" style="position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(80px);background:var(--text-primary);color:#fff;padding:10px 20px;border-radius:99px;font-size:13px;font-weight:500;transition:transform .3s;z-index:9999;pointer-events:none"></div>
-
-<script src="js/data.js"></script>
+<!-- EmailJS -->
+<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
 <script src="js/client.js"></script>
 </body>
 </html>

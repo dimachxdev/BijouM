@@ -277,7 +277,7 @@
       <input class="search-bar" type="text" placeholder="Rechercher un client..." id="client-search" />
       <div class="card"><div class="table-wrap">
         <table>
-          <thead><tr><th>Client</th><th>Téléphone</th><th>Total achats</th><th>Restant dû</th><th>Nb ventes</th><th>Niveau</th><th>Dernière visite</th></tr></thead>
+          <thead><tr><th>Client</th><th>Téléphone</th><th>Total achats</th><th>Restant dû</th><th>Nb ventes</th><th>Niveau</th><th>Dernière visite</th><th>Portail</th></tr></thead>
           <tbody id="clients-body"></tbody>
         </table>
       </div></div>
@@ -785,6 +785,11 @@
     <div class="form-row">
       <div class="form-group"><label class="form-label">Email</label><input class="form-input" type="email" placeholder="email@exemple.com" id="c-email" /></div>
       <div class="form-group"><label class="form-label">Adresse</label><input class="form-input" placeholder="Quartier, ville" id="c-adresse" /></div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Code PIN portail client (4 chiffres)</label>
+      <input class="form-input" type="password" inputmode="numeric" maxlength="4" placeholder="••••" id="c-pin" style="letter-spacing:6px;font-size:18px" />
+      <small style="color:var(--text-tertiary);font-size:11px">Le client utilisera ce code pour accéder à son espace sur client.html</small>
     </div>
     <div class="modal-actions">
       <button class="btn btn-secondary" onclick="closeModal('modal-add-client')">Annuler</button>

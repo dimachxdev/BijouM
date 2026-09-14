@@ -1,342 +1,415 @@
 /**
  * KAYOR — Portail Client
- * Authentification : Téléphone + Code PIN
- * Email reçu       : EmailJS
+ * Connexion : téléphone + PIN 4 chiffres
+ * Données directement depuis Supabase REST API
  */
 
-// ── Helpers LocalStorage ──────────────────────────────────────────
-function loadLS(k, fb) { try { const s = localStorage.getItem(k); return s ? JSON.parse(s) : fb; } catch { return fb; } }
-function saveLS(k, v)  { localStorage.setItem(k, JSON.stringify(v)); }
-
-// ── État ──────────────────────────────────────────────────────────
-let CL_STATE = {
-  clients:        loadLS('marjan_users_cl',    []),   // clients avec PIN
-  comptesClients: loadLS('marjan_cc',          []),
-  bijouxArr:      loadLS('marjan_ba',          []),
-  emailjsConfig:  loadLS('marjan_emailjs',     {}),
-  currentClient:  null,
-  currentDepot:   { compteId: null, montant: 0, note: '' },
-  lastRecu:       null,
+const SUPA_URL = 'https://yflvtquowzvghwxyvuah.supabase.co';
+const SUPA_KEY = 'sb_publishable_3EBGFxeT8B8cys54IZj3Nw_ZTS-4ZR1';
+const SUPA_H = {
+  'Content-Type': 'application/json',
+  'apikey':        SUPA_KEY,
+  'Authorization': 'Bearer ' + SUPA_KEY
 };
 
-function reloadState() {
-  // Lire les données fraîches depuis localStorage (partagé avec l'app admin)
-  const allClients = loadLS('marjan_clients', []);
-  // Clients enrichis avec PIN (stockés séparément)
-  const clientsPins = loadLS('marjan_clients_pin', {});
-  CL_STATE.clients = allClients.map(c => ({ ...c, pin: clientsPins[c.id] || null }));
-  CL_STATE.comptesClients = loadLS('marjan_cc', []);
-  CL_STATE.bijouxArr      = loadLS('marjan_ba', []);
-  CL_STATE.emailjsConfig  = loadLS('marjan_emailjs', {});
-}
+// État courant
+var CLIENT   = null; // objet client connecté
+var COMPTES  = [];   // comptes épargne du client
+var ARRHES   = [];   // bijoux en arrhes du client
+var LAST_DEPOT = null; // dernier dépôt pour le reçu
+var EMAILJS_LOADED = false;
 
-// ── Formatage ─────────────────────────────────────────────────────
-function fmt(n) { return Number(n||0).toLocaleString('fr-FR') + ' F'; }
-function fmtDate(d) { if (!d) return '—'; const [y,m,j] = d.split('-'); return `${j}/${m}/${y}`; }
-function today()    { return new Date().toISOString().split('T')[0]; }
-function prenom(nom){ return (nom||'').split(' ')[0]; }
+// ─── Utilitaires ───────────────────────────────────────────
 
-// ── Toast ─────────────────────────────────────────────────────────
-function showClientToast(msg) {
-  const t = document.getElementById('client-toast');
+function fmt(n){ return Number(n||0).toLocaleString('fr-FR') + ' FCFA'; }
+function fmtDate(d){ if(!d) return '—'; var p=d.split('-'); return p.length===3?p[2]+'/'+p[1]+'/'+p[0]:d; }
+function today(){ return new Date().toISOString().slice(0,10); }
+
+function showToast(msg, dur){
+  var t = document.getElementById('toast');
   t.textContent = msg;
-  t.style.transform = 'translateX(-50%) translateY(0)';
-  setTimeout(() => { t.style.transform = 'translateX(-50%) translateY(80px)'; }, 3000);
+  t.classList.add('show');
+  clearTimeout(t._t);
+  t._t = setTimeout(function(){ t.classList.remove('show'); }, dur||3000);
 }
 
-// ══════════════════════════════════════════════════════════════════
-// AUTHENTIFICATION
-// ══════════════════════════════════════════════════════════════════
-(function initPinInputs() {
-  const pins = ['pin1','pin2','pin3','pin4'];
-  pins.forEach((id, i) => {
-    const el = document.getElementById(id);
-    el.addEventListener('input', () => {
-      el.value = el.value.replace(/\D/g, '').slice(0,1);
-      if (el.value && i < 3) document.getElementById(pins[i+1]).focus();
-    });
-    el.addEventListener('keydown', e => {
-      if (e.key === 'Backspace' && !el.value && i > 0) document.getElementById(pins[i-1]).focus();
-      if (e.key === 'Enter') doClientLogin();
-    });
+function showLoading(on){
+  document.getElementById('loading-overlay').style.display = on ? 'flex' : 'none';
+}
+
+function openModal(id){
+  document.getElementById(id).classList.add('open');
+}
+function closeModal(id){
+  document.getElementById(id).classList.remove('open');
+}
+
+// ─── Supabase REST ─────────────────────────────────────────
+
+async function supaGet(table, filter){
+  var url = SUPA_URL + '/rest/v1/' + table + '?select=*';
+  if(filter) url += '&' + filter;
+  var r = await fetch(url, { headers: SUPA_H });
+  if(!r.ok) throw new Error(table + ' ' + r.status);
+  return r.json();
+}
+
+async function supaPost(table, data){
+  var r = await fetch(SUPA_URL + '/rest/v1/' + table, {
+    method: 'POST',
+    headers: Object.assign({}, SUPA_H, { 'Prefer': 'return=representation' }),
+    body: JSON.stringify(Array.isArray(data) ? data : [data])
   });
-  document.getElementById('cl-tel').addEventListener('keydown', e => {
-    if (e.key === 'Enter') document.getElementById('pin1').focus();
+  if(!r.ok) throw new Error(table + ' POST ' + r.status + ' — ' + await r.text());
+  return r.json();
+}
+
+async function supaPatch(table, filter, data){
+  var r = await fetch(SUPA_URL + '/rest/v1/' + table + '?' + filter, {
+    method: 'PATCH',
+    headers: Object.assign({}, SUPA_H, { 'Prefer': 'return=representation' }),
+    body: JSON.stringify(data)
   });
-})();
-
-function getPinValue() {
-  return ['pin1','pin2','pin3','pin4'].map(id => document.getElementById(id).value).join('');
+  if(!r.ok) throw new Error(table + ' PATCH ' + r.status);
+  return r.json();
 }
 
-function doClientLogin() {
-  reloadState();
-  const tel = document.getElementById('cl-tel').value.replace(/\s/g,'');
-  const pin = getPinValue();
-  const err = document.getElementById('login-error');
-  err.style.display = 'none';
+// ─── Navigation ────────────────────────────────────────────
 
-  if (!tel) { err.textContent = 'Entrez votre numéro de téléphone.'; err.style.display = ''; return; }
-  if (pin.length < 4) { err.textContent = 'Entrez votre code PIN complet (4 chiffres).'; err.style.display = ''; return; }
-
-  const client = CL_STATE.clients.find(c => c.tel.replace(/\s/g,'') === tel);
-  if (!client) { err.textContent = 'Numéro de téléphone non trouvé.'; err.style.display = ''; return; }
-  if (!client.pin) { err.textContent = 'Aucun code PIN défini. Contactez la boutique.'; err.style.display = ''; return; }
-  if (client.pin !== pin) { err.textContent = 'Code PIN incorrect.'; err.style.display = ''; return; }
-
-  CL_STATE.currentClient = client;
-  afficherDashboard();
-}
-
-function doClientLogout() {
-  CL_STATE.currentClient = null;
-  document.getElementById('page-login').style.display = '';
-  document.getElementById('page-dashboard').style.display = 'none';
-  document.getElementById('cl-tel').value = '';
-  ['pin1','pin2','pin3','pin4'].forEach(id => document.getElementById(id).value = '');
-}
-
-// ══════════════════════════════════════════════════════════════════
-// DASHBOARD
-// ══════════════════════════════════════════════════════════════════
-function afficherDashboard() {
-  reloadState();
-  const c = CL_STATE.currentClient;
-  document.getElementById('dash-client-prenom').textContent = prenom(c.nom);
+function showPage(id){
   document.getElementById('page-login').style.display = 'none';
-  document.getElementById('page-dashboard').style.display = '';
-  renderComptesEpargne();
-  renderBijouxArrClient();
+  document.getElementById('page-dashboard').style.display = 'none';
+  var el = document.getElementById(id);
+  if(el) el.style.display = '';
 }
 
-function renderComptesEpargne() {
-  const c = CL_STATE.currentClient;
-  const comptes = CL_STATE.comptesClients.filter(cc => cc.client === c.nom && cc.actif !== false);
-  const el = document.getElementById('dash-comptes-epargne');
-  if (!comptes.length) {
-    el.innerHTML = '<div class="no-account-box">Aucun compte épargne ouvert.<br><span style="font-size:12px">Contactez la boutique pour en créer un.</span></div>';
-    return;
+// ─── PIN navigation ────────────────────────────────────────
+
+function pinNav(el, nextId, prevId, autoSubmit){
+  var val = el.value.replace(/\D/g,'');
+  el.value = val;
+  if(val && nextId) {
+    document.getElementById(nextId).focus();
+  } else if(!val && prevId && event.key==='Backspace') {
+    document.getElementById(prevId).focus();
   }
-  el.innerHTML = comptes.map(cc => {
-    const pct = cc.objectif > 0 ? Math.min(100, Math.round((cc.solde / cc.objectif) * 100)) : 0;
-    const mvts = (cc.mouvements || []).slice().reverse().slice(0, 5);
-    return `
-    <div class="card" style="margin-bottom:16px">
-      <div class="card-body">
-        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px">
-          <div>
-            <div style="font-size:13px;color:var(--text-secondary)">Compte épargne</div>
-            <div style="font-size:12px;color:var(--text-tertiary)">${cc.objetCible || '—'}</div>
-          </div>
-          <div style="text-align:right">
-            <div style="font-size:24px;font-weight:800;color:var(--success-text)">${fmt(cc.solde)}</div>
-            ${cc.objectif ? `<div style="font-size:12px;color:var(--text-tertiary)">sur ${fmt(cc.objectif)}</div>` : ''}
-          </div>
-        </div>
-        ${cc.objectif ? `
-        <div class="progress-wrap"><div class="progress-fill" style="width:${pct}%"></div></div>
-        <div style="font-size:12px;color:var(--text-tertiary);margin-bottom:12px">${pct}% atteint</div>` : ''}
+  if(autoSubmit && val) doLogin();
+}
 
-        ${mvts.length ? `
-        <div style="margin-bottom:14px">
-          <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--text-tertiary);margin-bottom:6px">Derniers mouvements</div>
-          ${mvts.map(m => `
-          <div class="mvt-row">
-            <span style="color:var(--text-secondary)">${fmtDate(m.date)} — ${m.note || '—'}</span>
-            <span class="mvt-amount ${m.type === 'retrait' ? 'debit' : 'credit'}">${m.type === 'retrait' ? '−' : '+'}${fmt(m.montant)}</span>
-          </div>`).join('')}
-        </div>` : ''}
-
-        <button class="btn btn-primary" style="width:100%" onclick="ouvrirDepot('${cc.id}')">+ Faire un dépôt</button>
-      </div>
-    </div>`;
+function getPin(){
+  return ['pin-1','pin-2','pin-3','pin-4'].map(function(id){
+    return document.getElementById(id).value.replace(/\D/g,'');
   }).join('');
 }
 
-function renderBijouxArrClient() {
-  const c = CL_STATE.currentClient;
-  const bijoux = CL_STATE.bijouxArr.filter(b => b.client === c.nom);
-  const el = document.getElementById('dash-bijoux-arr');
-  if (!bijoux.length) {
-    el.innerHTML = '<div class="no-account-box" style="padding:20px">Aucune réservation en cours.</div>';
-    return;
-  }
-  el.innerHTML = bijoux.map(b => {
-    const ec = b.statut === 'en_cours';
-    const pct = Math.min(100, Math.round((b.arrhesVerse / b.prixTotal) * 100));
-    const overdue = ec && b.dateEcheance < today();
-    return `
-    <div class="card" style="margin-bottom:12px">
-      <div class="card-body">
-        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
-          <div>
-            <div style="font-weight:600;font-size:14px">${b.article}${b.poids ? ` <span style="font-size:12px;color:var(--text-tertiary)">${b.poids}g</span>` : ''}</div>
-            <div style="font-size:12px;color:var(--text-tertiary);margin-top:2px">Réservé le ${fmtDate(b.date)} · Échéance : ${fmtDate(b.dateEcheance)}</div>
-          </div>
-          <span class="${ec ? (overdue ? 'badge-encours' : 'badge-encours') : 'badge-solde'}">${ec ? (overdue ? 'Échéance dépassée' : 'En cours') : 'Soldé'}</span>
-        </div>
-        <div class="progress-wrap"><div class="progress-fill" style="width:${pct}%"></div></div>
-        <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text-tertiary);margin-top:4px">
-          <span>Arrhes versées : <strong style="color:var(--success-text)">${fmt(b.arrhesVerse)}</strong></span>
-          ${b.restantDu > 0 ? `<span>Restant : <strong style="color:var(--warning-text)">${fmt(b.restantDu)}</strong></span>` : '<span style="color:var(--success-text)">✓ Soldé</span>'}
-        </div>
-      </div>
-    </div>`;
-  }).join('');
-}
-
-// ══════════════════════════════════════════════════════════════════
-// DÉPÔT
-// ══════════════════════════════════════════════════════════════════
-function ouvrirDepot(compteId) {
-  reloadState();
-  const cc = CL_STATE.comptesClients.find(c => c.id === compteId);
-  if (!cc) return;
-  CL_STATE.currentDepot = { compteId, montant: 0, note: '' };
-  document.getElementById('depot-compte-nom').textContent    = cc.client + (cc.objetCible ? ' — ' + cc.objetCible : '');
-  document.getElementById('depot-solde-actuel').textContent  = fmt(cc.solde);
-  document.getElementById('depot-montant').value             = '';
-  document.getElementById('depot-note').value                = '';
-  document.getElementById('depot-error').style.display       = 'none';
-  document.querySelectorAll('.depot-quick-btn').forEach(b => b.classList.remove('selected'));
-  document.getElementById('modal-depot').classList.add('show');
-}
-
-function closeDepotModal() {
-  document.getElementById('modal-depot').classList.remove('show');
-}
-
-function setDepotQuick(montant) {
-  document.getElementById('depot-montant').value = montant;
-  document.querySelectorAll('.depot-quick-btn').forEach(b => {
-    b.classList.toggle('selected', parseInt(b.textContent.replace(/\s/g,'')) === montant);
+function clearPin(){
+  ['pin-1','pin-2','pin-3','pin-4'].forEach(function(id){
+    document.getElementById(id).value = '';
   });
 }
 
-function onDepotMontantChange() {
-  document.querySelectorAll('.depot-quick-btn').forEach(b => b.classList.remove('selected'));
-}
+// ─── LOGIN ─────────────────────────────────────────────────
 
-function confirmerDepot() {
-  reloadState();
-  const montant = parseInt(document.getElementById('depot-montant').value) || 0;
-  const note    = document.getElementById('depot-note').value.trim() || 'Dépôt client';
-  const err     = document.getElementById('depot-error');
-
-  if (montant <= 0) { err.textContent = 'Entrez un montant valide.'; err.style.display = ''; return; }
+async function doLogin(){
+  var tel = document.getElementById('login-tel').value.trim();
+  var pin = getPin();
+  var err = document.getElementById('login-error');
   err.style.display = 'none';
 
-  const { compteId } = CL_STATE.currentDepot;
-  const cc = CL_STATE.comptesClients.find(c => c.id === compteId);
-  if (!cc) return;
+  if(!tel){ err.textContent='Veuillez saisir votre numéro de téléphone.'; err.style.display='block'; return; }
+  if(pin.length !== 4){ err.textContent='Veuillez saisir votre code PIN (4 chiffres).'; err.style.display='block'; return; }
 
-  // Enregistrer le mouvement
-  const mouvement = { date: today(), type: 'depot', montant, note };
-  cc.mouvements.push(mouvement);
-  cc.solde += montant;
+  showLoading(true);
 
-  // Sauvegarder dans localStorage
-  saveLS('marjan_cc', CL_STATE.comptesClients);
+  try {
+    // Chercher le client par téléphone
+    var telNorm = tel.replace(/\s/g,'');
+    var clients = await supaGet('clients', 'tel=eq.'+encodeURIComponent(tel));
+    // Fallback sans espaces
+    if(!clients.length){
+      clients = await supaGet('clients', 'tel=ilike.*'+telNorm+'*');
+    }
 
-  // Préparer le reçu
-  CL_STATE.lastRecu = {
-    client:       CL_STATE.currentClient,
-    compte:       cc,
-    montant,
-    note,
-    nouveauSolde: cc.solde,
-    date:         today(),
-  };
+    if(!clients.length){
+      showLoading(false);
+      err.textContent='Numéro de téléphone introuvable.'; err.style.display='block';
+      return;
+    }
 
-  closeDepotModal();
-  afficherRecu();
-  afficherDashboard();
-  showClientToast('✓ Dépôt de ' + fmt(montant) + ' enregistré.');
-}
+    var client = clients[0];
 
-// ══════════════════════════════════════════════════════════════════
-// REÇU
-// ══════════════════════════════════════════════════════════════════
-function afficherRecu() {
-  const r = CL_STATE.lastRecu;
-  const pct = r.compte.objectif > 0 ? Math.min(100, Math.round((r.nouveauSolde / r.compte.objectif) * 100)) : null;
+    // Vérifier le PIN — d'abord Supabase, puis localStorage fallback
+    var pinOk = false;
+    if(client.pin){
+      pinOk = (client.pin === pin);
+    } else {
+      // Fallback localStorage (admin app même appareil)
+      try {
+        var localPins = JSON.parse(localStorage.getItem('marjan_clients_pin')||'{}');
+        pinOk = (localPins[client.id] === pin);
+      } catch(e) { pinOk = false; }
+    }
 
-  document.getElementById('recu-content').innerHTML = `
-    <div style="text-align:center;padding:16px 0 20px;border-bottom:1px solid var(--border-light);margin-bottom:16px">
-      <div style="font-size:22px;font-weight:800;color:var(--accent)">KAYOR</div>
-      <div style="font-size:11px;color:var(--text-tertiary)">Reçu de dépôt — Épargne bijoux</div>
-    </div>
-    <table style="width:100%;font-size:13px;border-collapse:collapse">
-      <tr><td style="color:var(--text-secondary);padding:5px 0">Client</td><td style="font-weight:600;text-align:right">${r.client.nom}</td></tr>
-      <tr><td style="color:var(--text-secondary);padding:5px 0">Date</td><td style="font-weight:600;text-align:right">${fmtDate(r.date)}</td></tr>
-      <tr><td style="color:var(--text-secondary);padding:5px 0">Montant déposé</td><td style="font-weight:700;text-align:right;font-size:16px;color:var(--success-text)">+ ${fmt(r.montant)}</td></tr>
-      <tr><td style="color:var(--text-secondary);padding:5px 0">Nouveau solde</td><td style="font-weight:700;text-align:right">${fmt(r.nouveauSolde)}</td></tr>
-      ${r.compte.objectif ? `<tr><td style="color:var(--text-secondary);padding:5px 0">Objectif</td><td style="text-align:right">${fmt(r.compte.objectif)} (${pct}% atteint)</td></tr>` : ''}
-      <tr><td style="color:var(--text-secondary);padding:5px 0">Note</td><td style="text-align:right">${r.note}</td></tr>
-    </table>
-    ${r.client.email
-      ? `<div style="margin-top:14px;font-size:12px;color:var(--text-tertiary)">Ce reçu sera envoyé à : <strong>${r.client.email}</strong></div>`
-      : `<div style="margin-top:14px;font-size:12px;color:var(--warning-text)">Aucun email enregistré. Ajoutez votre email à la boutique pour recevoir vos reçus.</div>`
-    }`;
+    if(!pinOk){
+      showLoading(false);
+      err.textContent='Code PIN incorrect.'; err.style.display='block';
+      clearPin();
+      document.getElementById('pin-1').focus();
+      return;
+    }
 
-  const btnEmail = document.getElementById('btn-envoyer-email');
-  if (btnEmail) btnEmail.style.display = r.client.email ? '' : 'none';
-
-  document.getElementById('modal-recu').classList.add('show');
-}
-
-function closeRecuModal() {
-  document.getElementById('modal-recu').classList.remove('show');
-}
-
-function imprimerRecu() {
-  window.print();
-}
-
-// ══════════════════════════════════════════════════════════════════
-// EMAIL (EmailJS)
-// ══════════════════════════════════════════════════════════════════
-function envoyerRecuEmail() {
-  const cfg = CL_STATE.emailjsConfig;
-  const r   = CL_STATE.lastRecu;
-  const btn = document.getElementById('btn-envoyer-email');
-
-  if (!cfg.serviceId || !cfg.templateId || !cfg.publicKey) {
-    showClientToast('⛔ EmailJS non configuré. Contactez l\'administrateur.');
-    return;
+    CLIENT = client;
+    await chargerDonnees();
+    afficherDashboard();
+  } catch(e){
+    showLoading(false);
+    err.textContent='Erreur de connexion. Vérifiez votre réseau.'; err.style.display='block';
+    console.error(e);
   }
-  if (!r.client.email) {
-    showClientToast('⛔ Aucun email enregistré pour ce client.');
-    return;
-  }
+}
 
-  btn.disabled = true;
-  btn.textContent = 'Envoi en cours...';
+async function chargerDonnees(){
+  var [comptes, mvtsCC, arrhes, mvtsArr] = await Promise.all([
+    supaGet('comptes_clients', 'client=eq.'+encodeURIComponent(CLIENT.nom)),
+    supaGet('mouvements_cc', 'order=id.asc'),
+    supaGet('bijoux_arrhes', 'client=eq.'+encodeURIComponent(CLIENT.nom)),
+    supaGet('mouvements_arrhes', 'order=id.asc')
+  ]);
 
-  const pct = r.compte.objectif > 0 ? Math.min(100, Math.round((r.nouveauSolde / r.compte.objectif) * 100)) : null;
+  COMPTES = comptes.map(function(cc){
+    return Object.assign({}, cc, {
+      mouvements: mvtsCC.filter(function(m){ return m.compte_id === cc.id; })
+    });
+  });
 
-  emailjs.init(cfg.publicKey);
-  emailjs.send(cfg.serviceId, cfg.templateId, {
-    to_email:       r.client.email,
-    to_name:        r.client.nom,
-    depot_montant:  Number(r.montant).toLocaleString('fr-FR') + ' F CFA',
-    nouveau_solde:  Number(r.nouveauSolde).toLocaleString('fr-FR') + ' F CFA',
-    objectif:       r.compte.objectif ? Number(r.compte.objectif).toLocaleString('fr-FR') + ' F CFA' : '—',
-    progression:    pct !== null ? pct + '%' : '—',
-    bijou_cible:    r.compte.objetCible || '—',
-    date_depot:     fmtDate(r.date),
-    note_depot:     r.note,
-  }).then(() => {
-    showClientToast('✓ Reçu envoyé à ' + r.client.email);
-    btn.textContent = '✓ Envoyé';
-  }).catch(err => {
-    showClientToast('⛔ Échec envoi email : ' + (err.text || err));
-    btn.disabled = false;
-    btn.textContent = '✉ Envoyer par email';
+  ARRHES = arrhes.map(function(ba){
+    return Object.assign({}, ba, {
+      mouvements: mvtsArr.filter(function(m){ return m.arrhes_id === ba.id; })
+    });
   });
 }
 
-// ── Fermer modals en cliquant à l'extérieur ───────────────────────
-document.querySelectorAll('.modal-backdrop').forEach(m => {
-  m.addEventListener('click', e => { if (e.target === m) m.classList.remove('show'); });
+// ─── DASHBOARD ─────────────────────────────────────────────
+
+function afficherDashboard(){
+  showLoading(false);
+  document.getElementById('dash-client-nom').textContent = CLIENT.nom;
+  renderComptes();
+  renderArrhes();
+  showPage('page-dashboard');
+}
+
+function renderComptes(){
+  var el = document.getElementById('comptes-list');
+  if(!COMPTES.length){
+    el.innerHTML = '<div class="empty-state"><div class="icon">💰</div><div>Aucun compte épargne</div></div>';
+    return;
+  }
+
+  el.innerHTML = COMPTES.map(function(cc){
+    var pct = cc.objectif ? Math.min(100, Math.round(cc.solde / cc.objectif * 100)) : 0;
+    var derniers = (cc.mouvements||[]).slice(-5).reverse();
+
+    var mvtHtml = derniers.length ? derniers.map(function(m){
+      var cls = (m.type==='retrait') ? 'mvt-amount retrait' : 'mvt-amount';
+      var signe = (m.type==='retrait') ? '-' : '+';
+      return '<div class="mvt-item">' +
+        '<div><div class="mvt-date">'+fmtDate(m.date)+'</div><div class="mvt-note">'+(m.note||m.type||'')+'</div></div>' +
+        '<div class="'+cls+'">'+signe+' '+fmt(m.montant)+'</div>' +
+      '</div>';
+    }).join('') : '<div style="font-size:12px;color:var(--sub);text-align:center;padding:8px">Aucun mouvement</div>';
+
+    return '<div class="cc-card">' +
+      '<div class="cc-card-header">' +
+        '<div><div class="cc-solde-label">Solde épargne</div><div class="cc-solde">'+fmt(cc.solde)+'</div></div>' +
+        '<div>' + (cc.actif ? '<span class="badge badge-green">Actif</span>' : '<span class="badge badge-red">Clôturé</span>') + '</div>' +
+      '</div>' +
+      (cc.objectif ? '<div class="cc-objet">Objectif : '+fmt(cc.objectif)+(cc.objetCible?' — '+cc.objetCible:'')+'</div>' : '') +
+      (cc.objectif ? '<div class="progress-bar"><div class="progress-fill" style="width:'+pct+'%"></div></div>' +
+        '<div class="progress-label"><span>'+pct+'%</span><span>'+fmt(cc.objectif)+'</span></div>' : '') +
+      '<div class="mvt-list">' + mvtHtml + '</div>' +
+      (cc.actif ? '<button class="btn-depot" onclick="ouvrirDepot(\''+cc.id+'\')">+ Effectuer un dépôt</button>' : '') +
+    '</div>';
+  }).join('');
+}
+
+function renderArrhes(){
+  var el = document.getElementById('arrhes-list');
+  if(!ARRHES.length){
+    el.innerHTML = '<div class="empty-state"><div class="icon">💍</div><div>Aucun bijou réservé</div></div>';
+    return;
+  }
+
+  el.innerHTML = ARRHES.map(function(ba){
+    var pct = ba.prix_total ? Math.min(100, Math.round(ba.arrhes_verse / ba.prix_total * 100)) : 0;
+    var statutBadge = {en_cours:'badge-or', solde:'badge-green', annule:'badge-red'}[ba.statut] || 'badge-or';
+    var statutLabel = {en_cours:'En cours', solde:'Soldé', annule:'Annulé'}[ba.statut] || ba.statut;
+
+    return '<div class="arr-card">' +
+      '<div class="arr-article">'+(ba.article||ba.description||'Bijou réservé')+'</div>' +
+      '<div class="arr-meta">' +
+        '<span>📅 '+fmtDate(ba.date)+'</span>' +
+        (ba.date_echeance ? '<span>⏰ Échéance: '+fmtDate(ba.date_echeance)+'</span>' : '') +
+        '<span class="badge '+statutBadge+'">'+statutLabel+'</span>' +
+      '</div>' +
+      '<div class="amounts-row">' +
+        '<div class="amount-box"><div class="val">'+fmt(ba.prix_total)+'</div><div class="lbl">Prix total</div></div>' +
+        '<div class="amount-box"><div class="val">'+fmt(ba.arrhes_verse)+'</div><div class="lbl">Versé</div></div>' +
+        '<div class="amount-box"><div class="val" style="color:'+(ba.restant_du>0?'#f44336':'#4caf50')+'">'+fmt(ba.restant_du)+'</div><div class="lbl">Restant</div></div>' +
+      '</div>' +
+      '<div class="progress-bar"><div class="progress-fill" style="width:'+pct+'%"></div></div>' +
+      '<div class="progress-label"><span>'+pct+'% versé</span><span>'+fmt(ba.prix_total)+'</span></div>' +
+    '</div>';
+  }).join('');
+}
+
+// ─── DÉPÔT ─────────────────────────────────────────────────
+
+function ouvrirDepot(compteId){
+  document.getElementById('depot-compte-id').value = compteId;
+  document.getElementById('depot-montant').value = '';
+  document.getElementById('depot-note').value = '';
+  document.querySelectorAll('.qa-btn').forEach(function(b){ b.classList.remove('active'); });
+  openModal('modal-depot');
+}
+
+function setMontantDepot(val){
+  document.getElementById('depot-montant').value = val;
+  document.querySelectorAll('.qa-btn').forEach(function(b){
+    b.classList.toggle('active', parseInt(b.textContent.replace(/\s/g,'')) === val);
+  });
+}
+
+function clearQA(){
+  document.querySelectorAll('.qa-btn').forEach(function(b){ b.classList.remove('active'); });
+}
+
+async function confirmerDepot(){
+  var compteId = document.getElementById('depot-compte-id').value;
+  var montant  = parseFloat(document.getElementById('depot-montant').value) || 0;
+  var note     = document.getElementById('depot-note').value.trim() || 'Dépôt client';
+
+  if(montant < 500){ showToast('Montant minimum : 500 FCFA'); return; }
+
+  var cc = COMPTES.find(function(c){ return c.id === compteId; });
+  if(!cc){ showToast('Compte introuvable'); return; }
+
+  var d = today();
+  var nvSolde = (cc.solde || 0) + montant;
+
+  showLoading(true);
+  closeModal('modal-depot');
+
+  try {
+    // Ajouter le mouvement
+    await supaPost('mouvements_cc', { compte_id: compteId, date: d, type: 'depot', montant: montant, note: note });
+    // Mettre à jour le solde
+    await supaPatch('comptes_clients', 'id=eq.'+encodeURIComponent(compteId), { solde: nvSolde });
+
+    // Mettre à jour localement
+    cc.solde = nvSolde;
+    if(!cc.mouvements) cc.mouvements = [];
+    cc.mouvements.push({ compte_id: compteId, date: d, type: 'depot', montant: montant, note: note });
+
+    LAST_DEPOT = { compteId: compteId, montant: montant, note: note, date: d, nvSolde: nvSolde, cc: cc };
+
+    renderComptes();
+    showLoading(false);
+    afficherRecu();
+  } catch(e){
+    showLoading(false);
+    showToast('Erreur dépôt : ' + e.message);
+    console.error(e);
+  }
+}
+
+// ─── REÇU ──────────────────────────────────────────────────
+
+function afficherRecu(){
+  if(!LAST_DEPOT) return;
+  var d = LAST_DEPOT;
+  var cc = d.cc;
+  var pct = cc.objectif ? Math.min(100, Math.round(d.nvSolde / cc.objectif * 100)) : null;
+
+  var rows = [
+    ['Client',         CLIENT.nom],
+    ['Date',           fmtDate(d.date)],
+    ['Montant déposé', fmt(d.montant)],
+    ['Nouveau solde',  fmt(d.nvSolde)],
+  ];
+  if(cc.objectif) rows.push(['Progression', pct + '% de ' + fmt(cc.objectif)]);
+  if(cc.objetCible) rows.push(['Objectif', cc.objetCible]);
+  if(d.note) rows.push(['Note', d.note]);
+
+  var html = rows.map(function(r, i){
+    return '<tr class="'+(i===rows.length-1?'':'')+'"><td>'+r[0]+'</td><td>'+r[1]+'</td></tr>';
+  }).join('');
+
+  document.getElementById('recu-table').innerHTML = html;
+
+  var btnEmail = document.getElementById('btn-send-email');
+  btnEmail.style.display = CLIENT.email ? '' : 'none';
+
+  openModal('modal-recu');
+}
+
+async function envoyerRecu(){
+  if(!LAST_DEPOT){ return; }
+  if(!CLIENT.email){ showToast('Aucun email associé à ce compte.'); return; }
+
+  var conf = {};
+  try { conf = JSON.parse(localStorage.getItem('marjan_emailjs')||'{}'); } catch(e){}
+  if(!conf.serviceId || !conf.templateId || !conf.publicKey){
+    showToast('EmailJS non configuré (demander à l\'admin).');
+    return;
+  }
+
+  var d = LAST_DEPOT;
+  var cc = d.cc;
+  var pct = cc.objectif ? Math.min(100, Math.round(d.nvSolde / cc.objectif * 100)) : 0;
+
+  var btn = document.getElementById('btn-send-email');
+  btn.textContent = '⏳ Envoi…';
+  btn.disabled = true;
+
+  try {
+    emailjs.init(conf.publicKey);
+    await emailjs.send(conf.serviceId, conf.templateId, {
+      to_email:     CLIENT.email,
+      to_name:      CLIENT.nom,
+      depot_montant: d.montant.toLocaleString('fr-FR'),
+      nouveau_solde: d.nvSolde.toLocaleString('fr-FR'),
+      objectif:      cc.objectif ? cc.objectif.toLocaleString('fr-FR') : '—',
+      progression:   pct + '%',
+      bijou_cible:   cc.objetCible || '—',
+      date_depot:    fmtDate(d.date),
+      note_depot:    d.note || ''
+    });
+    showToast('✓ Reçu envoyé à ' + CLIENT.email);
+    closeModal('modal-recu');
+  } catch(e){
+    showToast('Erreur email : ' + e.message);
+    console.error(e);
+  } finally {
+    btn.textContent = '📧 Recevoir par email';
+    btn.disabled = false;
+  }
+}
+
+// ─── LOGOUT ────────────────────────────────────────────────
+
+function doLogout(){
+  CLIENT = null; COMPTES = []; ARRHES = []; LAST_DEPOT = null;
+  clearPin();
+  document.getElementById('login-tel').value = '';
+  document.getElementById('login-error').style.display = 'none';
+  showPage('page-login');
+}
+
+// ─── INIT ──────────────────────────────────────────────────
+
+window.addEventListener('DOMContentLoaded', function(){
+  showLoading(false);
+  showPage('page-login');
+  document.getElementById('login-tel').focus();
 });

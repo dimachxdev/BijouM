@@ -788,10 +788,9 @@ async function saveStockBatch(items) {
 }
 
 async function saveClient(c) {
-  await _writeAndRefresh('clients', {
-    id:c.id, nom:c.nom, tel:c.tel||null,
-    email:c.email||null, adresse:c.adresse||null
-  }, async function() {
+  var row = { id:c.id, nom:c.nom, tel:c.tel||null, email:c.email||null, adresse:c.adresse||null };
+  if(c.pin !== undefined) row.pin = c.pin || null;
+  await _writeAndRefresh('clients', row, async function() {
     await reloadClients();
     await saveCompteurs(['cl']);
   });

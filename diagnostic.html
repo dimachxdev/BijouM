@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>Diagnostic KAYOR — Supabase</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: monospace; background: #1a1916; color: #fff; padding: 20px; }
+h1 { color: #C9A84C; margin-bottom: 16px; font-size: 18px; letter-spacing: 2px; }
+h2 { color: #C9A84C; font-size: 13px; margin: 16px 0 8px; text-transform: uppercase; letter-spacing: 1px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 10px; margin-bottom: 16px; }
+.card { background: #2d2b27; border-radius: 6px; padding: 12px; border-left: 3px solid #555; }
+.card.ok  { border-color: #4caf50; }
+.card.err { border-color: #f44336; }
+.card.pending { border-color: #C9A84C; }
+.card-title { font-size: 12px; font-weight: bold; margin-bottom: 6px; color: #C9A84C; }
+.card-status { font-size: 11px; margin: 3px 0; }
+.ok-text  { color: #4caf50; }
+.err-text { color: #f44336; }
+.warn-text{ color: #ff9800; }
+pre { font-size: 10px; color: #aaa; white-space: pre-wrap; word-break: break-all; margin-top: 4px; max-height: 80px; overflow: auto; }
+.btn { background: #C9A84C; color: #000; border: none; padding: 10px 20px; font-weight: bold; cursor: pointer; border-radius: 4px; margin: 4px; font-size: 13px; }
+.btn:hover { background: #b8943a; }
+.btn-sm { padding: 6px 12px; font-size: 11px; }
+#summary { background: #2d2b27; padding: 14px; border-radius: 6px; margin-bottom: 16px; }
+.progress { height: 4px; background: #444; border-radius: 2px; margin: 8px 0; }
+.progress-bar { height: 100%; background: #C9A84C; border-radius: 2px; transition: width 0.3s; }
+</style>
+</head>
+<body>
+<h1>🔧 Diagnostic Supabase — KAYOR</h1>
+
+<div style="margin-bottom:16px">
+  <button class="btn" onclick="runAll()">▶ Lancer diagnostic complet</button>
+  <button class="btn" onclick="runInsertAll()">📥 Tester tous les INSERTs</button>
+  <button class="btn" onclick="cleanupTests()">🗑 Supprimer données de test</button>
+</div>
+
+<div id="summary">En attente du diagnostic...</div>
+<div class="progress"><div class="progress-bar" id="progress" style="width:0%"></div></div>
+
+<h2>SELECT (Lecture)</h2>
+<div class="grid" id="select-grid"></div>
+
+<h2>INSERT (Écriture)</h2>
+<div class="grid" id="insert-grid"></div>
+
+<script>
+const URL = 'https://yflvtquowzvghwxyvuah.supabase.co';
+const KEY = 'sb_publishable_3EBGFxeT8B8cys54IZj3Nw_ZTS-4ZR1';
+const H = {
+  'Content-Type': 'application/json',
+  'apikey': KEY,
+  'Authorization': 'Bearer ' + KEY
+};
+
+// Définition des tables et données de test
+const TABLES = [
+  {
+    name: 'clients',
+    testData: { id:'_TEST_CLI', nom:'Test Client', tel:'77 000 00 00', email:null, adresse:null }
+  },
+  {
+    name: 'ventes',
+    testData: { id:'_TEST_VEN', date:'2025-01-01', client:'Test Client',
+      description:'Test', type_bijou:'or', carat:'18k-local',
+      poids:10.0, local:10.0, importe:0, paiement:'especes',
+      montant:50000, acompte:50000, restant:0 }
+  },
+  {
+    name: 'stock',
+    testData: { ref:'_TEST_STK', nom:'Test Article', type_bijou:'or',
+      carat:'18k-local', provenance:'local', type:'local',
+      poids:100.0, poids_total_g:100.0, qty:1, prix:0, seuil:50 }
+  },
+  {
+    name: 'sorties',
+    testData: { id:'_TEST_SRT', date:'2025-01-01', type_bijou:'or',
+      carat:'18k-local', poids:5.0, nb_articles:1,
+      motif:'Test', commentaire:null, valide_par:'admin' }
+  },
+  {
+    name: 'decaissements',
+    testData: { id:'_TEST_DEC', date:'2025-01-01', categorie:'Test',
+      description:'Test', montant:1000, saisi_par:'admin' }
+  },
+  {
+    name: 'comptes_clients',
+    testData: { id:'_TEST_CC', client:'Test Client',
+      date_ouverture:'2025-01-01', solde:0, actif:true }
+  },
+  {
+    name: 'mouvements_cc',
+    testData: { compte_id:'_TEST_CC', date:'2025-01-01',
+      type:'depot', montant:1000, note:'Test' }
+  },
+  {
+    name: 'reprises',
+    testData: { id:'_TEST_REP', date:'2025-01-01', client:'Test Client',
+      description:'Test reprise', type_bijou:'or',
+      carat:'18k-local', poids:5.0, local:5.0, importe:0,
+      prix:20000, note:null, photo:null }
+  },
+  {
+    name: 'bijoux_arrhes',
+    testData: { id:'_TEST_BA', date:'2025-01-01', client:'Test Client',
+      article:'Test', description:'Test',
+      prix_total:100000, arrhes_verse:50000,
+      restant_du:50000, date_echeance:'2025-06-01', statut:'en_cours' }
+  },
+  {
+    name: 'connexions',
+    testData: { id:'_TEST_CON', user_id:'U-0001', nom:'Admin Test',
+      role:'admin', date:'2025-01-01', heure:'09:00', action:'connexion' }
+  },
+  {
+    name: 'compteurs',
+    testData: { cle:'_test', valeur:0 }
+  },
+  {
+    name: 'utilisateurs',
+    testData: { id:'_TEST_USR', nom:'Test User', login:'test_diag',
+      password:'test', role:'vendeur', actif:false }
+  }
+];
+
+async function apiSelect(table) {
+  const r = await fetch(URL+'/rest/v1/'+table+'?select=*&limit=5', {
+    headers: Object.assign({}, H, {'Prefer': 'return=representation'})
+  });
+  const txt = await r.text();
+  return { ok: r.ok, status: r.status, body: txt };
+}
+
+async function apiInsert(table, data) {
+  const r = await fetch(URL+'/rest/v1/'+table, {
+    method: 'POST',
+    headers: Object.assign({}, H, {
+      'Prefer': 'resolution=merge-duplicates,return=representation'
+    }),
+    body: JSON.stringify([data])
+  });
+  const txt = await r.text();
+  return { ok: r.ok, status: r.status, body: txt };
+}
+
+async function apiDelete(table, filter) {
+  const r = await fetch(URL+'/rest/v1/'+table+'?'+filter, {
+    method: 'DELETE', headers: H
+  });
+  return { ok: r.ok, status: r.status };
+}
+
+function makeCard(containerId, table, state) {
+  const grid = document.getElementById(containerId);
+  let card = document.getElementById('card-'+containerId+'-'+table);
+  if (!card) {
+    card = document.createElement('div');
+    card.id = 'card-'+containerId+'-'+table;
+    card.className = 'card pending';
+    grid.appendChild(card);
+  }
+  card.className = 'card ' + (state.ok === true ? 'ok' : state.ok === false ? 'err' : 'pending');
+  card.innerHTML = '<div class="card-title">'+table+'</div>' +
+    '<div class="card-status '+(state.ok===true?'ok-text':state.ok===false?'err-text':'warn-text')+'">' +
+    (state.ok===true ? '✓ OK' : state.ok===false ? '✗ ERREUR '+state.status : '⏳ En cours...') +
+    '</div>' +
+    (state.count !== undefined ? '<div class="card-status">'+state.count+' lignes existantes</div>' : '') +
+    (state.detail ? '<pre>'+state.detail+'</pre>' : '');
+}
+
+function updateSummary(done, total, okCount, errCount) {
+  const pct = Math.round(done/total*100);
+  document.getElementById('progress').style.width = pct+'%';
+  document.getElementById('summary').innerHTML =
+    '<span class="ok-text">✓ '+okCount+' OK</span>  ' +
+    '<span class="err-text">✗ '+errCount+' ERREURS</span>  ' +
+    '('+done+'/'+total+' testés)' +
+    (errCount > 0 ? '<br><br><span class="warn-text">→ Exécuter fix_colonnes.sql + fix_rls.sql dans Supabase SQL Editor</span>' : '');
+}
+
+async function runAll() {
+  document.getElementById('select-grid').innerHTML = '';
+  document.getElementById('insert-grid').innerHTML = '';
+  let done = 0, okS = 0, errS = 0, okI = 0, errI = 0;
+  const total = TABLES.length * 2;
+
+  for (const t of TABLES) {
+    // SELECT
+    makeCard('select-grid', t.name, { ok: null });
+    const s = await apiSelect(t.name);
+    let count = 0;
+    try { count = JSON.parse(s.body).length; } catch(e) {}
+    if (s.ok) okS++; else errS++;
+    makeCard('select-grid', t.name, {
+      ok: s.ok, status: s.status,
+      count: s.ok ? count : undefined,
+      detail: s.ok ? null : s.body.substring(0,200)
+    });
+    done++;
+    updateSummary(done, total, okS+okI, errS+errI);
+    await new Promise(r => setTimeout(r, 100));
+
+    // INSERT
+    makeCard('insert-grid', t.name, { ok: null });
+    const ins = await apiInsert(t.name, t.testData);
+    if (ins.ok) okI++; else errI++;
+    let detail = null;
+    if (!ins.ok) {
+      try { detail = JSON.parse(ins.body).message || ins.body; } catch(e) { detail = ins.body; }
+    }
+    makeCard('insert-grid', t.name, {
+      ok: ins.ok, status: ins.status,
+      detail: detail ? detail.substring(0,200) : null
+    });
+    done++;
+    updateSummary(done, total, okS+okI, errS+errI);
+    await new Promise(r => setTimeout(r, 100));
+  }
+}
+
+async function runInsertAll() {
+  document.getElementById('insert-grid').innerHTML = '';
+  let done = 0, ok = 0, err = 0;
+  for (const t of TABLES) {
+    makeCard('insert-grid', t.name, { ok: null });
+    const ins = await apiInsert(t.name, t.testData);
+    if (ins.ok) ok++; else err++;
+    let detail = null;
+    if (!ins.ok) {
+      try { detail = JSON.parse(ins.body).message || ins.body; } catch(e) { detail = ins.body; }
+    }
+    makeCard('insert-grid', t.name, {
+      ok: ins.ok, status: ins.status,
+      detail: detail ? detail.substring(0,250) : null
+    });
+    done++;
+    updateSummary(done, TABLES.length, ok, err);
+    await new Promise(r => setTimeout(r, 150));
+  }
+}
+
+async function cleanupTests() {
+  const deletes = [
+    ['clients',         'id=eq._TEST_CLI'],
+    ['ventes',          'id=eq._TEST_VEN'],
+    ['stock',           'ref=eq._TEST_STK'],
+    ['sorties',         'id=eq._TEST_SRT'],
+    ['decaissements',   'id=eq._TEST_DEC'],
+    ['mouvements_cc',   'compte_id=eq._TEST_CC'],
+    ['comptes_clients', 'id=eq._TEST_CC'],
+    ['reprises',        'id=eq._TEST_REP'],
+    ['bijoux_arrhes',   'id=eq._TEST_BA'],
+    ['connexions',      'id=eq._TEST_CON'],
+    ['compteurs',       'cle=eq._test'],
+    ['utilisateurs',    'id=eq._TEST_USR'],
+  ];
+  for (const [table, filter] of deletes) {
+    await apiDelete(table, filter);
+  }
+  document.getElementById('summary').innerHTML = '<span class="ok-text">✓ Données de test supprimées</span>';
+}
+
+// Lancer au chargement
+window.onload = () => runAll();
+</script>
+</body>
+</html>
