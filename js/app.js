@@ -548,8 +548,8 @@ function renderDashboard(){
   const nbRestants   =STATE.ventes.filter(v=>(v.restant||0)>0).length;
   const decMois      =STATE.decaissements.filter(d=>isMois(d.date));
   const totalDecMois =decMois.reduce((s,d)=>s+(d.montant||0),0);
-  const arrhesEnCours=STATE.bijouxArr.filter(b=>b.statut==='en_cours');
-  const totalArrhes  =arrhesEnCours.reduce((s,b)=>s+(b.restantDu||0),0);
+  const arrhesEnCours=STATE.ventes.filter(v=>(v.restant||0)>0);
+  const totalArrhes  =arrhesEnCours.reduce((s,v)=>s+(v.restant||0),0);
 
   document.getElementById('metric-ca').textContent=fmt(totalMois);
   document.getElementById('metric-ca-nb').textContent=ventesMois.length+' vente'+(ventesMois.length>1?'s':'');
@@ -583,7 +583,7 @@ function renderDashboard(){
   const alertes=[];
   STATE.stock.filter(i=>i.qty===0).forEach(i=>alertes.push({type:'danger',msg:`Rupture stock : ${i.nom}`}));
   STATE.stock.filter(i=>i.qty>0&&i.qty<=i.seuil).forEach(i=>alertes.push({type:'warn',msg:`Stock bas : ${i.nom} (${i.qty} restant${i.qty>1?'s':''})`}));
-  STATE.bijouxArr.filter(b=>b.statut==='en_cours'&&b.dateEcheance<today()).forEach(b=>alertes.push({type:'danger',msg:`Échéance dépassée : ${b.client} — ${b.article}`}));
+  // (alertes arrhes supprimées — géré via ventes avec restant)
   STATE.ventes.filter(v=>(v.restant||0)>0).forEach(v=>alertes.push({type:'warn',msg:`Restant dû : ${v.client} — ${fmt(v.restant)}`}));
   document.getElementById('dash-alertes').innerHTML=alertes.slice(0,6).map(a=>`<div style="display:flex;align-items:center;gap:8px;padding:9px 16px;border-bottom:0.5px solid var(--border-light);font-size:12px"><span class="stock-badge ${a.type==='danger'?'stock-out':'stock-low'}" style="flex-shrink:0">${a.type==='danger'?'!':'⚠'}</span><span>${a.msg}</span></div>`).join('')||'<div style="padding:14px 16px;font-size:13px;color:var(--text-tertiary)">Aucune alerte en cours</div>';
 }
@@ -1188,6 +1188,8 @@ function renderClients(f=''){
 }
 document.getElementById('client-search')?.addEventListener('input',function(){renderClients(this.value);});
 document.getElementById('cc-search')?.addEventListener('input',function(){renderComptesClients(this.value);});
+document.getElementById('arr-search')?.addEventListener('input',renderBijouxArr);
+document.getElementById('arr-filtre')?.addEventListener('change',renderBijouxArr);
 function ajouterClient(){
   const nom=document.getElementById('c-nom').value.trim(),tel=document.getElementById('c-tel').value.trim(),email=document.getElementById('c-email').value.trim(),adresse=document.getElementById('c-adresse').value.trim();
   const pin=(document.getElementById('c-pin')?.value||'').replace(/\D/g,'').slice(0,4);
@@ -1317,104 +1319,148 @@ function supprimerCC(id){
 }
 
 // ============================================
-// BIJOUX EN ARRHES
+// ARRHES & COMMANDES — basé sur journal de vente
 // ============================================
-function remplirPrixBijouArr(){
-  const sel=document.getElementById('ba-article');const opt=sel.options[sel.selectedIndex];
-  const stockItem=getStockItem(sel.value);
-  // Afficher info stock
-  afficherInfoStock(stockItem,'ba-stock-label','ba-stock-dispo','ba-stock-info','ba-stock-poids-dispo','ba-stock-qty-dispo');
-  if(stockItem){
-    var prixEl=document.getElementById('ba-prix');
-    if(prixEl&&!prixEl.value) prixEl.value=stockItem.prix||'';
-  }
-  if(opt?.dataset.prix){document.getElementById('ba-prix').value=opt.dataset.prix;calcBijouArrRestant();}
-}
-function calcBijouArrRestant(){
-  const p=parseFloat(document.getElementById('ba-prix')?.value)||0,a=parseFloat(document.getElementById('ba-arrhes')?.value)||0;
-  const el=document.getElementById('ba-restant-disp');if(!el)return;
-  const r=Math.max(0,p-a);el.value=p>0?(r===0?'Soldé ✓':fmt(r)):'—';el.style.color=r===0&&p>0?'var(--success-text)':r>0?'var(--warning-text)':'';
-}
 function renderBijouxArr(){
-  const enCours=STATE.bijouxArr.filter(b=>b.statut==='en_cours');const soldes=STATE.bijouxArr.filter(b=>b.statut==='solde');
-  document.getElementById('ba-count-label').textContent=`${enCours.length} en cours · ${soldes.length} soldé${soldes.length>1?'s':''}`;
-  document.getElementById('ba-list').innerHTML=STATE.bijouxArr.length===0?'<div style="padding:24px;text-align:center;color:var(--text-tertiary);font-size:13px">Aucune réservation</div>':
-  STATE.bijouxArr.map(ba=>{
-    const ec=ba.statut==='en_cours';const pct=Math.min(100,Math.round((ba.arrhesVerse/ba.prixTotal)*100));const overdue=ec&&ba.dateEcheance<today();
+  const q=(document.getElementById('arr-search')?.value||'').toLowerCase();
+  const filtre=document.getElementById('arr-filtre')?.value||'en_cours';
+
+  // Source = ventes avec restant > 0 (en cours) + soldées ce mois (soldé récent)
+  var data=STATE.ventes.filter(function(v){
+    if(filtre==='en_cours') return (v.restant||0)>0;
+    if(filtre==='solde')    return (v.restant||0)===0 && (v.acompte||0)>0 && isMois(v.date);
+    // tous = en cours + soldés ce mois
+    return (v.restant||0)>0 || ((v.restant||0)===0 && (v.acompte||0)>0 && isMois(v.date));
+  });
+  if(q) data=data.filter(function(v){ return (v.client||'').toLowerCase().includes(q)||(v.description||'').toLowerCase().includes(q); });
+  data.sort(function(a,b){ return b.date.localeCompare(a.date); });
+
+  const nbEnCours=STATE.ventes.filter(function(v){return (v.restant||0)>0;}).length;
+  document.getElementById('ba-count-label').textContent=nbEnCours+' commande'+(nbEnCours>1?'s':'')+' avec restant dû · '+data.length+' affichée'+(data.length>1?'s':'');
+
+  if(!data.length){
+    document.getElementById('ba-list').innerHTML='<div style="padding:32px;text-align:center;color:var(--text-tertiary);font-size:13px">Aucune commande avec acompte dans ce filtre</div>';
+    return;
+  }
+
+  document.getElementById('ba-list').innerHTML=data.map(function(v){
+    const restant=v.restant||0;
+    const acompte=v.acompte||0;
+    const montant=v.montant||0;
+    const pct=montant>0?Math.min(100,Math.round(acompte/montant*100)):0;
+    const solde=restant===0;
+    const caratLabel=v.carat?v.carat.replace(/-local|-importe/gi,'').toUpperCase():'';
+    const typeLabel=v.typeBijou||'';
+    const poidsTxt=(v.poids||0)>0?`${v.poids}g`:'';
+
     return`<div style="padding:16px 20px;border-bottom:0.5px solid var(--border-light)">
-      <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:10px">
-        <div>
-          <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
-            <span style="font-weight:500">${ba.client}</span>
-            <span class="stock-badge ${ec?(overdue?'stock-out':'stock-low'):'stock-ok'}">${ec?(overdue?'Échéance dépassée':'En cours'):'Soldé'}</span>
-            <span class="ref-code">#${ba.id}</span>
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:10px">
+        <div style="flex:1;min-width:0">
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px">
+            <span style="font-weight:600;font-size:14px">${v.client||'—'}</span>
+            <span class="stock-badge ${solde?'stock-ok':'stock-low'}">${solde?'Soldé':'En cours'}</span>
+            <span class="ref-code">${v.numFacture||v.id}</span>
           </div>
-          <div style="font-size:13px;color:var(--text-secondary)">${ba.article}</div>
-          <div style="font-size:12px;color:var(--text-tertiary);margin-top:2px">Réservé le ${fmtDate(ba.date)} · Échéance : ${fmtDate(ba.dateEcheance)}</div>
+          <div style="font-size:13px;color:var(--text-secondary);margin-bottom:2px">${v.description||'—'}</div>
+          <div style="font-size:11px;color:var(--text-tertiary);display:flex;gap:10px;flex-wrap:wrap">
+            <span>📅 ${fmtDate(v.date)}</span>
+            ${caratLabel?`<span>${caratLabel}${poidsTxt?' · '+poidsTxt:''}</span>`:''}
+            ${v.paiement?`<span>💳 ${v.paiement}</span>`:''}
+          </div>
         </div>
         <div style="text-align:right;flex-shrink:0">
-          <div style="font-size:16px;font-weight:600">${fmt(ba.prixTotal)}</div>
-          <div style="font-size:12px;color:var(--success-text)">Arrhes : ${fmt(ba.arrhesVerse)}</div>
-          ${ba.restantDu>0?`<div style="font-size:12px;color:var(--warning-text)">Restant : ${fmt(ba.restantDu)}</div>`:''}
+          <div style="font-size:16px;font-weight:700">${fmt(montant)}</div>
+          <div style="font-size:12px;color:var(--success-text)">Versé : ${fmt(acompte)}</div>
+          ${restant>0?`<div style="font-size:13px;font-weight:600;color:var(--warning-text)">Restant : ${fmt(restant)}</div>`:'<div style="font-size:12px;color:var(--success-text)">✓ Soldé</div>'}
         </div>
       </div>
-      <div class="bar-track" style="height:8px;margin-bottom:10px"><div class="bar-fill" style="width:${pct}%"></div></div>
-      <div style="font-size:11px;color:var(--text-tertiary);margin-bottom:10px">
-        ${ba.mouvements.map(m=>`<span style="margin-right:12px">${fmtDate(m.date)} : +${fmt(m.montant)} — ${m.note}</span>`).join('')}
+      <div class="bar-track" style="height:6px;margin-bottom:10px"><div class="bar-fill" style="width:${pct}%"></div></div>
+      <div style="display:flex;align-items:center;justify-content:space-between">
+        <span style="font-size:11px;color:var(--text-tertiary)">${pct}% versé</span>
+        ${!solde&&isAdmin()?`<div style="display:flex;gap:8px">
+          <button class="btn small btn-primary" onclick="ouvrirFinalisation('${v.id}')">+ Paiement</button>
+          <button class="btn small" style="color:var(--danger-text);border-color:var(--danger-text)" onclick="ouvrirRemboursement('${v.id}')">⟲ Rembourser</button>
+        </div>`:''}
+        ${!solde&&!isAdmin()?`<button class="btn small btn-primary" onclick="ouvrirFinalisation('${v.id}')">+ Paiement</button>`:''}
       </div>
-      ${ec?`<div style="display:flex;gap:8px"><button class="btn small btn-primary" onclick="openPaiementArr('${ba.id}')">+ Paiement</button><button class="btn small" onclick="retournerStockArr('${ba.id}')">⟲ Retour stock</button></div>`:'<span style="font-size:12px;color:var(--success-text)">✓ Entièrement soldé</span>'}
     </div>`;
   }).join('');
 }
-async function enregistrerBijouArr(){
-  const date=document.getElementById('ba-date').value,client=document.getElementById('ba-client').value,ref=document.getElementById('ba-article').value,prix=parseInt(document.getElementById('ba-prix').value)||0,arrhes=parseInt(document.getElementById('ba-arrhes').value)||0,echeance=document.getElementById('ba-echeance').value;
-  if(!date||!client||!ref||prix<=0||arrhes<=0||!echeance){showToast('⚠ Tous les champs sont obligatoires.');return;}
-  if(arrhes>prix){showToast('⚠ Les arrhes ne peuvent pas dépasser le prix.');return;}
-  if(echeance<=date){showToast('⚠ L\'échéance doit être après la date de réservation.');return;}
-  const nbArticlesBA=parseInt(document.getElementById('ba-nb-articles')&&document.getElementById('ba-nb-articles').value)||0;
-  const stockBA=STATE.stock.find(i=>i.ref===ref);
-  if(!stockBA||(stockBA.poidsTotalG||0)<=0){showToast('Article non disponible en stock.');return;}
-  const articleLabel=stockBA?`${ref} — ${stockBA.nom}`:ref;
-  const id=nextId('BA','ba');
-  // Stocker le ref stock + poids dans l'arrhes pour la liaison
-  const poidsBA=parseFloat(document.getElementById('ba-poids')&&document.getElementById('ba-poids').value)||0;
-  STATE.bijouxArr.unshift({
-    id,date,client,article:articleLabel,
-    stockRef:ref, typeBijou:stockBA.typeBijou, carat:stockBA.carat,
-    poids:poidsBA||0, nbArticles:nbArticlesBA||0,
-    prixTotal:prix,arrhesVerse:arrhes,restantDu:prix-arrhes,
-    dateEcheance:echeance,statut:'en_cours',
-    mouvements:[{date,montant:arrhes,note:'Arrhes initiales'}]
-  });
-  // Déduire du stock si poids renseigné
-  if((poidsBA>0||nbArticlesBA>0) && stockBA){
-    var okBA = await deduireStock(ref, poidsBA, nbArticlesBA);
-    if(!okBA) return;
-  }
-  const baObj=STATE.bijouxArr[0];
-  saveBijouArr(baObj).then(function(){closeModal('modal-add-bijou-arr');renderDashboard();showToast('Reservation '+id+' creee.');});
+
+function ouvrirFinalisation(venteId){
+  const v=STATE.ventes.find(x=>x.id===venteId);if(!v)return;
+  document.getElementById('fin-vente-id').value=venteId;
+  document.getElementById('fin-info-client').textContent=v.client||'—';
+  document.getElementById('fin-info-desc').textContent=v.description||'';
+  document.getElementById('fin-info-total').textContent=fmt(v.montant||0);
+  document.getElementById('fin-info-acompte').textContent=fmt(v.acompte||0);
+  document.getElementById('fin-info-restant').textContent=fmt(v.restant||0);
+  document.getElementById('fin-date').value=today();
+  document.getElementById('fin-montant').value=v.restant||'';
+  document.getElementById('fin-paiement').value='especes';
+  openModal('modal-finaliser');
 }
-function openPaiementArr(id){document.getElementById('paiement-arr-id').value=id;document.getElementById('paiement-arr-date').value=today();document.getElementById('paiement-arr-montant').value='';document.getElementById('paiement-arr-note').value='';document.getElementById('modal-paiement-arr').classList.add('show');}
-function enregistrerPaiementArr(){
-  const id=document.getElementById('paiement-arr-id').value,date=document.getElementById('paiement-arr-date').value,montant=parseInt(document.getElementById('paiement-arr-montant').value)||0,note=document.getElementById('paiement-arr-note').value||'Paiement';
-  if(!date||montant<=0){showToast('⚠ Date et montant obligatoires.');return;}
-  const ba=STATE.bijouxArr.find(b=>b.id===id);if(!ba)return;
-  if(montant>ba.restantDu){showToast(`⚠ Montant supérieur au restant dû (${fmt(ba.restantDu)})`);return;}
-  ba.arrhesVerse+=montant;ba.restantDu-=montant;ba.mouvements.push({date,montant,note});
-  if(ba.restantDu===0){ba.statut='solde';showToast(`✓ Bijou entièrement soldé ! Paiement de ${fmt(montant)} enregistré.`);}
-  else{showToast(`✓ Paiement de ${fmt(montant)} enregistré. Restant : ${fmt(ba.restantDu)}`);}
-  saveBijouArr(ba).then(function(){closeModal('modal-paiement-arr');});renderDashboard();
-}
-async function retournerStockArr(id){
-  const ba=STATE.bijouxArr.find(b=>b.id===id);if(!ba)return;
-  if(!confirm('Retourner le bijou en stock ? Les arrhes versées ('+fmt(ba.arrhesVerse||0)+') seront perdues par le client.'))return;
-  // Remettre poids + articles en stock
-  if(ba.stockRef && (ba.poids>0 || ba.nbArticles>0)){
-    await reajouterStock(ba.stockRef, ba.poids||0, ba.nbArticles||0);
-  }
-  ba.statut='retour_stock';
+
+function confirmerFinalisation(){
+  const venteId=document.getElementById('fin-vente-id').value;
+  const montant=parseInt(document.getElementById('fin-montant').value)||0;
+  const date=document.getElementById('fin-date').value;
+  const paiement=document.getElementById('fin-paiement').value;
+  const v=STATE.ventes.find(x=>x.id===venteId);
+  if(!v||!date){showToast('⚠ Date obligatoire.');return;}
+  if(montant<=0){showToast('⚠ Montant obligatoire.');return;}
+  if(montant>(v.restant||0)){showToast(`⚠ Montant supérieur au restant dû (${fmt(v.restant)})`);return;}
+  v.acompte=(v.acompte||0)+montant;
+  v.restant=Math.max(0,(v.restant||0)-montant);
+  if(paiement) v.paiement=paiement;
   save();
-  saveBijouArr(ba); // App → Supabase → App
+  saveVente(v);
+  closeModal('modal-finaliser');
+  renderBijouxArr();
+  renderJournal();
+  renderDashboard();
+  showToast(v.restant===0?`✓ Commande entièrement soldée ! Paiement de ${fmt(montant)} enregistré.`:`✓ Paiement de ${fmt(montant)} enregistré. Restant : ${fmt(v.restant)}`);
+}
+
+function ouvrirRemboursement(venteId){
+  if(!isAdmin()){showToast('⛔ Admin seulement.');return;}
+  const v=STATE.ventes.find(x=>x.id===venteId);if(!v)return;
+  document.getElementById('remb-vente-id').value=venteId;
+  document.getElementById('remb-info-client').textContent=v.client||'—';
+  document.getElementById('remb-info-desc').textContent=v.description||'';
+  document.getElementById('remb-info-acompte').textContent=fmt(v.acompte||0);
+  document.getElementById('remb-date').value=today();
+  document.getElementById('remb-montant').value=v.acompte||0;
+  document.getElementById('remb-motif').value='';
+  openModal('modal-remboursement');
+}
+
+function confirmerRemboursement(){
+  const venteId=document.getElementById('remb-vente-id').value;
+  const montant=parseInt(document.getElementById('remb-montant').value)||0;
+  const date=document.getElementById('remb-date').value;
+  const motif=document.getElementById('remb-motif').value.trim()||'Remboursement client';
+  const v=STATE.ventes.find(x=>x.id===venteId);
+  if(!v||!date){showToast('⚠ Date obligatoire.');return;}
+  if(montant<0){showToast('⚠ Montant invalide.');return;}
+  // Créer un décaissement pour le remboursement
+  if(montant>0){
+    const dId=nextId('D','d');
+    const dec={id:dId,date,categorie:'Remboursement client',description:`Remb. ${v.client||''} — ${v.description||''}${motif?' ('+motif+')':''}`,montant,saisiPar:STATE.currentUser?.nom||'admin'};
+    STATE.decaissements.unshift(dec);
+    save();
+    saveDecaissement(dec);
+    renderDecaissements();
+  }
+  // Annuler la vente : acompte et restant à zéro
+  v.acompte=0;v.restant=0;
+  save();
+  saveVente(v);
+  closeModal('modal-remboursement');
+  renderBijouxArr();
+  renderJournal();
+  renderDashboard();
+  showToast(`✓ Remboursement de ${fmt(montant)} enregistré. Commande annulée.`);
 }
 
 // ============================================

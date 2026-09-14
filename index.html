@@ -93,7 +93,7 @@
         <span class="nav-icon">◑</span> Comptes clients
       </button>
       <button class="nav-item" data-section="bijou_arr" data-perm="bijou_arr">
-        <span class="nav-icon">◆</span> Bijoux en arrhes
+        <span class="nav-icon">◆</span> Arrhes & Commandes
       </button>
           <div class="nav-section-label" style="margin-top:8px">Sécurité</div>
       <button class="nav-item" data-section="historique" data-perm="historique"><span class="nav-icon">◷</span> Historique connexions</button>
@@ -126,7 +126,7 @@
         <div class="metric-card"><div class="metric-label">CA du mois</div><div class="metric-value" id="metric-ca">—</div><span class="metric-badge badge-info" id="metric-ca-nb">—</span></div>
         <div class="metric-card"><div class="metric-label">Restants dus</div><div class="metric-value" id="metric-restants">—</div><span class="metric-badge badge-warn" id="metric-nb-restants">—</span></div>
         <div class="metric-card"><div class="metric-label">💰 Solde net caisse</div><div class="metric-value" id="metric-decaiss">—</div><span class="metric-badge badge-info" id="metric-nb-decaiss">—</span></div>
-        <div class="metric-card"><div class="metric-label">Bijoux en arrhes</div><div class="metric-value" id="metric-arrhes">—</div><span class="metric-badge badge-warn" id="metric-nb-arrhes">—</span></div>
+        <div class="metric-card"><div class="metric-label">Arrhes &amp; Commandes</div><div class="metric-value" id="metric-arrhes">—</div><span class="metric-badge badge-warn" id="metric-nb-arrhes">—</span></div>
       </div>
       <div class="two-col">
         <div class="card">
@@ -293,11 +293,19 @@
       <div id="cc-list"></div>
     </section>
 
-    <!-- BIJOUX EN ARRHES -->
+    <!-- ARRHES & COMMANDES -->
     <section class="section" id="bijou_arr">
       <div class="page-header">
-        <div><h1 class="page-title">Bijoux en arrhes</h1><p class="page-sub" id="ba-count-label"></p></div>
-        <button class="btn btn-primary" onclick="openModal('modal-add-bijou-arr')">+ Nouvelle réservation</button>
+        <div><h1 class="page-title">Arrhes &amp; Commandes</h1><p class="page-sub" id="ba-count-label"></p></div>
+      </div>
+      <!-- Filtres -->
+      <div style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap">
+        <input class="search-bar" type="text" placeholder="Rechercher un client..." id="arr-search" style="flex:1;min-width:180px" />
+        <select class="form-input" id="arr-filtre" style="width:auto;min-width:150px">
+          <option value="tous">Tous</option>
+          <option value="en_cours" selected>En cours</option>
+          <option value="solde">Soldés ce mois</option>
+        </select>
       </div>
       <div class="card" id="ba-list"></div>
     </section>
@@ -907,19 +915,85 @@
   </div>
 </div>
 
-<!-- PAIEMENT ARRHES -->
-<div class="modal-backdrop" id="modal-paiement-arr">
+<!-- PAIEMENT ARRHES (ancien) -->
+<div class="modal-backdrop" id="modal-paiement-arr" style="display:none">
+  <div class="modal"><input type="hidden" id="paiement-arr-id" /></div>
+</div>
+
+<!-- FINALISER PAIEMENT VENTE -->
+<div class="modal-backdrop" id="modal-finaliser">
   <div class="modal">
-    <div class="modal-header"><div class="modal-title">Enregistrer un paiement</div><button class="modal-close" onclick="closeModal('modal-paiement-arr')">✕</button></div>
-    <input type="hidden" id="paiement-arr-id" />
-    <div class="form-row">
-      <div class="form-group"><label class="form-label">Date *</label><input class="form-input" type="date" id="paiement-arr-date" /></div>
-      <div class="form-group"><label class="form-label">Montant (F CFA) *</label><input class="form-input" type="number" min="0" placeholder="0" id="paiement-arr-montant" /></div>
+    <div class="modal-header">
+      <div class="modal-title">Finaliser le paiement</div>
+      <button class="modal-close" onclick="closeModal('modal-finaliser')">✕</button>
     </div>
-    <div class="form-group" style="margin-bottom:12px"><label class="form-label">Note</label><input class="form-input" type="text" placeholder="ex: Versement partiel" id="paiement-arr-note" /></div>
+    <input type="hidden" id="fin-vente-id" />
+    <div style="background:var(--bg-secondary);border-radius:var(--radius-md);padding:12px 14px;margin-bottom:16px;font-size:13px">
+      <div id="fin-info-client" style="font-weight:600;margin-bottom:4px"></div>
+      <div id="fin-info-desc" style="color:var(--text-secondary);margin-bottom:8px"></div>
+      <div style="display:flex;gap:20px">
+        <span>Total : <strong id="fin-info-total"></strong></span>
+        <span style="color:var(--success-text)">Versé : <strong id="fin-info-acompte"></strong></span>
+        <span style="color:var(--warning-text)">Restant : <strong id="fin-info-restant"></strong></span>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Date *</label>
+        <input class="form-input" type="date" id="fin-date" />
+      </div>
+      <div class="form-group">
+        <label class="form-label">Montant encaissé (F CFA) *</label>
+        <input class="form-input" type="number" min="1" id="fin-montant" placeholder="0" />
+      </div>
+    </div>
+    <div class="form-group" style="margin-bottom:16px">
+      <label class="form-label">Mode de paiement</label>
+      <select class="form-input" id="fin-paiement">
+        <option value="especes">Espèces</option>
+        <option value="wave">Wave</option>
+        <option value="orange-money">Orange Money</option>
+        <option value="virement">Virement</option>
+        <option value="cheque">Chèque</option>
+      </select>
+    </div>
     <div class="modal-actions">
-      <button class="btn btn-secondary" onclick="closeModal('modal-paiement-arr')">Annuler</button>
-      <button class="btn btn-primary" onclick="enregistrerPaiementArr()">Valider</button>
+      <button class="btn btn-secondary" onclick="closeModal('modal-finaliser')">Annuler</button>
+      <button class="btn btn-primary" onclick="confirmerFinalisation()">✓ Valider l'encaissement</button>
+    </div>
+  </div>
+</div>
+
+<!-- REMBOURSEMENT -->
+<div class="modal-backdrop" id="modal-remboursement">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" style="color:var(--danger-text)">⟲ Remboursement client</div>
+      <button class="modal-close" onclick="closeModal('modal-remboursement')">✕</button>
+    </div>
+    <input type="hidden" id="remb-vente-id" />
+    <div style="background:rgba(244,67,54,0.06);border:1px solid rgba(244,67,54,0.2);border-radius:var(--radius-md);padding:12px 14px;margin-bottom:16px;font-size:13px">
+      <div id="remb-info-client" style="font-weight:600;margin-bottom:4px"></div>
+      <div id="remb-info-desc" style="color:var(--text-secondary);margin-bottom:6px"></div>
+      <div>Acompte versé par le client : <strong id="remb-info-acompte" style="color:var(--danger-text)"></strong></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Date *</label>
+        <input class="form-input" type="date" id="remb-date" />
+      </div>
+      <div class="form-group">
+        <label class="form-label">Montant remboursé (F CFA) *</label>
+        <input class="form-input" type="number" min="0" id="remb-montant" placeholder="0" />
+      </div>
+    </div>
+    <div class="form-group" style="margin-bottom:16px">
+      <label class="form-label">Motif du remboursement</label>
+      <input class="form-input" type="text" id="remb-motif" placeholder="Ex : Article non disponible, annulation..." />
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeModal('modal-remboursement')">Annuler</button>
+      <button class="btn" style="background:var(--danger-bg);color:var(--danger-text);border:1px solid var(--danger-text)" onclick="confirmerRemboursement()">Confirmer le remboursement</button>
     </div>
   </div>
 </div>
