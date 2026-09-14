@@ -16,11 +16,20 @@ const H = {
 // ============================================
 // API DE BASE
 // ============================================
+// Fetch avec timeout (ms) pour éviter les blocages sur projet dormant
+function _fetchTimeout(url, opts, ms) {
+  ms = ms || 12000;
+  var ctrl = new AbortController();
+  var tid = setTimeout(function(){ ctrl.abort(); }, ms);
+  return fetch(url, Object.assign({}, opts, { signal: ctrl.signal }))
+    .finally(function(){ clearTimeout(tid); });
+}
+
 const _supa = {
   async select(table, filters) {
     var url = SUPABASE_URL + '/rest/v1/' + table + '?select=*';
     if (filters) url += '&' + filters;
-    var r = await fetch(url, { headers: H });
+    var r = await _fetchTimeout(url, { headers: H });
     if (!r.ok) throw new Error('SELECT ' + table + ': ' + r.status + ' ' + await r.text());
     return r.json();
   },
@@ -63,7 +72,7 @@ const _supa = {
 // CHARGEMENT INITIAL
 // ============================================
 async function chargerDonnees() {
-  showLoadingOverlay(true);
+  showRealtimeIndicator(false); // indicateur discret de sync
   try {
     var res = await Promise.all([
       _supa.select('utilisateurs'),
@@ -115,14 +124,14 @@ async function chargerDonnees() {
     STATE.connexions     = connexions;
     if (Object.keys(countersObj).length) STATE.counters = countersObj;
 
-    // Sync localStorage
+    // Sync localStorage + rafraîchir l'affichage
     save();
+    if(typeof renderDashboard==='function') renderDashboard();
     console.log('Supabase chargé — Ventes:', STATE.ventes.length, 'Stock:', STATE.stock.length);
   } catch(e) {
     console.error('Erreur chargement:', e);
-    showToast('Erreur connexion Supabase: ' + e.message);
+    if(e.name !== 'AbortError') showToast('⚠ Sync Supabase échouée — données locales utilisées');
   } finally {
-    showLoadingOverlay(false);
   }
 }
 

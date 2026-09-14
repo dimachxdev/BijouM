@@ -218,22 +218,24 @@ function doLogin() {
   errEl.style.display='none';
   STATE.currentUser = user;
 
-  // Charger les données depuis Supabase
+  // Afficher l'app immédiatement avec les données locales
+  document.getElementById('login-screen').style.display='none';
+  document.getElementById('main-app').style.display='block';
+  const role = ROLES[user.role];
+  document.getElementById('user-avatar').textContent = user.nom.split(' ').slice(0,2).map(p=>p[0]).join('').toUpperCase();
+  document.getElementById('user-name').textContent = user.nom;
+  document.getElementById('user-role-badge').textContent = role.label;
+  document.getElementById('user-role-badge').style.background = role.bg;
+  document.getElementById('user-role-badge').style.color = role.color;
+  const tb = document.getElementById('topbar-role-badge');
+  if (tb) { tb.textContent = role.label; tb.style.background = role.bg; tb.style.color = role.color; }
+  buildNav();
+  renderDashboard();
+  startAutoRefresh();
+
+  // Synchroniser avec Supabase en arrière-plan
   chargerDonnees().then(function() {
     enregistrerConnexion(user, 'connexion');
-    document.getElementById('login-screen').style.display='none';
-    document.getElementById('main-app').style.display='block';
-    const role = ROLES[user.role];
-    document.getElementById('user-avatar').textContent = user.nom.split(' ').slice(0,2).map(p=>p[0]).join('').toUpperCase();
-    document.getElementById('user-name').textContent = user.nom;
-    document.getElementById('user-role-badge').textContent = role.label;
-    document.getElementById('user-role-badge').style.background = role.bg;
-    document.getElementById('user-role-badge').style.color = role.color;
-    const tb = document.getElementById('topbar-role-badge');
-    if (tb) { tb.textContent = role.label; tb.style.background = role.bg; tb.style.color = role.color; }
-    buildNav();
-    renderDashboard();
-    startAutoRefresh();
     startRealtime(); // WebSocket temps réel
   });
 }
