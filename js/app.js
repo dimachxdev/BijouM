@@ -12,8 +12,7 @@ const KAYOR_LOGO_B64 = 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAgAAZABkAAD/7AARR
 function loadLS(k, fb) { try { const s=localStorage.getItem(k); return s?JSON.parse(s):fb; } catch { return fb; } }
 
 const STATE = {
-  currentUser: null,
-  users:         loadLS('marjan_users',      INITIAL_USERS),
+  currentUser: null,   // alimenté par Auth après connexion — plus de liste locale d'utilisateurs
   ventes:        loadLS('marjan_ventes',     INITIAL_VENTES),
   clients:       loadLS('marjan_clients',    INITIAL_CLIENTS),
   stock:         loadLS('marjan_stock',      INITIAL_STOCK),
@@ -34,7 +33,7 @@ const PAIEMENT_LABELS = {
 // save() : localStorage + flag Supabase
 function save() {
   const keyMap = {
-    users:'users', ventes:'ventes', clients:'clients', stock:'stock',
+    ventes:'ventes', clients:'clients', stock:'stock',
     sorties:'sorties', decaissements:'decaiss', achats:'achats',
     achatsClients:'ac', comptesClients:'cc', bijouxArr:'ba',
     connexions:'connexions', counters:'counters'
@@ -181,13 +180,21 @@ async function saveAndSyncConnexion(cn) {
 // ============================================
 // PERMISSIONS
 // ============================================
+// Ces deux fonctions ne pilotent que l'affichage (masquer un onglet, un bouton).
+// L'autorisation réelle est appliquée par les policies RLS dans PostgreSQL :
+// forcer STATE.currentUser.role dans la console change l'interface, pas les
+// droits — les requêtes sont rejetées côté serveur.
 function peutAcceder(section) {
-  if (!STATE.currentUser) return false;
-  const perms = PERM_MAP[STATE.currentUser.role] || [];
+  const role = STATE.currentUser?.role;
+  if (!role) return false;
+  const perms = PERM_MAP[role] || [];
   return perms.includes('all') || perms.includes(section);
 }
 
-function isAdmin() { return STATE.currentUser?.role === 'admin'; }
+function isAdmin() {
+  const role = STATE.currentUser?.role;
+  return role === 'admin' || role === 'proprietaire';
+}
 
 // ============================================
 // AUTH
@@ -196,58 +203,117 @@ document.getElementById('login-pass').addEventListener('keydown', e => { if(e.ke
 document.getElementById('login-user').addEventListener('keydown', e => { if(e.key==='Enter') document.getElementById('login-pass').focus(); });
 
 function resetAppData() {
-  if (!confirm('Réinitialiser toutes les données ? (Utiliser uniquement en cas de problème de connexion)')) return;
+  if (!confirm('Vider le cache local ?\n\nLes données restent dans Supabase et seront rechargées à la prochaine connexion.')) return;
   ['marjan_users','marjan_ventes','marjan_clients','marjan_stock','marjan_sorties',
    'marjan_decaiss','marjan_achats','marjan_ac','marjan_cc','marjan_ba',
-   'marjan_connexions','marjan_counters'].forEach(k => localStorage.removeItem(k));
+   'marjan_connexions','marjan_counters','marjan_clients_pin',
+   'kayor_session'].forEach(k => localStorage.removeItem(k));
   location.reload();
 }
 
-function doLogin() {
-  const login = document.getElementById('login-user').value.trim();
+/**
+ * Connexion via Supabase Auth.
+ *
+ * Avant : STATE.users.find(u => u.password === pass) — mot de passe en clair,
+ * comparé dans le navigateur, donc lisible par quiconque ouvre la console.
+ * Maintenant : le serveur vérifie l'empreinte bcrypt et renvoie un JWT signé.
+ * L'organisation et le rôle viennent de la table `membres`, et sont
+ * revérifiés par PostgreSQL à chaque requête.
+ */
+async function doLogin() {
+  const email = document.getElementById('login-user').value.trim();
   const pass  = document.getElementById('login-pass').value;
-  // Sécurité : vérifier que STATE.users est valide
-  if (!Array.isArray(STATE.users) || STATE.users.length === 0) {
-    document.getElementById('login-error').textContent = 'Données corrompues — réinitialisez via le bouton ci-dessous.';
-    document.getElementById('login-error').style.display = 'block';
+  const errEl = document.getElementById('login-error');
+  const btn   = document.getElementById('btn-login');
+
+  if (!email || !pass) {
+    errEl.textContent = 'Renseignez votre email et votre mot de passe.';
+    errEl.style.display = 'block';
     return;
   }
-  const user  = STATE.users.find(u => u.login===login && u.password===pass && u.actif);
-  const errEl = document.getElementById('login-error');
-  if (!user) { errEl.textContent='Identifiant ou mot de passe incorrect.'; errEl.style.display='block'; return; }
-  errEl.style.display='none';
-  STATE.currentUser = user;
 
-  // Afficher l'app immédiatement avec les données locales
-  document.getElementById('login-screen').style.display='none';
-  document.getElementById('main-app').style.display='block';
-  const role = ROLES[user.role];
-  document.getElementById('user-avatar').textContent = user.nom.split(' ').slice(0,2).map(p=>p[0]).join('').toUpperCase();
-  document.getElementById('user-name').textContent = user.nom;
-  document.getElementById('user-role-badge').textContent = role.label;
-  document.getElementById('user-role-badge').style.background = role.bg;
-  document.getElementById('user-role-badge').style.color = role.color;
+  errEl.style.display = 'none';
+  if (btn) { btn.disabled = true; btn.textContent = 'Connexion…'; }
+
+  try {
+    const profil = await Auth.connexion(email, pass);
+    ouvrirSession(profil);
+  } catch (e) {
+    errEl.textContent = e.message || 'Connexion impossible.';
+    errEl.style.display = 'block';
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Se connecter'; }
+  }
+}
+
+/** Affiche l'application pour un profil authentifié (connexion ou reprise de session). */
+function ouvrirSession(profil) {
+  STATE.currentUser = {
+    id:   profil.user_id,
+    nom:  profil.nom,
+    role: profil.role,
+    organisationId: profil.organisation_id
+  };
+
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('main-app').style.display     = 'block';
+
+  const role = ROLES[profil.role] || ROLES.vendeur;
+  document.getElementById('user-avatar').textContent =
+    profil.nom.split(' ').slice(0,2).map(p => p[0]).join('').toUpperCase();
+  document.getElementById('user-name').textContent = profil.nom;
+
+  const badge = document.getElementById('user-role-badge');
+  badge.textContent = role.label;
+  badge.style.background = role.bg;
+  badge.style.color = role.color;
+
   const tb = document.getElementById('topbar-role-badge');
   if (tb) { tb.textContent = role.label; tb.style.background = role.bg; tb.style.color = role.color; }
+
+  // Nom de la boutique — l'utilisateur doit voir dans quel tenant il travaille.
+  const orgEl = document.getElementById('org-name');
+  if (orgEl && profil.org_nom) orgEl.textContent = profil.org_nom;
+
   buildNav();
   renderDashboard();
   startAutoRefresh();
 
-  // Synchroniser avec Supabase en arrière-plan
-  chargerDonnees().then(function() {
-    enregistrerConnexion(user, 'connexion');
-    startRealtime(); // WebSocket temps réel
+  chargerDonnees().then(function () {
+    enregistrerConnexion(STATE.currentUser, 'connexion');
+    startRealtime();
   });
 }
 
-function doLogout() {
+async function doLogout() {
   if (STATE.currentUser) enregistrerConnexion(STATE.currentUser, 'déconnexion');
+  stopRealtime();
+  stopAutoRefresh();
+  await Auth.deconnexion();
   STATE.currentUser = null;
   document.getElementById('main-app').style.display='none';
   document.getElementById('login-screen').style.display='flex';
   document.getElementById('login-user').value='';
   document.getElementById('login-pass').value='';
+  document.getElementById('login-error').style.display='none';
 }
+
+/**
+ * Reprise de session au chargement de la page.
+ * Le JWT survit au rafraîchissement : inutile de ressaisir ses identifiants
+ * à chaque F5. Un jeton expiré est renouvelé silencieusement ; s'il est
+ * invalide, on reste sur l'écran de connexion.
+ */
+async function amorcerSession() {
+  try {
+    const profil = await Auth.restaurer();
+    if (profil) ouvrirSession(profil);
+  } catch (e) {
+    console.warn('Reprise de session impossible :', e.message);
+  }
+}
+
+document.addEventListener('DOMContentLoaded', amorcerSession);
 
 function enregistrerConnexion(user, action) {
   const now = new Date();
@@ -2266,114 +2332,182 @@ window.addEventListener('resize', () => {
 // ============================================
 // GESTION COMPTES UTILISATEURS (admin)
 // ============================================
-function renderGestionComptes() {
+// Les comptes vivent désormais dans auth.users ; `membres` les rattache à la
+// boutique avec un rôle. L'application ne manipule donc plus de mots de passe :
+// on invite une adresse email, la personne choisit son mot de passe elle-même.
+
+async function renderGestionComptes() {
   if(!isAdmin()){showToast('⛔ Admin uniquement.');return;}
-  document.getElementById('gc-count-label').textContent=`${STATE.users.length} compte${STATE.users.length>1?'s':''} utilisateur${STATE.users.length>1?'s':''}`;
-  document.getElementById('users-body').innerHTML=STATE.users.map(u=>{
-    const role=ROLES[u.role]||{label:u.role,color:'#888',bg:'#eee'};
-    const isSelf=STATE.currentUser?.id===u.id;
+
+  const corps = document.getElementById('users-body');
+  corps.innerHTML = '<tr><td colspan="6" style="padding:20px;text-align:center;color:var(--text-tertiary);font-size:13px">Chargement…</td></tr>';
+
+  let membres = [], invitations = [];
+  try {
+    [membres, invitations] = await Promise.all([ chargerMembres(), chargerInvitations() ]);
+  } catch (e) {
+    corps.innerHTML = `<tr><td colspan="6" style="padding:20px;text-align:center;color:var(--danger-text);font-size:13px">${esc(e.message)}</td></tr>`;
+    return;
+  }
+
+  document.getElementById('gc-count-label').textContent =
+    `${membres.length} membre${membres.length>1?'s':''}` +
+    (invitations.length ? ` · ${invitations.length} invitation${invitations.length>1?'s':''} en attente` : '');
+
+  const moi = STATE.currentUser?.id;
+
+  const lignesMembres = membres.map(m => {
+    const role   = ROLES[m.role] || { label:m.role, color:'#888', bg:'#eee' };
+    const estMoi = m.user_id === moi;
+    const email  = (m.utilisateur && m.utilisateur.email) || '—';
     return `<tr>
       <td><div style="display:flex;align-items:center;gap:10px">
-        <div style="width:32px;height:32px;border-radius:50%;background:${role.bg};color:${role.color};display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0">${ini(u.nom)}</div>
-        <div><div style="font-size:13px;font-weight:500">${u.nom}</div>${isSelf?'<span style="font-size:10px;color:var(--success-text);font-weight:500">Vous</span>':''}</div>
+        <div style="width:32px;height:32px;border-radius:50%;background:${role.bg};color:${role.color};display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0">${esc(ini(m.nom))}</div>
+        <div><div style="font-size:13px;font-weight:500">${esc(m.nom)}</div>${estMoi?'<span style="font-size:10px;color:var(--success-text);font-weight:500">Vous</span>':''}</div>
       </div></td>
-      <td><span class="ref-code">${u.login}</span></td>
-      <td><span class="role-pill role-${u.role}">${role.label}</span></td>
-      <td><span class="stock-badge ${u.actif?'stock-ok':'stock-out'}">${u.actif?'Actif':'Inactif'}</span></td>
-      <td style="font-size:12px;color:var(--text-secondary)">${u.dateCreation||'—'}</td>
+      <td><span class="ref-code">${esc(email)}</span></td>
+      <td><span class="role-pill role-${esc(m.role)}">${esc(role.label)}</span></td>
+      <td><span class="stock-badge ${m.actif?'stock-ok':'stock-out'}">${m.actif?'Actif':'Suspendu'}</span></td>
+      <td style="font-size:12px;color:var(--text-secondary)">${esc((m.created_at||'').slice(0,10)||'—')}</td>
       <td><div style="display:flex;gap:4px;flex-wrap:wrap">
-        <button class="btn small" onclick="ouvrirEditUser('${u.id}')">✎ Modifier</button>
-        ${!isSelf?`<button class="btn small" onclick="toggleUserActif('${u.id}')" style="${u.actif?'color:var(--warning-text)':'color:var(--success-text)'}">${u.actif?'Désactiver':'Activer'}</button>`:''}
-        ${!isSelf&&u.id!=='U-001'?`<button class="btn small btn-danger" onclick="supprimerUser('${u.id}')">✕</button>`:''}
+        ${estMoi ? '<span style="font-size:11px;color:var(--text-tertiary)">—</span>' : `
+          <button class="btn small" onclick="ouvrirEditMembre('${escJs(m.user_id)}')">✎ Rôle</button>
+          <button class="btn small" onclick="basculerMembreActif('${escJs(m.user_id)}')" style="${m.actif?'color:var(--warning-text)':'color:var(--success-text)'}">${m.actif?'Suspendre':'Réactiver'}</button>
+          <button class="btn small btn-danger" onclick="retirerMembre('${escJs(m.user_id)}','${escJs(m.nom)}')">✕</button>`}
       </div></td>
     </tr>`;
   }).join('');
+
+  const lignesInvits = invitations.map(i => `<tr style="opacity:.75">
+      <td><div style="display:flex;align-items:center;gap:10px">
+        <div style="width:32px;height:32px;border-radius:50%;background:var(--warning-bg,#faeeda);color:var(--warning-text);display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0">✉</div>
+        <div><div style="font-size:13px;font-weight:500">${esc(i.nom)}</div><span style="font-size:10px;color:var(--warning-text)">Invitation en attente</span></div>
+      </div></td>
+      <td><span class="ref-code">${esc(i.email)}</span></td>
+      <td><span class="role-pill role-${esc(i.role)}">${esc((ROLES[i.role]||{}).label||i.role)}</span></td>
+      <td><span class="stock-badge stock-low">Expire le ${esc((i.expire_le||'').slice(0,10))}</span></td>
+      <td style="font-size:12px;color:var(--text-secondary)">${esc((i.created_at||'').slice(0,10))}</td>
+      <td><button class="btn small btn-danger" onclick="annulerInvitation('${escJs(i.id)}')">✕ Annuler</button></td>
+    </tr>`).join('');
+
+  corps.innerHTML = lignesMembres + lignesInvits ||
+    '<tr><td colspan="6" style="padding:20px;text-align:center;color:var(--text-tertiary);font-size:13px">Aucun membre</td></tr>';
 }
 
-function prepUserModal(u=null) {
-  document.getElementById('u-edit-id').value  = u?u.id:'';
-  document.getElementById('u-nom').value      = u?u.nom:'';
-  document.getElementById('u-login').value    = u?u.login:'';
-  document.getElementById('u-password').value = '';
-  document.getElementById('u-role').value     = u?u.role:'vendeur';
-  document.getElementById('modal-user-title').textContent = u?`Modifier — ${u.nom}`:'Nouveau compte';
-  document.getElementById('btn-save-user').textContent    = u?'Sauvegarder':'Créer le compte';
+async function chargerMembres() {
+  const r = await fetch(SUPABASE_URL +
+    '/rest/v1/membres?select=user_id,nom,role,actif,created_at,utilisateur:user_id(email)' +
+    '&order=created_at.asc', { headers: H() });
+  if (!r.ok) throw new Error('Membres inaccessibles (' + r.status + ').');
+  return r.json();
 }
 
-function ouvrirEditUser(id) {
+async function chargerInvitations() {
+  const r = await fetch(SUPABASE_URL +
+    '/rest/v1/invitations?select=id,email,nom,role,expire_le,created_at' +
+    '&utilisee_le=is.null&order=created_at.desc', { headers: H() });
+  if (!r.ok) return [];   // table absente tant que 005 n'est pas appliquée
+  return r.json();
+}
+
+function ouvrirInvitation() {
   if(!isAdmin()){showToast('⛔ Admin uniquement.');return;}
-  const u=STATE.users.find(x=>x.id===id); if(!u)return;
-  prepUserModal(u);
-  document.getElementById('modal-add-user').classList.add('show');
+  document.getElementById('u-edit-id').value = '';
+  document.getElementById('u-nom').value     = '';
+  document.getElementById('u-email').value   = '';
+  document.getElementById('u-role').value    = 'vendeur';
+  document.getElementById('u-email').disabled = false;
+  document.getElementById('modal-user-title').textContent = 'Inviter un membre';
+  document.getElementById('btn-save-user').textContent    = 'Envoyer l\'invitation';
+  openModal('modal-add-user');
 }
 
-function creerUtilisateur() {
-  if (!isAdmin()) { showToast('⛔ Accès réservé à l\'administrateur.'); return; }
-  const nom   = document.getElementById('u-nom').value.trim();
-  const login = document.getElementById('u-login').value.trim().toLowerCase();
-  const pass  = document.getElementById('u-password').value;
-  const pass2 = document.getElementById('u-password2').value;
-  const role  = document.getElementById('u-role').value;
-  if (!nom||!login||!pass) { showToast('⚠ Nom, login et mot de passe sont obligatoires.'); return; }
-  if (pass !== pass2)      { showToast('⚠ Les mots de passe ne correspondent pas.'); return; }
-  if (pass.length < 6)     { showToast('⚠ Mot de passe trop court (6 caractères minimum).'); return; }
-  if (STATE.users.find(u => u.login === login)) { showToast('⚠ Ce login existe déjà.'); return; }
-  STATE.counters.u = (STATE.counters.u || 3) + 1;
-  var newUserObj = {
-    id: 'U-' + String(STATE.counters.u).padStart(3,'0'),
-    nom, login, password: pass, role, actif: true
-  };
-  STATE.users.push(newUserObj);
-  save();
-  saveUtilisateur(newUserObj);
-  reloadUtilisateurs();
-  renderGestionComptes();
-  closeModal('modal-add-user');
-  ['u-nom','u-login','u-password','u-password2'].forEach(id => document.getElementById(id).value = '');
-  showToast(`✓ Compte "${nom}" créé avec succès.`);
-}
-
-function sauvegarderUtilisateur() {
+async function ouvrirEditMembre(userId) {
   if(!isAdmin()){showToast('⛔ Admin uniquement.');return;}
-  const editId  =document.getElementById('u-edit-id').value;
-  const nom     =document.getElementById('u-nom').value.trim();
-  const login   =document.getElementById('u-login').value.trim();
-  const password=document.getElementById('u-password').value;
-  const role    =document.getElementById('u-role').value;
-  if(!nom||!login){showToast('⚠ Nom et identifiant obligatoires.');return;}
-  if(!editId&&!password){showToast('⚠ Mot de passe obligatoire.');return;}
-  if(password&&password.length<6){showToast('⚠ Mot de passe trop court (min 6 caractères).');return;}
-  if(STATE.users.find(u=>u.login===login&&u.id!==editId)){showToast('⚠ Identifiant déjà utilisé.');return;}
-  if(editId) {
-    const u=STATE.users.find(x=>x.id===editId); if(!u)return;
-    u.nom=nom;u.login=login;u.role=role;if(password)u.password=password;
-    save();closeModal('modal-add-user');renderGestionComptes();showToast(`✓ Compte "${nom}" mis à jour.`);
-  } else {
-    STATE.counters.u=(STATE.counters.u||4)+1;
-    const id='U-'+String(STATE.counters.u).padStart(3,'0');
-    STATE.users.push({id,nom,login,password,role,actif:true,dateCreation:today()});
-    save();closeModal('modal-add-user');renderGestionComptes();showToast(`✓ Compte "${nom}" créé.`);
+  const membres = await chargerMembres();
+  const m = membres.find(x => x.user_id === userId);
+  if (!m) return;
+  document.getElementById('u-edit-id').value = userId;
+  document.getElementById('u-nom').value     = m.nom;
+  document.getElementById('u-email').value   = (m.utilisateur && m.utilisateur.email) || '';
+  document.getElementById('u-email').disabled = true;   // l'email appartient au compte Auth
+  document.getElementById('u-role').value    = m.role;
+  document.getElementById('modal-user-title').textContent = 'Modifier — ' + m.nom;
+  document.getElementById('btn-save-user').textContent    = 'Sauvegarder';
+  openModal('modal-add-user');
+}
+
+/** Crée une invitation, ou met à jour un membre existant. */
+async function sauvegarderMembre() {
+  if(!isAdmin()){showToast('⛔ Admin uniquement.');return;}
+  const userId = document.getElementById('u-edit-id').value;
+  const nom    = document.getElementById('u-nom').value.trim();
+  const email  = document.getElementById('u-email').value.trim().toLowerCase();
+  const role   = document.getElementById('u-role').value;
+
+  if (!nom) { showToast('⚠ Le nom est obligatoire.'); return; }
+
+  try {
+    if (userId) {
+      const r = await fetch(SUPABASE_URL + '/rest/v1/membres?user_id=eq.' + encodeURIComponent(userId), {
+        method: 'PATCH', headers: H(), body: JSON.stringify({ nom, role })
+      });
+      if (!r.ok) throw new Error(await r.text());
+      showToast(`✓ ${nom} — rôle mis à jour.`);
+    } else {
+      if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { showToast('⚠ Adresse email invalide.'); return; }
+      const r = await fetch(SUPABASE_URL + '/rest/v1/invitations', {
+        method: 'POST', headers: H(),
+        body: JSON.stringify({ email, nom, role, organisation_id: Auth.orgId(), invite_par: STATE.currentUser.id })
+      });
+      if (!r.ok) throw new Error(await r.text());
+      showToast(`✓ Invitation envoyée à ${email}. La personne crée son mot de passe en s'inscrivant avec cette adresse.`);
+    }
+    closeModal('modal-add-user');
+    renderGestionComptes();
+  } catch (e) {
+    // RLS renvoie 403/42501 quand le rôle demandé dépasse les droits de l'appelant.
+    showToast(/42501|403/.test(String(e.message))
+      ? '⛔ Votre rôle ne permet pas cette action.'
+      : '⚠ Échec : ' + String(e.message).slice(0, 120));
   }
 }
 
-function toggleUserActif(id) {
+async function basculerMembreActif(userId) {
   if(!isAdmin()){showToast('⛔ Admin uniquement.');return;}
-  const u=STATE.users.find(x=>x.id===id);if(!u)return;
-  u.actif=!u.actif;save();renderGestionComptes();
-  showToast(`Compte "${u.nom}" ${u.actif?'activé':'désactivé'}.`);
+  const membres = await chargerMembres();
+  const m = membres.find(x => x.user_id === userId);
+  if (!m) return;
+  const r = await fetch(SUPABASE_URL + '/rest/v1/membres?user_id=eq.' + encodeURIComponent(userId), {
+    method: 'PATCH', headers: H(), body: JSON.stringify({ actif: !m.actif })
+  });
+  if (!r.ok) { showToast('⚠ Modification refusée.'); return; }
+  showToast(`${m.nom} ${!m.actif ? 'réactivé' : 'suspendu'}.`);
+  renderGestionComptes();
 }
 
-function supprimerUser(id) {
-  if(!isAdmin()){showToast('Admin uniquement.');return;}
-  const u=STATE.users.find(x=>x.id===id);
-  if(!u||id==='U-001'){showToast('Impossible de supprimer l\'admin principal.');return;}
-  if(!confirm('Supprimer "'+u.nom+'" ?'))return;
-  STATE.users=STATE.users.filter(x=>x.id!==id);
-  save();
-  deleteUtilisateur(id); // App→Supabase→App
-  reloadUtilisateurs();
+async function retirerMembre(userId, nom) {
+  if(!isAdmin()){showToast('⛔ Admin uniquement.');return;}
+  if(!confirm(`Retirer "${nom}" de la boutique ?\n\nSon compte est conservé et l'historique reste attribuable, mais l'accès est coupé immédiatement.`)) return;
+  // Passe par une fonction serveur : elle refuse de laisser la boutique sans
+  // propriétaire et empêche un admin de retirer un propriétaire.
+  const r = await fetch(SUPABASE_URL + '/rest/v1/rpc/retirer_membre', {
+    method: 'POST', headers: H(), body: JSON.stringify({ p_user_id: userId })
+  });
+  const res = r.ok ? await r.json() : { ok:false, erreur:'Requête refusée.' };
+  if (!res.ok) { showToast('⛔ ' + res.erreur); return; }
+  showToast(`${nom} retiré de la boutique.`);
   renderGestionComptes();
-  showToast('Compte "'+u.nom+'" supprime.');
+}
+
+async function annulerInvitation(id) {
+  if(!isAdmin()){showToast('⛔ Admin uniquement.');return;}
+  const r = await fetch(SUPABASE_URL + '/rest/v1/invitations?id=eq.' + encodeURIComponent(id), {
+    method: 'DELETE', headers: H()
+  });
+  if (!r.ok) { showToast('⚠ Suppression refusée.'); return; }
+  showToast('Invitation annulée.');
+  renderGestionComptes();
 }
 
 // ============================================

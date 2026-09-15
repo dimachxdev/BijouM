@@ -6,12 +6,33 @@
 const SUPABASE_URL = 'https://yflvtquowzvghwxyvuah.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_3EBGFxeT8B8cys54IZj3Nw_ZTS-4ZR1';
 
-const H = {
-  'Content-Type':  'application/json',
-  'apikey':        SUPABASE_KEY,
-  'Authorization': 'Bearer ' + SUPABASE_KEY,
-  'Prefer':        'return=representation'
-};
+/**
+ * En-têtes de requête — reconstruits à chaque appel.
+ *
+ * Avant : objet constant portant `Bearer <clé publiable>`, donc toutes les
+ * requêtes arrivaient en tant que rôle `anon`. C'est ce qui obligeait à
+ * désactiver RLS pour que l'application fonctionne.
+ *
+ * Maintenant : on envoie le JWT de la session. PostgreSQL identifie
+ * l'utilisateur, en déduit son organisation et applique les policies.
+ * Sans session, on retombe sur la clé publiable — utile tant que les
+ * migrations 002/003 ne sont pas appliquées.
+ */
+function H(extra) {
+  var h;
+  if (typeof Auth !== 'undefined' && Auth.connecte()) {
+    h = Auth.enTetes();
+  } else {
+    h = {
+      'Content-Type':  'application/json',
+      'apikey':        SUPABASE_KEY,
+      'Authorization': 'Bearer ' + SUPABASE_KEY
+    };
+  }
+  h['Prefer'] = 'return=representation';
+  if (extra) Object.assign(h, extra);
+  return h;
+}
 
 // ============================================
 // API DE BASE
@@ -29,7 +50,7 @@ const _supa = {
   async select(table, filters) {
     var url = SUPABASE_URL + '/rest/v1/' + table + '?select=*';
     if (filters) url += '&' + filters;
-    var r = await _fetchTimeout(url, { headers: H });
+    var r = await _fetchTimeout(url, { headers: H() });
     if (!r.ok) throw new Error('SELECT ' + table + ': ' + r.status + ' ' + await r.text());
     return r.json();
   },
@@ -37,7 +58,7 @@ const _supa = {
     var rows = Array.isArray(data) ? data : [data];
     var r = await fetch(SUPABASE_URL + '/rest/v1/' + table, {
       method:  'POST',
-      headers: Object.assign({}, H, { 'Prefer': 'resolution=merge-duplicates,return=representation' }),
+      headers: H({ 'Prefer': 'resolution=merge-duplicates,return=representation' }),
       body:    JSON.stringify(rows)
     });
     if (!r.ok) {
@@ -49,7 +70,7 @@ const _supa = {
   },
   async delete(table, filter) {
     var r = await fetch(SUPABASE_URL + '/rest/v1/' + table + '?' + filter, {
-      method: 'DELETE', headers: H
+      method: 'DELETE', headers: H()
     });
     if (!r.ok) throw new Error('DELETE ' + table + ': ' + r.status);
     return true;
@@ -58,7 +79,7 @@ const _supa = {
     // Détecter si la clé primaire est 'ref' (stock) ou 'id'
     var pkField = (table === 'stock') ? 'ref' : 'id';
     var r = await fetch(SUPABASE_URL + '/rest/v1/' + table + '?' + pkField + '=eq.' + encodeURIComponent(id), {
-      method: 'DELETE', headers: H
+      method: 'DELETE', headers: H()
     });
     if (!r.ok) {
       var txt = await r.text();
@@ -74,8 +95,9 @@ const _supa = {
 async function chargerDonnees() {
   showRealtimeIndicator(false); // indicateur discret de sync
   try {
+    // `utilisateurs` n'est plus chargée : l'identité vit dans auth.users et le
+    // rattachement dans `membres`, lus à la demande par renderGestionComptes().
     var res = await Promise.all([
-      _supa.select('utilisateurs'),
       _supa.select('clients'),
       _supa.select('ventes',          'order=date.desc'),
       _supa.select('stock'),
@@ -90,10 +112,10 @@ async function chargerDonnees() {
       _supa.select('compteurs')
     ]);
 
-    var utilisateurs=res[0], clients=res[1], ventes=res[2], stock=res[3],
-        sorties=res[4], decaissements=res[5], comptes=res[6], mouvements=res[7],
-        reprises=res[8], arrhes=res[9], mvtArrhes=res[10], connexions=res[11],
-        compteurs=res[12];
+    var clients=res[0], ventes=res[1], stock=res[2],
+        sorties=res[3], decaissements=res[4], comptes=res[5], mouvements=res[6],
+        reprises=res[7], arrhes=res[8], mvtArrhes=res[9], connexions=res[10],
+        compteurs=res[11];
 
     // Injecter mouvements dans comptes
     comptes.forEach(function(cc) {
@@ -112,7 +134,6 @@ async function chargerDonnees() {
     compteurs.forEach(function(c){ countersObj[c.cle] = c.valeur; });
 
     // Mettre STATE à jour
-    if (utilisateurs.length) STATE.users = utilisateurs;
     STATE.clients        = clients;
     STATE.ventes         = ventes.map(mapVente);
     STATE.stock          = stock.map(mapStock);
@@ -271,6 +292,19 @@ async function db(label, fn) {
 var _ws = null;
 var _wsAlive = false;
 
+// Jeton présenté au canal temps réel.
+// Une fois RLS actif, Realtime n'envoie à chaque abonné que les lignes que ses
+// policies autorisent — encore faut-il qu'il sache QUI écoute. Sans JWT, le
+// canal est traité comme anonyme et ne diffuse plus rien.
+function _wsToken() {
+  if (typeof Auth !== 'undefined' && Auth.connecte()) {
+    var h = Auth.enTetes();
+    var bearer = h['Authorization'] || '';
+    if (bearer.indexOf('Bearer ') === 0) return bearer.slice(7);
+  }
+  return SUPABASE_KEY;
+}
+
 function startRealtime() {
   if (_ws && _ws.readyState === WebSocket.OPEN) return;
   var url = SUPABASE_URL.replace('https://', 'wss://')
@@ -280,6 +314,7 @@ function startRealtime() {
   _ws.onopen = function() {
     _wsAlive = true;
     showRealtimeIndicator(true);
+    var token = _wsToken();
     // S'abonner à toutes les tables
     ['ventes','stock','clients','sorties','decaissements',
      'comptes_clients','mouvements_cc','reprises','bijoux_arrhes','compteurs']
@@ -287,7 +322,7 @@ function startRealtime() {
       _ws.send(JSON.stringify({
         topic:   'realtime:public:' + t,
         event:   'phx_join',
-        payload: { config: { broadcast:{self:false} } },
+        payload: { config: { broadcast:{self:false} }, access_token: token },
         ref:     t
       }));
     });
@@ -320,6 +355,23 @@ function startRealtime() {
 
 function stopRealtime() {
   if (_ws) { _ws.onclose=null; _ws.close(); _ws=null; }
+}
+
+// Appelée après chaque renouvellement de JWT : un jeton expiré côté Realtime
+// fait taire le canal sans erreur visible.
+function refreshRealtimeToken() {
+  if (!_ws || _ws.readyState !== WebSocket.OPEN) return;
+  var token = _wsToken();
+  ['ventes','stock','clients','sorties','decaissements',
+   'comptes_clients','mouvements_cc','reprises','bijoux_arrhes','compteurs']
+  .forEach(function(t) {
+    _ws.send(JSON.stringify({
+      topic:   'realtime:public:' + t,
+      event:   'access_token',
+      payload: { access_token: token },
+      ref:     t + '_tok'
+    }));
+  });
 }
 
 function onRealtimeChange(event, table, record, old) {
@@ -815,7 +867,7 @@ async function saveCompteClient(cc) {
   if (cc.mouvements && cc.mouvements.length) {
     try {
       await fetch(SUPABASE_URL+'/rest/v1/mouvements_cc?compte_id=eq.'+encodeURIComponent(cc.id),
-        { method:'DELETE', headers:H });
+        { method:'DELETE', headers:H() });
       await _supa.upsert('mouvements_cc', cc.mouvements.map(function(m){
         return {compte_id:cc.id,date:m.date,type:m.type,montant:m.montant,note:m.note||null};
       }));
@@ -872,7 +924,7 @@ async function saveBijouArr(ba) {
   if (ba.mouvements && ba.mouvements.length) {
     try {
       await fetch(SUPABASE_URL+'/rest/v1/mouvements_arrhes?arrhes_id=eq.'+encodeURIComponent(ba.id),
-        { method:'DELETE', headers:H });
+        { method:'DELETE', headers:H() });
       await _supa.upsert('mouvements_arrhes', ba.mouvements.map(function(m){
         return {arrhes_id:ba.id,date:m.date,montant:m.montant,note:m.note||null};
       }));
@@ -933,7 +985,7 @@ async function deleteClient(id) {
 async function deleteCompteClient(id) {
   // Supprimer les mouvements d'abord
   await fetch(SUPABASE_URL+'/rest/v1/mouvements_cc?compte_id=eq.'+encodeURIComponent(id),
-    {method:'DELETE', headers:H});
+    {method:'DELETE', headers:H()});
   await _supa.deleteRow('comptes_clients', id);
   await reloadComptes();
 }
@@ -943,7 +995,7 @@ async function deleteReprise(id) {
 }
 async function deleteBijouArr(id) {
   await fetch(SUPABASE_URL+'/rest/v1/mouvements_arrhes?arrhes_id=eq.'+encodeURIComponent(id),
-    {method:'DELETE', headers:H});
+    {method:'DELETE', headers:H()});
   await _supa.deleteRow('bijoux_arrhes', id);
   await reloadArrhes();
 }
@@ -983,7 +1035,7 @@ async function deleteDecaissement(id) {
 }
 async function deleteCompteClient(id) {
   try {
-    await fetch(SUPABASE_URL+'/rest/v1/mouvements_cc?compte_id=eq.'+encodeURIComponent(id), {method:'DELETE',headers:H});
+    await fetch(SUPABASE_URL+'/rest/v1/mouvements_cc?compte_id=eq.'+encodeURIComponent(id), {method:'DELETE',headers:H()});
     await _supa.deleteRow('comptes_clients', id);
     await reloadComptes();
   } catch(e) { console.error('deleteCC:', e); }
@@ -994,25 +1046,7 @@ async function deleteReprise(id) {
     await reloadReprises();
   } catch(e) { console.error('deleteReprise:', e); }
 }
-async function deleteUtilisateur(id) {
-  try {
-    await _supa.deleteRow('utilisateurs', id);
-  } catch(e) { console.error('deleteUser:', e); }
-}
-async function saveUtilisateur(u) {
-  try {
-    await _supa.upsert('utilisateurs', {
-      id:u.id, nom:u.nom, login:u.login,
-      password:u.password, role:u.role, actif:u.actif!==false
-    });
-  } catch(e) { console.error('saveUser:', e); }
-}
-
-async function reloadUtilisateurs() {
-  try {
-    var rows = await _supa.select('utilisateurs');
-    STATE.users = rows;
-    if(typeof renderGestionComptes==='function') renderGestionComptes();
-  } catch(e) { console.error('reloadUsers:', e); }
-}
+// saveUtilisateur / deleteUtilisateur / reloadUtilisateurs ont été supprimées :
+// écrire un mot de passe depuis le navigateur n'a plus de sens. Les comptes se
+// gèrent via Supabase Auth (invitations) — voir renderGestionComptes() dans app.js.
 

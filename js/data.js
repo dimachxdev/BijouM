@@ -7,19 +7,20 @@
 // COMPTES UTILISATEURS & RÔLES
 // ============================================
 const ROLES = {
+  proprietaire: { label: 'Propriétaire',      color: '#8a6d1f', bg: '#f7efd8' },
   admin:        { label: 'Administrateur',    color: '#534ab7', bg: '#eeedfe' },
   gestionnaire: { label: 'Gestionnaire Stock',color: '#0f6e56', bg: '#e1f5ee' },
   vendeur:      { label: 'Vendeur',           color: '#854f0b', bg: '#faeeda' },
 };
 
-const INITIAL_USERS = [
-  { id:'U-001', nom:'Administrateur Principal', login:'admin',   password:'admin123',   role:'admin',         actif:true },
-  { id:'U-002', nom:'Gestionnaire Stock',        login:'stock',   password:'stock123',   role:'gestionnaire',  actif:true },
-  { id:'U-003', nom:'Vendeur',                   login:'vendeur', password:'vendeur123', role:'vendeur',       actif:true },
-];
+// Les comptes de démonstration (admin/admin123…) ont été supprimés : ils
+// étaient livrés en clair dans ce fichier, donc connus de quiconque a vu le
+// code. L'identité est désormais gérée par Supabase Auth — voir
+// migrations/004_migration_comptes.sql et 005_invitations.sql.
 
 // Permissions par rôle
 const PERM_MAP = {
+  proprietaire: ['all','journal','stocks','achats','sorties','decaissements','clients','compte_client','bijou_arr','historique','comptes_users','rapport_jour'],
   admin:        ['all','journal','stocks','achats','sorties','decaissements','clients','compte_client','bijou_arr','historique','comptes_users','rapport_jour'],
   gestionnaire: ['journal','stocks','achats_clients','clients','compte_client','bijou_arr','rapport_jour'],
   vendeur:      ['journal','clients','compte_client','bijou_arr','rapport_jour'],

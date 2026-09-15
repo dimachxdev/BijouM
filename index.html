@@ -17,21 +17,18 @@
     <div style="text-align:center;margin-bottom:8px"><img src="assets/logo-kayor.jpg" alt="KAYOR" style="max-width:180px;max-height:100px;object-fit:contain" /></div>
     <div class="login-tagline">Brillez sans effort</div>
     <div class="form-group" style="margin-top:24px">
-      <label class="form-label">Identifiant</label>
-      <input class="form-input" type="text" id="login-user" placeholder="admin / stock / vendeur" autocomplete="username" />
+      <label class="form-label">Adresse email</label>
+      <input class="form-input" type="email" id="login-user" placeholder="vous@boutique.sn" autocomplete="email" />
     </div>
     <div class="form-group" style="margin:12px 0 20px">
       <label class="form-label">Mot de passe</label>
       <input class="form-input" type="password" id="login-pass" placeholder="••••••••" autocomplete="current-password" />
     </div>
     <div class="login-error" id="login-error"></div>
-    <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="doLogin()">Se connecter</button>
-    <div class="login-hint">
-      <span>admin / admin123</span><span>stock / stock123</span><span>vendeur / vendeur123</span>
-    </div>
+    <button class="btn btn-primary" id="btn-login" style="width:100%;justify-content:center" onclick="doLogin()">Se connecter</button>
     <div style="text-align:center;margin-top:16px">
       <button onclick="resetAppData()" style="background:none;border:none;font-size:11px;color:var(--text-tertiary);cursor:pointer;text-decoration:underline">
-        Problème de connexion ? Réinitialiser les données
+        Problème de connexion ? Réinitialiser les données locales
       </button>
     </div>
   </div>
@@ -107,6 +104,7 @@
         <div>
           <div class="user-name" id="user-name">—</div>
           <div class="user-role-badge" id="user-role-badge">—</div>
+          <div id="org-name" style="font-size:10px;color:var(--text-tertiary);margin-top:3px;letter-spacing:.3px"></div>
         </div>
       </div>
       <button class="btn-logout" onclick="refreshAll()" title="Actualiser" style="margin-right:4px">⟳</button><button class="btn-logout" onclick="doLogout()" title="Déconnexion">⏻</button>
@@ -322,28 +320,15 @@
       <div id="rapport-journalier-content"></div>
     </section>
 
-    <!-- GESTION COMPTES UTILISATEURS -->
-    <section class="section" id="gestion_comptes">
-      <div class="page-header">
-        <div><h1 class="page-title">Gestion des comptes</h1><p class="page-sub" id="gc-count-label"></p></div>
-        <button class="btn btn-primary" onclick="openModal('modal-add-user')">+ Nouveau compte</button>
-      </div>
-      <div class="card" style="overflow-x:auto">
-        <table><thead><tr><th>Nom</th><th>Identifiant</th><th>Role</th><th>Statut</th><th>Date creation</th><th>Actions</th></tr></thead>
-        <tbody id="users-body"></tbody></table>
-      </div>
-    </section>
-
-
-    <!-- GESTION COMPTES UTILISATEURS -->
+    <!-- MEMBRES DE LA BOUTIQUE -->
     <section class="section" id="comptes_users">
       <div class="page-header">
-        <div><h1 class="page-title">Gestion des comptes</h1><p class="page-sub" id="users-count-label"></p></div>
-        <button class="btn btn-primary" onclick="openModal('modal-add-user')">+ Nouveau compte</button>
+        <div><h1 class="page-title">Membres de la boutique</h1><p class="page-sub" id="gc-count-label"></p></div>
+        <button class="btn btn-primary" onclick="ouvrirInvitation()">+ Inviter un membre</button>
       </div>
       <div class="card"><div class="table-wrap">
         <table>
-          <thead><tr><th>Utilisateur</th><th>Login</th><th>Rôle</th><th>Statut</th><th>Dernière connexion</th><th>Actions</th></tr></thead>
+          <thead><tr><th>Membre</th><th>Email</th><th>Rôle</th><th>Statut</th><th>Ajouté le</th><th>Actions</th></tr></thead>
           <tbody id="users-body"></tbody>
         </table>
       </div></div>
@@ -1002,52 +987,28 @@
 <!-- MODAL CRÉER UTILISATEUR -->
 <div class="modal-backdrop" id="modal-add-user">
   <div class="modal">
-    <div class="modal-header"><div class="modal-title">Nouveau compte utilisateur</div><button class="modal-close" onclick="closeModal('modal-add-user')">✕</button></div>
+    <div class="modal-header"><div class="modal-title" id="modal-user-title">Inviter un membre</div><button class="modal-close" onclick="closeModal('modal-add-user')">✕</button></div>
     <div class="role-banner role-admin" style="margin-bottom:12px"><span>🔒</span> Réservé à l'administrateur</div>
+    <input type="hidden" id="u-edit-id" />
     <div class="form-row">
       <div class="form-group"><label class="form-label">Nom complet *</label><input class="form-input" placeholder="ex: Fatou Ndiaye" id="u-nom" /></div>
-      <div class="form-group"><label class="form-label">Login *</label><input class="form-input" placeholder="ex: fatou" id="u-login" /></div>
-    </div>
-    <div class="form-row">
-      <div class="form-group"><label class="form-label">Mot de passe *</label><input class="form-input" type="password" id="u-password" /></div>
-      <div class="form-group"><label class="form-label">Confirmer *</label><input class="form-input" type="password" id="u-password2" /></div>
+      <div class="form-group"><label class="form-label">Adresse email *</label><input class="form-input" type="email" placeholder="fatou@boutique.sn" id="u-email" autocomplete="off" /></div>
     </div>
     <div class="form-group" style="margin-bottom:12px"><label class="form-label">Rôle *</label>
       <select class="form-input" id="u-role">
         <option value="vendeur">Vendeur</option>
         <option value="gestionnaire">Gestionnaire Stock</option>
         <option value="admin">Administrateur</option>
+        <option value="proprietaire">Propriétaire</option>
       </select>
+    </div>
+    <div style="background:var(--info-bg,#eef4fb);border-radius:6px;padding:10px 12px;margin-bottom:12px;font-size:11px;color:var(--text-secondary);line-height:1.5">
+      Aucun mot de passe n'est saisi ici. La personne invitée s'inscrit avec cette adresse
+      et choisit elle-même son mot de passe — il n'est jamais visible, ni par vous ni dans la base.
     </div>
     <div class="modal-actions">
       <button class="btn btn-secondary" onclick="closeModal('modal-add-user')">Annuler</button>
-      <button class="btn btn-primary" onclick="creerUtilisateur()">Créer le compte</button>
-    </div>
-  </div>
-</div>
-
-<!-- MODAL MODIFIER UTILISATEUR -->
-<div class="modal-backdrop" id="modal-edit-user">
-  <div class="modal">
-    <div class="modal-header"><div class="modal-title">Modifier le compte — <span id="edit-u-label" style="font-weight:400"></span></div><button class="modal-close" onclick="closeModal('modal-edit-user')">✕</button></div>
-    <input type="hidden" id="edit-u-id" />
-    <div class="form-row">
-      <div class="form-group"><label class="form-label">Nom complet</label><input class="form-input" id="edit-u-nom" /></div>
-      <div class="form-group"><label class="form-label">Rôle</label>
-        <select class="form-input" id="edit-u-role">
-          <option value="vendeur">Vendeur</option>
-          <option value="gestionnaire">Gestionnaire Stock</option>
-          <option value="admin">Administrateur</option>
-        </select>
-      </div>
-    </div>
-    <div class="form-row">
-      <div class="form-group"><label class="form-label">Nouveau mot de passe</label><input class="form-input" type="password" placeholder="Laisser vide pour conserver" id="edit-u-password" /></div>
-      <div class="form-group"><label class="form-label">Confirmer</label><input class="form-input" type="password" id="edit-u-password2" /></div>
-    </div>
-    <div class="modal-actions">
-      <button class="btn btn-secondary" onclick="closeModal('modal-edit-user')">Annuler</button>
-      <button class="btn btn-primary" onclick="sauvegarderUtilisateur()">Sauvegarder</button>
+      <button class="btn btn-primary" id="btn-save-user" onclick="sauvegarderMembre()">Envoyer l'invitation</button>
     </div>
   </div>
 </div>

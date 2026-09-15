@@ -170,6 +170,7 @@
       user:          data.user || s.user
     });
     programmerRefresh();
+    if (typeof global.refreshRealtimeToken === 'function') global.refreshRealtimeToken();
     return session;
   }
 
