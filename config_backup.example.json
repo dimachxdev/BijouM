@@ -1,0 +1,9 @@
+{
+  "_lisezmoi": "Copier ce fichier en config_backup.json puis renseigner les valeurs. config_backup.json est ignoré par git (.gitignore) car il contient un secret.",
+  "emailFrom":           "expediteur@gmail.com",
+  "emailTo":             "destinataire@gmail.com",
+  "appPassword":         "REMPLACER — mot de passe d'application Gmail (16 caracteres)",
+  "dossierProjet":       "C:\\Users\\<utilisateur>\\Desktop\\Gestion Bijouterie",
+  "dossierSauvegardes":  "C:\\Users\\<utilisateur>\\Desktop\\Sauvegardes Kayor",
+  "garderNbSauvegardes": 4
+}
