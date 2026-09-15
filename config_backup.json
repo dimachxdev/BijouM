@@ -1,8 +1,9 @@
 {
-  "emailFrom":            "dimachxdev@gmail.com",
-  "emailTo":              "dimachxsn@gmail.com",
-  "appPassword":          "Djimahcx23#@!!1",
-  "dossierProjet":        "C:\\Users\\dell\\Desktop\\Gestion Bijouterie",
-  "dossierSauvegardes":   "C:\\Users\\dell\\Desktop\\Sauvegardes Kayor",
-  "garderNbSauvegardes":  4
+  "_lisezmoi": "Copier ce fichier en config_backup.json puis renseigner les valeurs. config_backup.json est ignoré par git (.gitignore) car il contient un secret.",
+  "emailFrom":           "dimachxdev@gmail.com",
+  "emailTo":             "dimachxsn@gmail.com",
+  "appPassword":         "Djimahcx23#@!!1",
+  "dossierProjet":       "C:\\Users\\<utilisateur>\\Desktop\\Gestion Bijouterie",
+  "dossierSauvegardes":  "C:\\Users\\<utilisateur>\\Desktop\\Sauvegardes Kayor",
+  "garderNbSauvegardes": 4
 }
