@@ -201,6 +201,9 @@ function isAdmin() {
 // ============================================
 document.getElementById('login-pass').addEventListener('keydown', e => { if(e.key==='Enter') doLogin(); });
 document.getElementById('login-user').addEventListener('keydown', e => { if(e.key==='Enter') document.getElementById('login-pass').focus(); });
+// Entrée valide aussi les panneaux d'inscription et de réinitialisation.
+[['signup-pass2',()=>doSignup()],['forgot-email',()=>doForgot()],['reset-pass2',()=>doReset()]]
+  .forEach(([id,fn]) => document.getElementById(id)?.addEventListener('keydown', e => { if(e.key==='Enter') fn(); }));
 
 function resetAppData() {
   if (!confirm('Vider le cache local ?\n\nLes données restent dans Supabase et seront rechargées à la prochaine connexion.')) return;
@@ -295,7 +298,107 @@ async function doLogout() {
   document.getElementById('login-screen').style.display='flex';
   document.getElementById('login-user').value='';
   document.getElementById('login-pass').value='';
-  document.getElementById('login-error').style.display='none';
+  afficherPanneau('panel-login');
+}
+
+// ============================================
+// INSCRIPTION / MOT DE PASSE OUBLIÉ
+// ============================================
+const PANNEAUX_AUTH = ['panel-login','panel-signup','panel-forgot','panel-reset'];
+
+function afficherPanneau(id) {
+  PANNEAUX_AUTH.forEach(p => {
+    const el = document.getElementById(p);
+    if (el) el.style.display = (p === id) ? 'block' : 'none';
+  });
+  ['login-error','signup-error','signup-ok','forgot-error','forgot-ok','reset-error','reset-ok']
+    .forEach(i => { const el = document.getElementById(i); if (el) el.style.display = 'none'; });
+}
+
+function messageAuth(id, texte) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.textContent = texte;
+  el.style.display = texte ? 'block' : 'none';
+}
+
+/** Création de compte par une personne invitée. */
+async function doSignup() {
+  const email = document.getElementById('signup-email').value.trim();
+  const p1    = document.getElementById('signup-pass').value;
+  const p2    = document.getElementById('signup-pass2').value;
+  const btn   = document.getElementById('btn-signup');
+
+  messageAuth('signup-error',''); messageAuth('signup-ok','');
+
+  if (!email || !p1)      { messageAuth('signup-error','Renseignez votre email et un mot de passe.'); return; }
+  if (p1 !== p2)          { messageAuth('signup-error','Les deux mots de passe ne correspondent pas.'); return; }
+  if (p1.length < 12)     { messageAuth('signup-error','Le mot de passe doit faire au moins 12 caractères.'); return; }
+
+  btn.disabled = true; btn.textContent = 'Création…';
+  try {
+    const r = await Auth.inscription(email, p1);
+    if (r.confirmationRequise) {
+      // Formulation volontairement neutre : quand l'adresse possède déjà un
+      // compte, Supabase répond 200 avec un utilisateur factice plutôt que de
+      // le dire, pour qu'on ne puisse pas découvrir qui est inscrit. Annoncer
+      // « compte créé » serait donc faux une fois sur deux.
+      messageAuth('signup-ok',
+        'Vérifiez votre boîte mail. Si cette adresse peut ouvrir un compte, un lien de confirmation vient d\'être envoyé — ouvrez-le puis connectez-vous.');
+      document.getElementById('signup-pass').value = '';
+      document.getElementById('signup-pass2').value = '';
+    } else {
+      ouvrirSession(r.profil);
+    }
+  } catch (e) {
+    messageAuth('signup-error', e.message);
+  } finally {
+    btn.disabled = false; btn.textContent = 'Créer mon compte';
+  }
+}
+
+/** Demande du lien de réinitialisation. */
+async function doForgot() {
+  const email = document.getElementById('forgot-email').value.trim();
+  const btn   = document.getElementById('btn-forgot');
+  messageAuth('forgot-error',''); messageAuth('forgot-ok','');
+
+  if (!email) { messageAuth('forgot-error','Renseignez votre adresse email.'); return; }
+
+  btn.disabled = true; btn.textContent = 'Envoi…';
+  try {
+    await Auth.demanderReinitialisation(email);
+    // Réponse identique que l'adresse existe ou non : afficher « adresse
+    // inconnue » révélerait qui possède un compte.
+    messageAuth('forgot-ok', 'Si un compte existe pour ' + email + ', un lien vient d\'être envoyé. Pensez à vérifier les indésirables.');
+  } catch (e) {
+    messageAuth('forgot-error', e.message);
+  } finally {
+    btn.disabled = false; btn.textContent = 'Envoyer le lien';
+  }
+}
+
+/** Enregistrement du nouveau mot de passe, au retour du lien email. */
+async function doReset() {
+  const p1  = document.getElementById('reset-pass').value;
+  const p2  = document.getElementById('reset-pass2').value;
+  const btn = document.getElementById('btn-reset');
+  messageAuth('reset-error',''); messageAuth('reset-ok','');
+
+  if (!p1)            { messageAuth('reset-error','Saisissez un mot de passe.'); return; }
+  if (p1 !== p2)      { messageAuth('reset-error','Les deux mots de passe ne correspondent pas.'); return; }
+  if (p1.length < 12) { messageAuth('reset-error','Le mot de passe doit faire au moins 12 caractères.'); return; }
+
+  btn.disabled = true; btn.textContent = 'Enregistrement…';
+  try {
+    const profil = await Auth.definirMotDePasse(p1);
+    ouvrirSession(profil);
+    showToast('✓ Mot de passe mis à jour.');
+  } catch (e) {
+    messageAuth('reset-error', e.message);
+  } finally {
+    btn.disabled = false; btn.textContent = 'Enregistrer';
+  }
 }
 
 /**
@@ -305,6 +408,12 @@ async function doLogout() {
  * invalide, on reste sur l'écran de connexion.
  */
 async function amorcerSession() {
+  // Retour d'un lien de réinitialisation : on passe directement au choix du
+  // nouveau mot de passe, sans tenter de restaurer l'ancienne session.
+  if (Auth.detecterRecuperation()) {
+    afficherPanneau('panel-reset');
+    return;
+  }
   try {
     const profil = await Auth.restaurer();
     if (profil) ouvrirSession(profil);
@@ -2359,7 +2468,7 @@ async function renderGestionComptes() {
   const lignesMembres = membres.map(m => {
     const role   = ROLES[m.role] || { label:m.role, color:'#888', bg:'#eee' };
     const estMoi = m.user_id === moi;
-    const email  = (m.utilisateur && m.utilisateur.email) || '—';
+    const email  = m.email || '—';
     return `<tr>
       <td><div style="display:flex;align-items:center;gap:10px">
         <div style="width:32px;height:32px;border-radius:50%;background:${role.bg};color:${role.color};display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0">${esc(ini(m.nom))}</div>
@@ -2395,8 +2504,10 @@ async function renderGestionComptes() {
 }
 
 async function chargerMembres() {
+  // `email` est recopié sur `membres` : PostgREST n'expose que le schéma
+  // `public`, auth.users n'est donc pas embarquable depuis une requête REST.
   const r = await fetch(SUPABASE_URL +
-    '/rest/v1/membres?select=user_id,nom,role,actif,created_at,utilisateur:user_id(email)' +
+    '/rest/v1/membres?select=user_id,nom,email,role,actif,created_at' +
     '&order=created_at.asc', { headers: H() });
   if (!r.ok) throw new Error('Membres inaccessibles (' + r.status + ').');
   return r.json();
@@ -2429,7 +2540,7 @@ async function ouvrirEditMembre(userId) {
   if (!m) return;
   document.getElementById('u-edit-id').value = userId;
   document.getElementById('u-nom').value     = m.nom;
-  document.getElementById('u-email').value   = (m.utilisateur && m.utilisateur.email) || '';
+  document.getElementById('u-email').value   = m.email || '';
   document.getElementById('u-email').disabled = true;   // l'email appartient au compte Auth
   document.getElementById('u-role').value    = m.role;
   document.getElementById('modal-user-title').textContent = 'Modifier — ' + m.nom;

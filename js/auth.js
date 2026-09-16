@@ -105,6 +105,144 @@
   }
 
   // =========================================================================
+  // INSCRIPTION (sur invitation)
+  // =========================================================================
+  /**
+   * Crée un compte Auth. Le rattachement à une boutique est décidé côté
+   * serveur par le trigger `app.handle_new_user` : il n'a lieu que si une
+   * invitation valide existe pour cette adresse. Les données envoyées d'ici
+   * ne peuvent donc pas servir à s'octroyer un rôle.
+   *
+   * Deux issues possibles :
+   *   - confirmation d'email désactivée -> une session est renvoyée, on entre ;
+   *   - confirmation activée -> pas de session, l'utilisateur doit cliquer
+   *     le lien reçu par mail.
+   */
+  async function inscription(email, motDePasse) {
+    var r = await fetchTimeout(URL_BASE + '/auth/v1/signup', {
+      method:  'POST',
+      headers: enTetesAnon(),
+      body:    JSON.stringify({
+        email: String(email || '').trim().toLowerCase(),
+        password: motDePasse
+      })
+    });
+
+    var data = await r.json().catch(function () { return {}; });
+
+    if (!r.ok) {
+      var m = (data.msg || data.error_description || data.message || '').toLowerCase();
+      if (m.indexOf('already') !== -1 || m.indexOf('registered') !== -1) {
+        throw new Error('Un compte existe déjà pour cette adresse. Utilisez « Mot de passe oublié ».');
+      }
+      if (m.indexOf('password') !== -1) {
+        throw new Error('Mot de passe refusé : il est trop court ou trop simple.');
+      }
+      throw new Error('Inscription impossible. Vérifiez l\'adresse saisie.');
+    }
+
+    // Confirmation d'email activée : Supabase ne renvoie pas de session.
+    if (!data.access_token) {
+      return { confirmationRequise: true };
+    }
+
+    ecrireSession({
+      access_token:  data.access_token,
+      refresh_token: data.refresh_token,
+      expires_at:    Date.now() + (data.expires_in || 3600) * 1000,
+      user:          data.user
+    });
+
+    // chargerProfil() lève si aucune invitation n'a rattaché ce compte.
+    await chargerProfil();
+    programmerRefresh();
+    return { confirmationRequise: false, profil: profil };
+  }
+
+  // =========================================================================
+  // MOT DE PASSE OUBLIÉ
+  // =========================================================================
+  /**
+   * Demande l'envoi du lien de réinitialisation.
+   *
+   * Renvoie toujours un succès, même si l'adresse est inconnue : répondre
+   * « cette adresse n'existe pas » permettrait de découvrir qui possède un
+   * compte. Supabase applique la même règle de son côté.
+   */
+  async function demanderReinitialisation(email) {
+    var retour = location.origin + location.pathname;
+    await fetchTimeout(URL_BASE + '/auth/v1/recover', {
+      method:  'POST',
+      headers: enTetesAnon(),
+      body:    JSON.stringify({
+        email: String(email || '').trim().toLowerCase(),
+        gotrue_meta_security: {}
+      })
+    }).catch(function () { /* silencieux, voir ci-dessus */ });
+
+    // `redirect_to` doit figurer dans la liste blanche du projet Supabase
+    // (Authentication > URL Configuration > Redirect URLs).
+    return { envoye: true, retour: retour };
+  }
+
+  /**
+   * Détecte le retour du lien de réinitialisation.
+   *
+   * Supabase renvoie le jeton dans le fragment d'URL
+   * (#access_token=...&type=recovery). Le fragment n'est jamais transmis au
+   * serveur, ce qui évite que le jeton se retrouve dans des logs d'accès.
+   * On le retire de la barre d'adresse aussitôt lu.
+   */
+  function detecterRecuperation() {
+    var h = location.hash || '';
+    if (h.indexOf('access_token') === -1) return false;
+
+    var p = new URLSearchParams(h.replace(/^#/, ''));
+    var type = p.get('type');
+    if (type !== 'recovery' && type !== 'invite') return false;
+
+    session = {
+      access_token:  p.get('access_token'),
+      refresh_token: p.get('refresh_token'),
+      expires_at:    Date.now() + (parseInt(p.get('expires_in'), 10) || 3600) * 1000,
+      user:          null
+    };
+
+    history.replaceState(null, '', location.pathname + location.search);
+    return true;
+  }
+
+  /** Applique le nouveau mot de passe à l'aide du jeton de récupération. */
+  async function definirMotDePasse(nouveau) {
+    if (!session || !session.access_token) {
+      throw new Error('Lien expiré. Demandez un nouveau lien de réinitialisation.');
+    }
+    if (!nouveau || nouveau.length < 12) {
+      throw new Error('Le mot de passe doit faire au moins 12 caractères.');
+    }
+
+    var r = await fetchTimeout(URL_BASE + '/auth/v1/user', {
+      method:  'PUT',
+      headers: enTetes(),
+      body:    JSON.stringify({ password: nouveau })
+    });
+
+    if (!r.ok) {
+      var d = await r.json().catch(function () { return {}; });
+      var m = (d.msg || d.message || '').toLowerCase();
+      if (m.indexOf('different from the old') !== -1) {
+        throw new Error('Choisissez un mot de passe différent de l\'ancien.');
+      }
+      throw new Error('Enregistrement refusé. Le lien a peut-être expiré.');
+    }
+
+    ecrireSession(session);
+    await chargerProfil();
+    programmerRefresh();
+    return profil;
+  }
+
+  // =========================================================================
   // PROFIL (organisation + rôle)
   // =========================================================================
   async function chargerProfil() {
@@ -240,13 +378,17 @@
   // Ils ne protègent rien par eux-mêmes — l'autorisation réelle est appliquée
   // par les policies RLS dans PostgreSQL.
   global.Auth = {
-    connexion:         connexion,
-    deconnexion:       deconnexion,
-    restaurer:         restaurer,
-    rafraichir:        rafraichir,
-    chargerProfil:     chargerProfil,
-    changerMotDePasse: changerMotDePasse,
-    enTetes:           enTetes,
+    connexion:               connexion,
+    inscription:             inscription,
+    demanderReinitialisation: demanderReinitialisation,
+    detecterRecuperation:    detecterRecuperation,
+    definirMotDePasse:       definirMotDePasse,
+    deconnexion:             deconnexion,
+    restaurer:               restaurer,
+    rafraichir:              rafraichir,
+    chargerProfil:           chargerProfil,
+    changerMotDePasse:       changerMotDePasse,
+    enTetes:                 enTetes,
     profil:            function () { return profil; },
     connecte:          function () { return !!(session && profil); },
     role:              function () { return profil ? profil.role : null; },

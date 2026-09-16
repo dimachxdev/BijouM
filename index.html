@@ -16,17 +16,88 @@
   <div class="login-card">
     <div style="text-align:center;margin-bottom:8px"><img src="assets/logo-kayor.jpg" alt="KAYOR" style="max-width:180px;max-height:100px;object-fit:contain" /></div>
     <div class="login-tagline">Brillez sans effort</div>
-    <div class="form-group" style="margin-top:24px">
-      <label class="form-label">Adresse email</label>
-      <input class="form-input" type="email" id="login-user" placeholder="vous@boutique.sn" autocomplete="email" />
+    <!-- ---------- CONNEXION ---------- -->
+    <div id="panel-login">
+      <div class="form-group" style="margin-top:24px">
+        <label class="form-label">Adresse email</label>
+        <input class="form-input" type="email" id="login-user" placeholder="vous@boutique.sn" autocomplete="email" />
+      </div>
+      <div class="form-group" style="margin:12px 0 20px">
+        <label class="form-label">Mot de passe</label>
+        <input class="form-input" type="password" id="login-pass" placeholder="••••••••" autocomplete="current-password" />
+      </div>
+      <div class="login-error" id="login-error"></div>
+      <button class="btn btn-primary" id="btn-login" style="width:100%;justify-content:center" onclick="doLogin()">Se connecter</button>
+      <div style="display:flex;justify-content:space-between;gap:12px;margin-top:14px">
+        <button class="lien-auth" onclick="afficherPanneau('panel-forgot')">Mot de passe oublié ?</button>
+        <button class="lien-auth" onclick="afficherPanneau('panel-signup')">J'ai une invitation</button>
+      </div>
     </div>
-    <div class="form-group" style="margin:12px 0 20px">
-      <label class="form-label">Mot de passe</label>
-      <input class="form-input" type="password" id="login-pass" placeholder="••••••••" autocomplete="current-password" />
+
+    <!-- ---------- INSCRIPTION (sur invitation) ---------- -->
+    <div id="panel-signup" style="display:none">
+      <div class="auth-titre">Créer mon compte</div>
+      <div class="auth-aide">
+        Utilisez l'adresse email à laquelle l'invitation a été envoyée.
+        Sans invitation valide, le compte ne sera rattaché à aucune boutique.
+      </div>
+      <div class="form-group">
+        <label class="form-label">Adresse email</label>
+        <input class="form-input" type="email" id="signup-email" placeholder="vous@boutique.sn" autocomplete="email" />
+      </div>
+      <div class="form-group" style="margin-top:12px">
+        <label class="form-label">Mot de passe</label>
+        <input class="form-input" type="password" id="signup-pass" placeholder="12 caractères minimum" autocomplete="new-password" />
+      </div>
+      <div class="form-group" style="margin:12px 0 16px">
+        <label class="form-label">Confirmer le mot de passe</label>
+        <input class="form-input" type="password" id="signup-pass2" placeholder="••••••••" autocomplete="new-password" />
+      </div>
+      <div class="login-error" id="signup-error"></div>
+      <div class="login-ok" id="signup-ok"></div>
+      <button class="btn btn-primary" id="btn-signup" style="width:100%;justify-content:center" onclick="doSignup()">Créer mon compte</button>
+      <div style="text-align:center;margin-top:14px">
+        <button class="lien-auth" onclick="afficherPanneau('panel-login')">← Retour à la connexion</button>
+      </div>
     </div>
-    <div class="login-error" id="login-error"></div>
-    <button class="btn btn-primary" id="btn-login" style="width:100%;justify-content:center" onclick="doLogin()">Se connecter</button>
-    <div style="text-align:center;margin-top:16px">
+
+    <!-- ---------- MOT DE PASSE OUBLIÉ ---------- -->
+    <div id="panel-forgot" style="display:none">
+      <div class="auth-titre">Mot de passe oublié</div>
+      <div class="auth-aide">
+        Nous envoyons un lien de réinitialisation à votre adresse.
+        Le lien est valable une heure.
+      </div>
+      <div class="form-group">
+        <label class="form-label">Adresse email</label>
+        <input class="form-input" type="email" id="forgot-email" placeholder="vous@boutique.sn" autocomplete="email" />
+      </div>
+      <div class="login-error" id="forgot-error" style="margin-top:12px"></div>
+      <div class="login-ok" id="forgot-ok"></div>
+      <button class="btn btn-primary" id="btn-forgot" style="width:100%;justify-content:center;margin-top:12px" onclick="doForgot()">Envoyer le lien</button>
+      <div style="text-align:center;margin-top:14px">
+        <button class="lien-auth" onclick="afficherPanneau('panel-login')">← Retour à la connexion</button>
+      </div>
+    </div>
+
+    <!-- ---------- NOUVEAU MOT DE PASSE (retour du lien email) ---------- -->
+    <div id="panel-reset" style="display:none">
+      <div class="auth-titre">Choisir un nouveau mot de passe</div>
+      <div class="auth-aide">Votre lien est valide. Saisissez le mot de passe qui le remplacera.</div>
+      <div class="form-group">
+        <label class="form-label">Nouveau mot de passe</label>
+        <input class="form-input" type="password" id="reset-pass" placeholder="12 caractères minimum" autocomplete="new-password" />
+      </div>
+      <div class="form-group" style="margin:12px 0 16px">
+        <label class="form-label">Confirmer</label>
+        <input class="form-input" type="password" id="reset-pass2" placeholder="••••••••" autocomplete="new-password" />
+      </div>
+      <div class="login-error" id="reset-error"></div>
+      <div class="login-ok" id="reset-ok"></div>
+      <button class="btn btn-primary" id="btn-reset" style="width:100%;justify-content:center" onclick="doReset()">Enregistrer</button>
+    </div>
+
+    <div style="text-align:center;margin-top:18px">
       <button onclick="resetAppData()" style="background:none;border:none;font-size:11px;color:var(--text-tertiary);cursor:pointer;text-decoration:underline">
         Problème de connexion ? Réinitialiser les données locales
       </button>
