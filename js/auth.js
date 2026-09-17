@@ -132,6 +132,19 @@
 
     if (!r.ok) {
       var m = (data.msg || data.error_description || data.message || '').toLowerCase();
+      // Un 500 ici vient presque toujours de l'envoi de l'email de
+      // confirmation : quand il échoue, Supabase annule l'inscription et
+      // AUCUN compte n'est créé. Le dire clairement évite de croire que
+      // l'adresse saisie est en cause.
+      if (r.status >= 500) {
+        throw new Error(
+          "Le compte n'a pas pu être créé : l'envoi de l'email de confirmation a échoué. " +
+          "La configuration SMTP du projet doit être corrigée."
+        );
+      }
+      if (r.status === 429) {
+        throw new Error('Trop de tentatives. Patientez quelques minutes.');
+      }
       if (m.indexOf('already') !== -1 || m.indexOf('registered') !== -1) {
         throw new Error('Un compte existe déjà pour cette adresse. Utilisez « Mot de passe oublié ».');
       }
@@ -171,14 +184,32 @@
    */
   async function demanderReinitialisation(email) {
     var retour = location.origin + location.pathname;
-    await fetchTimeout(URL_BASE + '/auth/v1/recover', {
-      method:  'POST',
-      headers: enTetesAnon(),
-      body:    JSON.stringify({
-        email: String(email || '').trim().toLowerCase(),
-        gotrue_meta_security: {}
-      })
-    }).catch(function () { /* silencieux, voir ci-dessus */ });
+    var r;
+    try {
+      r = await fetchTimeout(URL_BASE + '/auth/v1/recover', {
+        method:  'POST',
+        headers: enTetesAnon(),
+        body:    JSON.stringify({
+          email: String(email || '').trim().toLowerCase(),
+          gotrue_meta_security: {}
+        })
+      });
+    } catch (e) {
+      throw new Error('Serveur injoignable. Vérifiez votre connexion.');
+    }
+
+    // Seul le cas « adresse inconnue » reste muet — c'est lui qui permettrait
+    // de découvrir qui possède un compte. Une panne serveur, elle, doit se
+    // voir : sinon on affiche « lien envoyé » alors que rien n'est parti.
+    if (r.status >= 500) {
+      throw new Error(
+        "L'envoi d'emails est en échec côté serveur. " +
+        "Vérifiez la configuration SMTP du projet Supabase (Authentication > SMTP)."
+      );
+    }
+    if (r.status === 429) {
+      throw new Error('Trop de demandes. Patientez quelques minutes avant de réessayer.');
+    }
 
     // `redirect_to` doit figurer dans la liste blanche du projet Supabase
     // (Authentication > URL Configuration > Redirect URLs).
