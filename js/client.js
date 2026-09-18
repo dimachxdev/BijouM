@@ -1,28 +1,34 @@
 /**
  * KAYOR — Portail Client
- * Connexion : téléphone + PIN 4 chiffres
- * Données directement depuis Supabase REST API
+ * ---------------------------------------------------------------------------
+ * Connexion : téléphone + code PIN à 4 chiffres.
+ *
+ * Le portail n'accède plus aux tables. Auparavant il téléchargeait la fiche
+ * cliente avec la clé publiable puis comparait le PIN dans le navigateur :
+ * n'importe qui pouvait lire tous les codes, et 4 chiffres se forcent en
+ * quelques secondes. Désormais il ne peut appeler que quatre fonctions
+ * serveur, qui vérifient le PIN en bcrypt, bloquent après 5 échecs et
+ * délivrent un jeton de session à durée limitée.
  */
 
 const SUPA_URL = 'https://yflvtquowzvghwxyvuah.supabase.co';
 const SUPA_KEY = 'sb_publishable_3EBGFxeT8B8cys54IZj3Nw_ZTS-4ZR1';
-const SUPA_H = {
-  'Content-Type': 'application/json',
-  'apikey':        SUPA_KEY,
-  'Authorization': 'Bearer ' + SUPA_KEY
-};
 
-// État courant
-var CLIENT   = null; // objet client connecté
-var COMPTES  = [];   // comptes épargne du client
-var ARRHES   = [];   // bijoux en arrhes du client
-var LAST_DEPOT = null; // dernier dépôt pour le reçu
-var EMAILJS_LOADED = false;
+// Le jeton vit dans sessionStorage, pas localStorage : le portail est souvent
+// ouvert depuis une tablette de boutique ou un téléphone prêté. La session
+// disparaît à la fermeture de l'onglet.
+const CLE_JETON = 'kayor_portail_token';
+
+var JETON     = null;
+var CLIENT    = null;
+var COMPTES   = [];
+var COMMANDES = [];
+var DERNIER_DEPOT = null;
 
 // ─── Utilitaires ───────────────────────────────────────────
 
 function fmt(n){ return Number(n||0).toLocaleString('fr-FR') + ' FCFA'; }
-function fmtDate(d){ if(!d) return '—'; var p=d.split('-'); return p.length===3?p[2]+'/'+p[1]+'/'+p[0]:d; }
+function fmtDate(d){ if(!d) return '—'; var p=String(d).split('-'); return p.length===3?p[2]+'/'+p[1]+'/'+p[0]:d; }
 function today(){ return new Date().toISOString().slice(0,10); }
 
 function showToast(msg, dur){
@@ -37,41 +43,44 @@ function showLoading(on){
   document.getElementById('loading-overlay').style.display = on ? 'flex' : 'none';
 }
 
-function openModal(id){
-  document.getElementById(id).classList.add('open');
-}
-function closeModal(id){
-  document.getElementById(id).classList.remove('open');
-}
+function openModal(id){  document.getElementById(id).classList.add('open'); }
+function closeModal(id){ document.getElementById(id).classList.remove('open'); }
 
-// ─── Supabase REST ─────────────────────────────────────────
-
-async function supaGet(table, filter){
-  var url = SUPA_URL + '/rest/v1/' + table + '?select=*';
-  if(filter) url += '&' + filter;
-  var r = await fetch(url, { headers: SUPA_H });
-  if(!r.ok) throw new Error(table + ' ' + r.status);
-  return r.json();
+function erreurLogin(msg){
+  var e = document.getElementById('login-error');
+  e.textContent = msg || '';
+  e.style.display = msg ? 'block' : 'none';
 }
 
-async function supaPost(table, data){
-  var r = await fetch(SUPA_URL + '/rest/v1/' + table, {
-    method: 'POST',
-    headers: Object.assign({}, SUPA_H, { 'Prefer': 'return=representation' }),
-    body: JSON.stringify(Array.isArray(data) ? data : [data])
-  });
-  if(!r.ok) throw new Error(table + ' POST ' + r.status + ' — ' + await r.text());
-  return r.json();
-}
+// ─── Appels serveur ────────────────────────────────────────
 
-async function supaPatch(table, filter, data){
-  var r = await fetch(SUPA_URL + '/rest/v1/' + table + '?' + filter, {
-    method: 'PATCH',
-    headers: Object.assign({}, SUPA_H, { 'Prefer': 'return=representation' }),
-    body: JSON.stringify(data)
-  });
-  if(!r.ok) throw new Error(table + ' PATCH ' + r.status);
-  return r.json();
+/**
+ * Seule porte d'entrée du portail : les quatre fonctions autorisées.
+ * Tout accès direct aux tables est refusé par PostgreSQL depuis que RLS est
+ * actif — le portail n'a volontairement aucun privilège de lecture.
+ */
+async function rpc(nom, params){
+  var ctrl = new AbortController();
+  var tid  = setTimeout(function(){ ctrl.abort(); }, 15000);
+  try {
+    var r = await fetch(SUPA_URL + '/rest/v1/rpc/' + nom, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': SUPA_KEY,
+        'Authorization': 'Bearer ' + SUPA_KEY
+      },
+      body: JSON.stringify(params || {}),
+      signal: ctrl.signal
+    });
+    if(!r.ok) throw new Error('Service indisponible (' + r.status + ').');
+    return await r.json();
+  } catch(e){
+    if(e.name === 'AbortError') throw new Error('Le serveur met trop de temps à répondre.');
+    throw e;
+  } finally {
+    clearTimeout(tid);
+  }
 }
 
 // ─── Navigation ────────────────────────────────────────────
@@ -81,17 +90,19 @@ function showPage(id){
   document.getElementById('page-dashboard').style.display = 'none';
   var el = document.getElementById(id);
   if(!el) return;
+  // Valeur explicite : une règle CSS pose display:none, et remettre une chaîne
+  // vide laisserait cette règle s'appliquer — la page resterait invisible.
   el.style.display = (id === 'page-login') ? 'flex' : 'block';
 }
 
-// ─── PIN navigation ────────────────────────────────────────
+// ─── Saisie du PIN ─────────────────────────────────────────
 
 function pinNav(el, nextId, prevId, autoSubmit){
   var val = el.value.replace(/\D/g,'');
   el.value = val;
-  if(val && nextId) {
+  if(val && nextId){
     document.getElementById(nextId).focus();
-  } else if(!val && prevId && event.key==='Backspace') {
+  } else if(!val && prevId && window.event && window.event.key === 'Backspace'){
     document.getElementById(prevId).focus();
   }
   if(autoSubmit && val) doLogin();
@@ -109,94 +120,83 @@ function clearPin(){
   });
 }
 
-// ─── LOGIN ─────────────────────────────────────────────────
+// ─── Connexion ─────────────────────────────────────────────
 
 async function doLogin(){
   var tel = document.getElementById('login-tel').value.trim();
   var pin = getPin();
-  var err = document.getElementById('login-error');
-  err.style.display = 'none';
+  erreurLogin('');
 
-  if(!tel){ err.textContent='Veuillez saisir votre numéro de téléphone.'; err.style.display='block'; return; }
-  if(pin.length !== 4){ err.textContent='Veuillez saisir votre code PIN (4 chiffres).'; err.style.display='block'; return; }
+  if(!tel){ erreurLogin('Veuillez saisir votre numéro de téléphone.'); return; }
+  if(pin.length !== 4){ erreurLogin('Veuillez saisir votre code PIN (4 chiffres).'); return; }
 
   showLoading(true);
-
   try {
-    // Chercher le client par téléphone
-    var telNorm = tel.replace(/\s/g,'');
-    var clients = await supaGet('clients', 'tel=eq.'+encodeURIComponent(tel));
-    // Fallback sans espaces
-    if(!clients.length){
-      clients = await supaGet('clients', 'tel=ilike.*'+telNorm+'*');
-    }
+    var res = await rpc('portail_login', { p_tel: tel, p_pin: pin });
 
-    if(!clients.length){
+    if(!res || !res.ok){
       showLoading(false);
-      err.textContent='Numéro de téléphone introuvable.'; err.style.display='block';
-      return;
-    }
-
-    var client = clients[0];
-
-    // Vérifier le PIN — d'abord Supabase, puis localStorage fallback
-    var pinOk = false;
-    if(client.pin){
-      pinOk = (client.pin === pin);
-    } else {
-      // Fallback localStorage (admin app même appareil)
-      try {
-        var localPins = JSON.parse(localStorage.getItem('marjan_clients_pin')||'{}');
-        pinOk = (localPins[client.id] === pin);
-      } catch(e) { pinOk = false; }
-    }
-
-    if(!pinOk){
-      showLoading(false);
-      err.textContent='Code PIN incorrect.'; err.style.display='block';
+      // Le serveur renvoie le même message pour un numéro inconnu et un PIN
+      // faux : distinguer les deux permettrait de savoir qui est cliente.
+      erreurLogin((res && res.erreur) || 'Connexion impossible.');
       clearPin();
       document.getElementById('pin-1').focus();
       return;
     }
 
-    CLIENT = client;
+    JETON  = res.token;
+    CLIENT = res.client;
+    try { sessionStorage.setItem(CLE_JETON, JETON); } catch(e){ /* navigation privée */ }
+
     await chargerDonnees();
     afficherDashboard();
   } catch(e){
     showLoading(false);
-    err.textContent='Erreur de connexion. Vérifiez votre réseau.'; err.style.display='block';
+    erreurLogin(e.message || 'Erreur de connexion. Vérifiez votre réseau.');
     console.error(e);
   }
 }
 
 async function chargerDonnees(){
-  var [comptes, mvtsCC, arrhes, mvtsArr] = await Promise.all([
-    supaGet('comptes_clients', 'client=eq.'+encodeURIComponent(CLIENT.nom)),
-    supaGet('mouvements_cc', 'order=id.asc'),
-    supaGet('bijoux_arrhes', 'client=eq.'+encodeURIComponent(CLIENT.nom)),
-    supaGet('mouvements_arrhes', 'order=id.asc')
-  ]);
-
-  COMPTES = comptes.map(function(cc){
-    return Object.assign({}, cc, {
-      mouvements: mvtsCC.filter(function(m){ return m.compte_id === cc.id; })
-    });
-  });
-
-  ARRHES = arrhes.map(function(ba){
-    return Object.assign({}, ba, {
-      mouvements: mvtsArr.filter(function(m){ return m.arrhes_id === ba.id; })
-    });
-  });
+  var res = await rpc('portail_donnees', { p_token: JETON });
+  if(!res || !res.ok){
+    throw new Error((res && res.erreur) || 'Session expirée.');
+  }
+  CLIENT    = res.client   || CLIENT;
+  COMPTES   = res.comptes  || [];
+  COMMANDES = res.commandes || [];
 }
 
-// ─── DASHBOARD ─────────────────────────────────────────────
+/** Reprise de session au rechargement de la page. */
+async function reprendreSession(){
+  var jeton = null;
+  try { jeton = sessionStorage.getItem(CLE_JETON); } catch(e){}
+
+  // Le balisage pose display:none sur les deux pages : sans jeton valide, il
+  // faut afficher explicitement l'écran de connexion, sinon la page reste noire.
+  if(!jeton){ showPage('page-login'); return; }
+
+  JETON = jeton;
+  showLoading(true);
+  try {
+    await chargerDonnees();
+    afficherDashboard();
+  } catch(e){
+    // Jeton expiré ou révoqué : on repart proprement de l'écran de connexion.
+    JETON = null;
+    try { sessionStorage.removeItem(CLE_JETON); } catch(_){}
+    showLoading(false);
+    showPage('page-login');
+  }
+}
+
+// ─── Tableau de bord ───────────────────────────────────────
 
 function afficherDashboard(){
   showLoading(false);
-  document.getElementById('dash-client-nom').textContent = CLIENT.nom;
+  document.getElementById('dash-client-nom').textContent = CLIENT.nom || '';
   renderComptes();
-  renderArrhes();
+  renderCommandes();
   showPage('page-dashboard');
 }
 
@@ -208,63 +208,67 @@ function renderComptes(){
   }
 
   el.innerHTML = COMPTES.map(function(cc){
-    var pct = cc.objectif ? Math.min(100, Math.round(cc.solde / cc.objectif * 100)) : 0;
-    var derniers = (cc.mouvements||[]).slice(-5).reverse();
-
-    var mvtHtml = derniers.length ? derniers.map(function(m){
-      var cls = (m.type==='retrait') ? 'mvt-amount retrait' : 'mvt-amount';
-      var signe = (m.type==='retrait') ? '-' : '+';
+    var mvts = (cc.mouvements || []).slice(0, 5);
+    var mvtHtml = mvts.length ? mvts.map(function(m){
+      var retrait = (m.type === 'retrait');
       return '<div class="mvt-item">' +
-        '<div><div class="mvt-date">'+fmtDate(m.date)+'</div><div class="mvt-note">'+(m.note||m.type||'')+'</div></div>' +
-        '<div class="'+cls+'">'+signe+' '+fmt(m.montant)+'</div>' +
+        '<div><div class="mvt-date">' + fmtDate(m.date) + '</div>' +
+        '<div class="mvt-note">' + esc(m.note || (retrait ? 'Achat en boutique' : 'Dépôt')) + '</div></div>' +
+        '<div class="' + (retrait ? 'mvt-amount retrait' : 'mvt-amount') + '">' +
+        (retrait ? '−' : '+') + ' ' + fmt(m.montant) + '</div>' +
       '</div>';
     }).join('') : '<div style="font-size:12px;color:var(--sub);text-align:center;padding:8px">Aucun mouvement</div>';
 
     return '<div class="cc-card">' +
       '<div class="cc-card-header">' +
-        '<div><div class="cc-solde-label">Solde épargne</div><div class="cc-solde">'+fmt(cc.solde)+'</div></div>' +
-        '<div>' + (cc.actif ? '<span class="badge badge-green">Actif</span>' : '<span class="badge badge-red">Clôturé</span>') + '</div>' +
+        '<div><div class="cc-solde-label">Solde épargne</div>' +
+        '<div class="cc-solde">' + fmt(cc.solde) + '</div></div>' +
+        '<div>' + (cc.actif ? '<span class="badge badge-green">Actif</span>'
+                            : '<span class="badge badge-red">Clôturé</span>') + '</div>' +
       '</div>' +
-      (cc.objectif ? '<div class="cc-objet">Objectif : '+fmt(cc.objectif)+(cc.objetCible?' — '+cc.objetCible:'')+'</div>' : '') +
-      (cc.objectif ? '<div class="progress-bar"><div class="progress-fill" style="width:'+pct+'%"></div></div>' +
-        '<div class="progress-label"><span>'+pct+'%</span><span>'+fmt(cc.objectif)+'</span></div>' : '') +
       '<div class="mvt-list">' + mvtHtml + '</div>' +
-      (cc.actif ? '<button class="btn-depot" onclick="ouvrirDepot(\''+cc.id+'\')">+ Effectuer un dépôt</button>' : '') +
+      (cc.actif ? '<button class="btn-depot" onclick="ouvrirDepot(\'' + escJs(cc.id) + '\')">+ Effectuer un dépôt</button>' : '') +
     '</div>';
   }).join('');
 }
 
-function renderArrhes(){
+/**
+ * Commandes en cours : les ventes dont il reste quelque chose à payer.
+ * L'ancienne table `bijoux_arrhes` n'alimente plus rien — le suivi se fait
+ * depuis le journal des ventes.
+ */
+function renderCommandes(){
   var el = document.getElementById('arrhes-list');
-  if(!ARRHES.length){
-    el.innerHTML = '<div class="empty-state"><div class="icon">💍</div><div>Aucun bijou réservé</div></div>';
+  if(!COMMANDES.length){
+    el.innerHTML = '<div class="empty-state"><div class="icon">💍</div><div>Aucune commande en cours</div></div>';
     return;
   }
 
-  el.innerHTML = ARRHES.map(function(ba){
-    var pct = ba.prix_total ? Math.min(100, Math.round(ba.arrhes_verse / ba.prix_total * 100)) : 0;
-    var statutBadge = {en_cours:'badge-or', solde:'badge-green', annule:'badge-red'}[ba.statut] || 'badge-or';
-    var statutLabel = {en_cours:'En cours', solde:'Soldé', annule:'Annulé'}[ba.statut] || ba.statut;
+  el.innerHTML = COMMANDES.map(function(v){
+    var montant = v.montant || 0;
+    var verse   = v.acompte || 0;
+    var restant = v.restant || 0;
+    var pct = montant > 0 ? Math.min(100, Math.round(verse / montant * 100)) : 0;
 
     return '<div class="arr-card">' +
-      '<div class="arr-article">'+(ba.article||ba.description||'Bijou réservé')+'</div>' +
+      '<div class="arr-article">' + esc(v.description || 'Commande') + '</div>' +
       '<div class="arr-meta">' +
-        '<span>📅 '+fmtDate(ba.date)+'</span>' +
-        (ba.date_echeance ? '<span>⏰ Échéance: '+fmtDate(ba.date_echeance)+'</span>' : '') +
-        '<span class="badge '+statutBadge+'">'+statutLabel+'</span>' +
+        '<span>📅 ' + fmtDate(v.date) + '</span>' +
+        (v.num_facture ? '<span>🧾 ' + esc(v.num_facture) + '</span>' : '') +
+        '<span class="badge badge-or">En cours</span>' +
       '</div>' +
       '<div class="amounts-row">' +
-        '<div class="amount-box"><div class="val">'+fmt(ba.prix_total)+'</div><div class="lbl">Prix total</div></div>' +
-        '<div class="amount-box"><div class="val">'+fmt(ba.arrhes_verse)+'</div><div class="lbl">Versé</div></div>' +
-        '<div class="amount-box"><div class="val" style="color:'+(ba.restant_du>0?'#f44336':'#4caf50')+'">'+fmt(ba.restant_du)+'</div><div class="lbl">Restant</div></div>' +
+        '<div class="amount-box"><div class="val">' + fmt(montant) + '</div><div class="lbl">Prix total</div></div>' +
+        '<div class="amount-box"><div class="val">' + fmt(verse) + '</div><div class="lbl">Versé</div></div>' +
+        '<div class="amount-box"><div class="val" style="color:#f44336">' + fmt(restant) + '</div><div class="lbl">Restant</div></div>' +
       '</div>' +
-      '<div class="progress-bar"><div class="progress-fill" style="width:'+pct+'%"></div></div>' +
-      '<div class="progress-label"><span>'+pct+'% versé</span><span>'+fmt(ba.prix_total)+'</span></div>' +
+      '<div class="progress-bar"><div class="progress-fill" style="width:' + pct + '%"></div></div>' +
+      '<div class="progress-label"><span>' + pct + '% versé</span><span>' + fmt(montant) + '</span></div>' +
     '</div>';
   }).join('');
 }
 
-// ─── DÉPÔT ─────────────────────────────────────────────────
+// ─── Dépôt ─────────────────────────────────────────────────
 
 function ouvrirDepot(compteId){
   document.getElementById('depot-compte-id').value = compteId;
@@ -277,7 +281,7 @@ function ouvrirDepot(compteId){
 function setMontantDepot(val){
   document.getElementById('depot-montant').value = val;
   document.querySelectorAll('.qa-btn').forEach(function(b){
-    b.classList.toggle('active', parseInt(b.textContent.replace(/\s/g,'')) === val);
+    b.classList.toggle('active', parseInt(b.textContent.replace(/\s/g,''), 10) === val);
   });
 }
 
@@ -287,33 +291,35 @@ function clearQA(){
 
 async function confirmerDepot(){
   var compteId = document.getElementById('depot-compte-id').value;
-  var montant  = parseFloat(document.getElementById('depot-montant').value) || 0;
-  var note     = document.getElementById('depot-note').value.trim() || 'Dépôt client';
+  var montant  = parseInt(document.getElementById('depot-montant').value, 10) || 0;
+  var note     = document.getElementById('depot-note').value.trim();
 
   if(montant < 500){ showToast('Montant minimum : 500 FCFA'); return; }
-
-  var cc = COMPTES.find(function(c){ return c.id === compteId; });
-  if(!cc){ showToast('Compte introuvable'); return; }
-
-  var d = today();
-  var nvSolde = (cc.solde || 0) + montant;
 
   showLoading(true);
   closeModal('modal-depot');
 
   try {
-    // Ajouter le mouvement
-    await supaPost('mouvements_cc', { compte_id: compteId, date: d, type: 'depot', montant: montant, note: note });
-    // Mettre à jour le solde
-    await supaPatch('comptes_clients', 'id=eq.'+encodeURIComponent(compteId), { solde: nvSolde });
+    // Le serveur revérifie le montant et que le compte appartient bien à la
+    // cliente connectée : un montant trafiqué côté navigateur ne passe pas.
+    var res = await rpc('portail_depot', {
+      p_token: JETON, p_compte: compteId,
+      p_montant: montant, p_note: note || null
+    });
 
-    // Mettre à jour localement
-    cc.solde = nvSolde;
-    if(!cc.mouvements) cc.mouvements = [];
-    cc.mouvements.push({ compte_id: compteId, date: d, type: 'depot', montant: montant, note: note });
+    if(!res || !res.ok){
+      showLoading(false);
+      showToast((res && res.erreur) || 'Dépôt refusé.');
+      if(res && /session/i.test(res.erreur||'')) doLogout();
+      return;
+    }
 
-    LAST_DEPOT = { compteId: compteId, montant: montant, note: note, date: d, nvSolde: nvSolde, cc: cc };
+    DERNIER_DEPOT = {
+      montant: montant, note: note, date: today(),
+      nouveauSolde: res.nouveau_solde
+    };
 
+    await chargerDonnees();   // on relit le serveur plutôt que de deviner l'état
     renderComptes();
     showLoading(false);
     afficherRecu();
@@ -324,50 +330,43 @@ async function confirmerDepot(){
   }
 }
 
-// ─── REÇU ──────────────────────────────────────────────────
+// ─── Reçu ──────────────────────────────────────────────────
 
 function afficherRecu(){
-  if(!LAST_DEPOT) return;
-  var d = LAST_DEPOT;
-  var cc = d.cc;
-  var pct = cc.objectif ? Math.min(100, Math.round(d.nvSolde / cc.objectif * 100)) : null;
+  if(!DERNIER_DEPOT) return;
+  var d = DERNIER_DEPOT;
 
-  var rows = [
+  var lignes = [
     ['Client',         CLIENT.nom],
     ['Date',           fmtDate(d.date)],
     ['Montant déposé', fmt(d.montant)],
-    ['Nouveau solde',  fmt(d.nvSolde)],
+    ['Nouveau solde',  fmt(d.nouveauSolde)]
   ];
-  if(cc.objectif) rows.push(['Progression', pct + '% de ' + fmt(cc.objectif)]);
-  if(cc.objetCible) rows.push(['Objectif', cc.objetCible]);
-  if(d.note) rows.push(['Note', d.note]);
+  if(d.note) lignes.push(['Note', d.note]);
 
-  var html = rows.map(function(r, i){
-    return '<tr class="'+(i===rows.length-1?'':'')+'"><td>'+r[0]+'</td><td>'+r[1]+'</td></tr>';
+  document.getElementById('recu-table').innerHTML = lignes.map(function(l){
+    return '<tr><td>' + esc(l[0]) + '</td><td>' + esc(l[1]) + '</td></tr>';
   }).join('');
 
-  document.getElementById('recu-table').innerHTML = html;
-
-  var btnEmail = document.getElementById('btn-send-email');
-  btnEmail.style.display = CLIENT.email ? '' : 'none';
+  var btn = document.getElementById('btn-send-email');
+  if(btn) btn.style.display = CLIENT.email ? '' : 'none';
 
   openModal('modal-recu');
 }
 
 async function envoyerRecu(){
-  if(!LAST_DEPOT){ return; }
-  if(!CLIENT.email){ showToast('Aucun email associé à ce compte.'); return; }
+  if(!DERNIER_DEPOT) return;
+  if(!CLIENT.email){ showToast('Aucun email associé à votre compte.'); return; }
 
+  // EmailJS se configure depuis le navigateur de l'administrateur : sur
+  // l'appareil d'une cliente, cette configuration est absente. L'envoi de
+  // reçus devra passer par le serveur (voir ARCHITECTURE.md).
   var conf = {};
-  try { conf = JSON.parse(localStorage.getItem('marjan_emailjs')||'{}'); } catch(e){}
+  try { conf = JSON.parse(localStorage.getItem('marjan_emailjs') || '{}'); } catch(e){}
   if(!conf.serviceId || !conf.templateId || !conf.publicKey){
-    showToast('EmailJS non configuré (demander à l\'admin).');
+    showToast('L\'envoi par email n\'est pas disponible pour le moment.');
     return;
   }
-
-  var d = LAST_DEPOT;
-  var cc = d.cc;
-  var pct = cc.objectif ? Math.min(100, Math.round(d.nvSolde / cc.objectif * 100)) : 0;
 
   var btn = document.getElementById('btn-send-email');
   btn.textContent = '⏳ Envoi…';
@@ -376,15 +375,12 @@ async function envoyerRecu(){
   try {
     emailjs.init(conf.publicKey);
     await emailjs.send(conf.serviceId, conf.templateId, {
-      to_email:     CLIENT.email,
-      to_name:      CLIENT.nom,
-      depot_montant: d.montant.toLocaleString('fr-FR'),
-      nouveau_solde: d.nvSolde.toLocaleString('fr-FR'),
-      objectif:      cc.objectif ? cc.objectif.toLocaleString('fr-FR') : '—',
-      progression:   pct + '%',
-      bijou_cible:   cc.objetCible || '—',
-      date_depot:    fmtDate(d.date),
-      note_depot:    d.note || ''
+      to_email:      CLIENT.email,
+      to_name:       CLIENT.nom,
+      depot_montant: Number(DERNIER_DEPOT.montant).toLocaleString('fr-FR'),
+      nouveau_solde: Number(DERNIER_DEPOT.nouveauSolde).toLocaleString('fr-FR'),
+      date_depot:    fmtDate(DERNIER_DEPOT.date),
+      note_depot:    DERNIER_DEPOT.note || ''
     });
     showToast('✓ Reçu envoyé à ' + CLIENT.email);
     closeModal('modal-recu');
@@ -397,20 +393,20 @@ async function envoyerRecu(){
   }
 }
 
-// ─── LOGOUT ────────────────────────────────────────────────
+// ─── Déconnexion ───────────────────────────────────────────
 
-function doLogout(){
-  CLIENT = null; COMPTES = []; ARRHES = []; LAST_DEPOT = null;
+async function doLogout(){
+  var jeton = JETON;
+  JETON = null; CLIENT = null; COMPTES = []; COMMANDES = []; DERNIER_DEPOT = null;
+  try { sessionStorage.removeItem(CLE_JETON); } catch(e){}
+
   clearPin();
   document.getElementById('login-tel').value = '';
-  document.getElementById('login-error').style.display = 'none';
+  erreurLogin('');
   showPage('page-login');
+
+  // Invalide le jeton côté serveur : sans cela il resterait valable deux heures.
+  if(jeton){ try { await rpc('portail_logout', { p_token: jeton }); } catch(e){} }
 }
 
-// ─── INIT ──────────────────────────────────────────────────
-
-window.addEventListener('DOMContentLoaded', function(){
-  showLoading(false);
-  showPage('page-login');
-  document.getElementById('login-tel').focus();
-});
+document.addEventListener('DOMContentLoaded', reprendreSession);
