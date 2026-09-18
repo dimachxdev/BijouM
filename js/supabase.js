@@ -47,8 +47,11 @@ function _fetchTimeout(url, opts, ms) {
 }
 
 const _supa = {
-  async select(table, filters) {
-    var url = SUPABASE_URL + '/rest/v1/' + table + '?select=*';
+  // `colonnes` permet de restreindre la projection. Nécessaire pour `clients`,
+  // dont la colonne `pin_hash` n'est lisible par personne : un `select=*`
+  // échouerait sur un refus de privilège.
+  async select(table, filters, colonnes) {
+    var url = SUPABASE_URL + '/rest/v1/' + table + '?select=' + (colonnes || '*');
     if (filters) url += '&' + filters;
     var r = await _fetchTimeout(url, { headers: H() });
     if (!r.ok) throw new Error('SELECT ' + table + ': ' + r.status + ' ' + await r.text());
@@ -98,7 +101,10 @@ async function chargerDonnees() {
     // `utilisateurs` n'est plus chargée : l'identité vit dans auth.users et le
     // rattachement dans `membres`, lus à la demande par renderGestionComptes().
     var res = await Promise.all([
-      _supa.select('clients'),
+      // Colonnes listées explicitement : `select=*` échouerait, la lecture de
+      // `pin_hash` étant refusée même aux administrateurs. `a_un_pin` suffit
+      // pour savoir si la cliente a accès au portail.
+      _supa.select('clients', null, 'id,nom,tel,email,adresse,a_un_pin'),
       _supa.select('ventes',          'order=date.desc'),
       _supa.select('stock'),
       _supa.select('sorties',         'order=date.desc'),
@@ -889,9 +895,25 @@ async function saveStockBatch(items) {
   }), reloadStock);
 }
 
+/**
+ * Pose ou retire le code PIN d'accès au portail.
+ * Le code est haché par PostgreSQL ; il n'est jamais stocké en clair, ni
+ * renvoyé. Passer une chaîne vide retire l'accès au portail.
+ */
+async function definirPinClient(clientId, pin) {
+  var r = await fetch(SUPABASE_URL + '/rest/v1/rpc/definir_pin_client', {
+    method: 'POST', headers: H(),
+    body: JSON.stringify({ p_client_id: clientId, p_pin: pin || '' })
+  });
+  if (!r.ok) throw new Error('Enregistrement du code refusé (' + r.status + ').');
+  return r.json();
+}
+
 async function saveClient(c) {
+  // Le code PIN ne passe plus par ici : la colonne `clients.pin` a disparu au
+  // profit d'une empreinte bcrypt, posée par la fonction serveur
+  // definir_pin_client(). Continuer à l'envoyer ferait échouer l'écriture.
   var row = { id:c.id, nom:c.nom, tel:c.tel||null, email:c.email||null, adresse:c.adresse||null };
-  if(c.pin !== undefined) row.pin = c.pin || null;
   await _writeAndRefresh('clients', row, async function() {
     await reloadClients();
     await saveCompteurs(['cl']);
@@ -934,7 +956,10 @@ async function saveDecaissement(d) {
   await _writeAndRefresh('decaissements', {
     id:d.id, date:d.date, categorie:d.categorie||null,
     description:d.description||null, montant:d.montant||0,
-    saisi_par:d.saisiPar||null
+    saisi_par:d.saisiPar||null,
+    // Sans ce rattachement, l'onglet Reprises ne retrouve pas le décaissement
+    // déjà créé et réaffiche indéfiniment le bouton « Enregistrer ».
+    origine_type:d.origineType||null, origine_id:d.origineId||null
   }, async function() {
     await reloadDecaissements();
     await saveCompteurs(['d']);

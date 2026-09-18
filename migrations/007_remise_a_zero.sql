@@ -1,0 +1,81 @@
+-- ============================================================================
+-- KAYOR — 007 : REMISE À ZÉRO DES DONNÉES D'ESSAI (2026-09-18)
+-- ----------------------------------------------------------------------------
+-- Les données mêlaient des essais (Test Client, montants à 1 F) et des
+-- séquelles de bugs corrigés depuis :
+--   * V-0030, V-0032, V-0035 : acompte ET restant à zéro, laissés par
+--     l'ancien remboursement qui effaçait les deux ;
+--   * V-0036 : marquée annulée, son décaissement de remboursement ayant été
+--     remplacé manuellement par une dépense fournisseur ;
+--   * AC-0006 et D-0009 : reprise sans sortie de caisse, et décaissement
+--     pointant vers une reprise supprimée.
+--
+-- Plutôt que de corriger ligne à ligne un jeu de données d'essai, tout a été
+-- remis à zéro. ÉTAT : appliquée.
+-- ============================================================================
+
+-- ============================================================================
+-- 1. ARCHIVE — effectuée AVANT toute suppression
+-- ============================================================================
+-- Schéma `archive`, sans aucun privilège pour anon ni authenticated : invisible
+-- depuis l'API REST, lisible seulement depuis l'éditeur SQL du tableau de bord.
+--
+--   archive.ventes_20260918            17 lignes
+--   archive.decaissements_20260918      4
+--   archive.reprises_20260918           1
+--   archive.comptes_clients_20260918    3
+--   archive.mouvements_cc_20260918     13
+--   archive.sorties_20260918            9
+--   archive.bijoux_arrhes_20260918      5
+--   archive.mouvements_arrhes_20260918  4
+--   archive.connexions_20260918        72
+--   archive.clients_20260918            4
+--   archive.stock_20260918              8
+--   archive.compteurs_20260918         14
+
+-- ============================================================================
+-- 2. SUPPRESSION
+-- ============================================================================
+-- Effacé   : ventes, décaissements, reprises, comptes épargne et leurs
+--            mouvements, sorties, arrhes, connexions, clients
+-- Conservé : stock (8 articles), boutique, membres, comptes Auth
+-- Compteurs remis à zéro sauf `stk`, l'inventaire n'ayant pas été touché.
+
+-- ============================================================================
+-- 3. RESTAURATION — si vous changez d'avis
+-- ============================================================================
+-- Remettre une table dans son état d'avant :
+--
+--   begin;
+--   delete from public.ventes;
+--   insert into public.ventes select * from archive.ventes_20260918;
+--   commit;
+--
+-- Respecter l'ordre des dépendances si vous restaurez tout :
+--   clients, comptes_clients, ventes, décaissements, reprises, sorties
+--   puis mouvements_cc, bijoux_arrhes, mouvements_arrhes, connexions
+--
+-- Penser à remettre les compteurs, sinon les prochains identifiants
+-- écraseraient des lignes restaurées :
+--
+--   delete from public.compteurs;
+--   insert into public.compteurs select * from archive.compteurs_20260918;
+
+-- ============================================================================
+-- 4. SUPPRESSION DÉFINITIVE DE L'ARCHIVE
+-- ============================================================================
+-- À ne faire qu'une fois la mise en service confirmée et sans regret :
+--
+--   drop schema archive cascade;
+
+-- ============================================================================
+-- 5. CÔTÉ APPLICATION
+-- ============================================================================
+-- Les tableaux de démonstration de js/data.js (INITIAL_VENTES, INITIAL_CLIENTS,
+-- INITIAL_STOCK…) ont été vidés. Ils repeuplaient l'écran de fausses ventes
+-- sur tout navigateur dont le cache local était vide, ce qui aurait donné
+-- l'impression d'une remise à zéro ratée.
+--
+-- Chaque poste doit vider son cache local une fois : bouton « Réinitialiser
+-- les données locales » sur l'écran de connexion, ou Ctrl+Shift+R.
+-- ============================================================================

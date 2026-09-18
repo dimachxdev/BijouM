@@ -1430,8 +1430,10 @@ function renderClients(f=''){
   const qn2=normalizeStr(q);const data=STATE.clients.filter(c=>c.nom.toLowerCase().includes(q)||normalizeStr(c.tel||'').includes(qn2)||(c.email||'').toLowerCase().includes(q));
   document.getElementById('clients-count-label').textContent=`${STATE.clients.length} clients`;
   const stats={};STATE.ventes.forEach(v=>{if(!stats[v.client])stats[v.client]={total:0,restant:0,nb:0,derniere:''};stats[v.client].total+=(v.montant||0);stats[v.client].restant+=(v.restant||0);stats[v.client].nb+=1;if(!stats[v.client].derniere||v.date>stats[v.client].derniere)stats[v.client].derniere=v.date;});
-  const localPins=loadLS('marjan_clients_pin',{});
-  document.getElementById('clients-body').innerHTML=data.map(c=>{const s=stats[c.nom]||{total:0,restant:0,nb:0,derniere:''};const t=tier(s.total);const d=s.derniere===today()?"Aujourd'hui":s.derniere?fmtDate(s.derniere):'—';const hasPin=!!(c.pin||localPins[c.id]);const pinCell=isAdmin()?`<td>${hasPin?`<span style="font-size:11px;color:var(--success-text);cursor:pointer" onclick="modifierPinClient('${c.id}')">🔑 Actif</span>`:`<button onclick="modifierPinClient('${c.id}')" style="font-size:11px;padding:3px 8px;border-radius:4px;background:transparent;border:1px solid var(--border-light);color:var(--text-secondary);cursor:pointer">+ PIN</button>`}</td>`:'<td>—</td>';return`<tr><td><div style="display:flex;align-items:center;gap:10px"><div style="width:32px;height:32px;border-radius:50%;background:var(--info-bg);color:var(--info-text);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:600;flex-shrink:0">${ini(c.nom)}</div><div><div style="font-size:13px;font-weight:500">${c.nom}</div><div style="font-size:11px;color:var(--text-tertiary)">${c.tel}</div></div></div></td><td>${c.tel}</td><td><strong>${fmt(s.total)}</strong></td><td>${s.restant>0?`<span class="stock-badge stock-low">${fmt(s.restant)}</span>`:'<span style="color:var(--success-text);font-size:12px">Soldé</span>'}</td><td>${s.nb}</td><td><span class="tier-badge ${t.cls}">${t.label}</span></td><td style="font-size:12px;color:var(--text-secondary)">${d}</td>${pinCell}</tr>`;}).join('');
+  // L'existence d'un code vient du serveur (colonne a_un_pin) : l'empreinte
+  // elle-même n'est lisible par personne, et l'ancien miroir localStorage
+  // `marjan_clients_pin` conservait les codes en clair sur le poste.
+  document.getElementById('clients-body').innerHTML=data.map(c=>{const s=stats[c.nom]||{total:0,restant:0,nb:0,derniere:''};const t=tier(s.total);const d=s.derniere===today()?"Aujourd'hui":s.derniere?fmtDate(s.derniere):'—';const hasPin=(c.a_un_pin===true||c.aUnPin===true);const pinCell=isAdmin()?`<td>${hasPin?`<span style="font-size:11px;color:var(--success-text);cursor:pointer" onclick="modifierPinClient('${c.id}')">🔑 Actif</span>`:`<button onclick="modifierPinClient('${c.id}')" style="font-size:11px;padding:3px 8px;border-radius:4px;background:transparent;border:1px solid var(--border-light);color:var(--text-secondary);cursor:pointer">+ PIN</button>`}</td>`:'<td>—</td>';return`<tr><td><div style="display:flex;align-items:center;gap:10px"><div style="width:32px;height:32px;border-radius:50%;background:var(--info-bg);color:var(--info-text);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:600;flex-shrink:0">${ini(c.nom)}</div><div><div style="font-size:13px;font-weight:500">${c.nom}</div><div style="font-size:11px;color:var(--text-tertiary)">${c.tel}</div></div></div></td><td>${c.tel}</td><td><strong>${fmt(s.total)}</strong></td><td>${s.restant>0?`<span class="stock-badge stock-low">${fmt(s.restant)}</span>`:'<span style="color:var(--success-text);font-size:12px">Soldé</span>'}</td><td>${s.nb}</td><td><span class="tier-badge ${t.cls}">${t.label}</span></td><td style="font-size:12px;color:var(--text-secondary)">${d}</td>${pinCell}</tr>`;}).join('');
 }
 document.getElementById('client-search')?.addEventListener('input',function(){renderClients(this.value);});
 document.getElementById('cc-search')?.addEventListener('input',function(){renderComptesClients(this.value);});
@@ -1445,27 +1447,40 @@ function ajouterClient(){
   if(pin&&pin.length!==4){showToast('⚠ Le PIN doit faire exactement 4 chiffres.');return;}
   const id=nextId('CL','cl');
   var cliObj={id,nom,tel,email,adresse};
-  if(pin){ cliObj.pin=pin; const pins=loadLS('marjan_clients_pin',{}); pins[id]=pin; localStorage.setItem('marjan_clients_pin',JSON.stringify(pins)); }
-  STATE.clients.unshift(cliObj);save();saveClient(cliObj);renderClients();closeModal('modal-add-client');
+  STATE.clients.unshift(cliObj);save();renderClients();closeModal('modal-add-client');
   ['c-nom','c-tel','c-email','c-adresse'].forEach(x=>document.getElementById(x).value='');
   if(document.getElementById('c-pin')) document.getElementById('c-pin').value='';
-  showToast(`✓ Client "${nom}" ajouté.${pin?' Portail activé.':''}`);
+
+  // La fiche d'abord, le code ensuite : celui-ci est haché par le serveur et
+  // ne transite ni par localStorage ni par la table en clair.
+  saveClient(cliObj)
+    .then(function(){ return pin ? definirPinClient(id, pin) : null; })
+    .then(function(){
+      renderClients();
+      showToast('✓ Cliente « '+nom+' » ajoutée.'+(pin?' Accès portail activé.':''));
+    })
+    .catch(function(e){ showToast('⚠ '+e.message); });
 }
 
 function modifierPinClient(clientId){
   if(!isAdmin()){showToast('⛔ Admin seulement.');return;}
   const client=STATE.clients.find(c=>c.id===clientId);
-  if(!client){showToast('Client introuvable.');return;}
-  const pin=prompt(`PIN portail pour ${client.nom}\n(4 chiffres, laisser vide pour désactiver)`,'');
-  if(pin===null) return;
-  const pinClean=pin.replace(/\D/g,'');
-  if(pin!==''&&pinClean.length!==4){showToast('⚠ Le PIN doit faire 4 chiffres.');return;}
-  client.pin=pinClean||null;
-  const pins=loadLS('marjan_clients_pin',{});
-  if(pinClean){pins[clientId]=pinClean;}else{delete pins[clientId];}
-  localStorage.setItem('marjan_clients_pin',JSON.stringify(pins));
-  save();saveClient(client);renderClients();
-  showToast(pinClean?`✓ PIN portail défini pour ${client.nom}.`:`PIN portail supprimé pour ${client.nom}.`);
+  if(!client){showToast('Cliente introuvable.');return;}
+
+  const saisie=prompt(`Code portail pour ${client.nom}\n(4 chiffres, laisser vide pour retirer l'accès)`,'');
+  if(saisie===null) return;
+  const pin=saisie.replace(/\D/g,'');
+  if(saisie!==''&&pin.length!==4){showToast('⚠ Le code doit faire 4 chiffres.');return;}
+
+  definirPinClient(clientId, pin)
+    .then(function(res){
+      if(res && res.ok===false){ showToast('⛔ '+res.erreur); return; }
+      client.aUnPin = !!pin;          // reflet local, l'empreinte reste au serveur
+      save(); renderClients();
+      showToast(pin?`✓ Accès portail activé pour ${client.nom}.`
+                   :`Accès portail retiré pour ${client.nom}.`);
+    })
+    .catch(function(e){ showToast('⚠ '+e.message); });
 }
 
 // ============================================
