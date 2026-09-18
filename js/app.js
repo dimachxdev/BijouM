@@ -17,7 +17,7 @@ const KAYOR_LOGO_B64 = 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAgAAZABkAAD/7AARR
  * qui « peut tout faire » alors que les droits sont restreints, c'est presque
  * toujours ça.
  */
-const APP_VERSION = '2026-09-18-operateur';
+const APP_VERSION = '2026-09-18-caisse';
 
 function loadLS(k, fb) { try { const s=localStorage.getItem(k); return s?JSON.parse(s):fb; } catch { return fb; } }
 
@@ -207,6 +207,25 @@ function peutAcceder(section) {
   if (section === 'profil_boutique') return role === 'proprietaire';
   const perms = PERM_MAP[role] || [];
   return perms.includes('all') || perms.includes(section);
+}
+
+/**
+ * Qui voit l'encaisse du magasin.
+ *
+ * Aligné sur le rapport journalier, déjà réservé aux administrateurs pour la
+ * même raison. Ce n'est pas qu'un choix d'affichage : la migration 008 ferme
+ * aussi la lecture des décaissements côté serveur, donc un vendeur qui
+ * interroge l'API reçoit une liste vide.
+ */
+function peutVoirCaisse() { return isAdmin(); }
+
+/** Retire de l'écran tout ce qui révèle l'encaisse, si le rôle n'y a pas droit. */
+function appliquerVisibiliteCaisse() {
+  var autorise = peutVoirCaisse();
+  ['carte-solde-caisse', 'cumul-solde-caisse', 'btn-export-rapport'].forEach(function (id) {
+    var el = document.getElementById(id);
+    if (el) el.style.display = autorise ? '' : 'none';
+  });
 }
 
 function isAdmin() {
@@ -526,6 +545,7 @@ function ouvrirSession(profil) {
   document.getElementById('login-screen').style.display = 'none';
   document.getElementById('main-app').style.display     = 'block';
   appliquerIdentiteBoutique();
+  appliquerVisibiliteCaisse();
 
   const role = ROLES[profil.role] || ROLES.vendeur;
   document.getElementById('user-avatar').textContent =
@@ -2066,7 +2086,7 @@ function renderAchatsClients(){
   const montantSansSortie = sansSortie.reduce((s,a)=>s+(a.prixPropose||0),0);
   const bandeau = document.getElementById('ac-alerte-caisse');
   if(bandeau){
-    if(sansSortie.length){
+    if(sansSortie.length && peutVoirCaisse()){
       bandeau.style.display='flex';
       bandeau.innerHTML=`<span>⚠</span><span>${sansSortie.length} reprise${sansSortie.length>1?'s':''} sans décaissement — <strong>${fmt(montantSansSortie)}</strong> payé${sansSortie.length>1?'s':''} aux clientes mais pas encore déduit${sansSortie.length>1?'s':''} de la caisse.</span>`;
     } else {
@@ -2083,6 +2103,9 @@ function decaissementDeLaPiece(type, id){
 }
 
 function celluleSortieCaisse(a){
+  // Un rôle sans accès à la caisse ne lit aucun décaissement : afficher
+  // « + Enregistrer » lui ferait croire que rien n'a été payé.
+  if(!peutVoirCaisse()) return '<span style="color:var(--text-tertiary);font-size:12px">—</span>';
   const dec = decaissementDeLaPiece('reprise', a.id);
   if(dec){
     return `<span class="stock-badge stock-ok" title="Décaissement ${esc(dec.id)} du ${fmtDate(dec.date)}">✓ ${fmt(dec.montant)}</span>`;
@@ -2225,6 +2248,7 @@ function supprimerAchatClient(id){
 function downloadFile(f,c,t='text/plain'){const b=new Blob(['\uFEFF'+c],{type:t+';charset=utf-8;'});const u=URL.createObjectURL(b);const a=document.createElement('a');a.href=u;a.download=f;a.click();URL.revokeObjectURL(u);}
 
 function exporterRapport(){
+  if (!peutVoirCaisse()) { showToast('⛔ Rapport réservé aux administrateurs.'); return; }
   const now=new Date();
   const _b=boutiqueInfos();
   const caM       =STATE.ventes.filter(v=>isMois(v.date)).reduce((s,v)=>s+(v.montant||0),0);

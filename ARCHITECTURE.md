@@ -213,6 +213,7 @@ migration 001 — et qui figeait la numérotation en silence.
 | `migrations/005_invitations.sql` | Invitations : un compte ne rejoint une boutique que sur invitation d'un admin |
 | `migrations/002_rls_policies.sql` | RLS sur 14 tables, révocation d'`anon`, Realtime filtré |
 | `migrations/003_portail_client.sql` | PIN en bcrypt, RPC de connexion, blocage après 5 échecs |
+| `migrations/008_caisse_reservee.sql` | Lecture des décaissements réservée à proprietaire + admin : l'encaisse n'est plus lisible depuis le comptoir |
 
 ### Ordre d'exécution
 

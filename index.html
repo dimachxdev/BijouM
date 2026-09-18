@@ -196,12 +196,12 @@
     <section class="section active" id="dashboard">
       <div class="page-header">
         <div><h1 class="page-title">Tableau de bord</h1><p class="page-sub" id="dashboard-date"></p></div>
-        <button class="btn btn-secondary" onclick="exporterRapport()">⬇ Rapport</button>
+        <button class="btn btn-secondary" id="btn-export-rapport" onclick="exporterRapport()">⬇ Rapport</button>
       </div>
       <div class="metrics-grid">
         <div class="metric-card"><div class="metric-label">CA du mois</div><div class="metric-value" id="metric-ca">—</div><span class="metric-badge badge-info" id="metric-ca-nb">—</span></div>
         <div class="metric-card"><div class="metric-label">Restants dus</div><div class="metric-value" id="metric-restants">—</div><span class="metric-badge badge-warn" id="metric-nb-restants">—</span></div>
-        <div class="metric-card"><div class="metric-label">💰 Solde net caisse</div><div class="metric-value" id="metric-decaiss">—</div><span class="metric-badge badge-info" id="metric-nb-decaiss">—</span></div>
+        <div class="metric-card" id="carte-solde-caisse"><div class="metric-label">💰 Solde net caisse</div><div class="metric-value" id="metric-decaiss">—</div><span class="metric-badge badge-info" id="metric-nb-decaiss">—</span></div>
         <div class="metric-card"><div class="metric-label">Arrhes &amp; Commandes</div><div class="metric-value" id="metric-arrhes">—</div><span class="metric-badge badge-warn" id="metric-nb-arrhes">—</span></div>
       </div>
       <div class="two-col">
@@ -248,8 +248,8 @@
       <div class="cumul-bar">
         <span class="cumul-label">Total ventes :</span><span class="cumul-value" id="montant-cumul">—</span>
         <span class="cumul-sep">|</span>
-        <span class="cumul-label">💰 Solde net caisse :</span><span class="cumul-value" id="montant-encaisse">—</span>
-        <span class="cumul-sep">|</span>
+        <span id="cumul-solde-caisse"><span class="cumul-label">💰 Solde net caisse :</span><span class="cumul-value" id="montant-encaisse">—</span>
+        <span class="cumul-sep">|</span></span>
         <span class="cumul-label">⏳ Restants :</span><span class="cumul-warn" id="total-restants">—</span>
         <span class="cumul-sep">|</span>
         <span class="cumul-label">Local :</span><span class="cumul-value" id="poids-local-total">—</span>
