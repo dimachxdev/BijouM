@@ -276,11 +276,39 @@
   // =========================================================================
   // PROFIL (organisation + rôle)
   // =========================================================================
+  /**
+   * Identifiant de l'utilisateur connecté, lu dans le JWT (`sub`).
+   *
+   * On ne se fie pas à `session.user`, absent après un retour de lien de
+   * réinitialisation. Le jeton, lui, est toujours là et fait foi — il est
+   * signé par Supabase.
+   */
+  function idUtilisateur() {
+    if (session && session.user && session.user.id) return session.user.id;
+    if (!session || !session.access_token) return null;
+    try {
+      var charge = session.access_token.split('.')[1];
+      charge = charge.replace(/-/g, '+').replace(/_/g, '/');
+      var json = decodeURIComponent(atob(charge).split('').map(function (c) {
+        return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+      }).join(''));
+      return JSON.parse(json).sub || null;
+    } catch (e) { return null; }
+  }
+
   async function chargerProfil() {
     if (!session) { profil = null; return null; }
 
+    var uid = idUtilisateur();
+    if (!uid) { await deconnexion(); throw new Error('Session illisible. Reconnectez-vous.'); }
+
+    // Le filtre sur user_id est indispensable : les policies autorisent chaque
+    // membre à lire TOUTE la liste de sa boutique. Sans lui, la requête
+    // renvoyait le premier membre venu — en pratique le propriétaire — et
+    // chacun se retrouvait affiché avec son nom et ses droits.
     var url = URL_BASE + '/rest/v1/membres'
             + '?select=user_id,organisation_id,nom,role,actif,organisations(slug,nom,plan,actif,expire_le)'
+            + '&user_id=eq.' + encodeURIComponent(uid)
             + '&actif=eq.true&limit=1';
 
     var r = await fetchTimeout(url, { headers: enTetes() });
