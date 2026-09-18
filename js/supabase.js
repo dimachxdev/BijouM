@@ -171,6 +171,10 @@ async function dbSaveVente(v) {
   if (v.numFacture)     row.num_facture      = v.numFacture;
   if (v.compteClientId) row.compte_client_id = v.compteClientId;
   if (v.noteComplement) row.note_complement  = v.noteComplement;
+  row.paye_par_compte = v.payeParCompte || 0;
+  row.annulee = v.annulee === true;
+  if (v.annuleeLe)    row.annulee_le    = v.annuleeLe;
+  if (v.annuleeMotif) row.annulee_motif = v.annuleeMotif;
   await _supa.upsert('ventes', row);
   await dbSaveCounters(['v','fac']);
 }
@@ -203,12 +207,31 @@ async function dbSaveCompteClient(cc) {
     date_ouverture:cc.dateOuverture||null,
     solde:cc.solde||0, actif:cc.actif!==false
   });
-  // Mouvements : supprimer puis réinsérer
+  // Mouvements : on n'ajoute que ceux qui manquent.
+  //
+  // L'ancienne version supprimait tout l'historique du compte puis réinsérait
+  // la liste présente en mémoire. Si celle-ci était incomplète — onglet ouvert
+  // depuis longtemps, chargement partiel, deux appareils — les mouvements
+  // absents disparaissaient définitivement, sans message. Sur un compte
+  // d'épargne cliente, c'est une perte irrécupérable.
   if (cc.mouvements && cc.mouvements.length) {
-    await _supa.delete('mouvements_cc', 'compte_id=eq.' + encodeURIComponent(cc.id));
-    await _supa.upsert('mouvements_cc', cc.mouvements.map(function(m){
-      return { compte_id:cc.id, date:m.date, type:m.type, montant:m.montant, note:m.note||null };
-    }));
+    var existants = await _supa.select('mouvements_cc',
+      'compte_id=eq.' + encodeURIComponent(cc.id));
+
+    var cle = function(m){
+      return [m.date, m.type, m.montant, (m.note || '')].join('|');
+    };
+    var dejaLa = {};
+    existants.forEach(function(m){ dejaLa[cle(m)] = true; });
+
+    var nouveaux = cc.mouvements
+      .filter(function(m){ return !dejaLa[cle(m)]; })
+      .map(function(m){
+        return { compte_id:cc.id, date:m.date, type:m.type,
+                 montant:m.montant, note:m.note||null };
+      });
+
+    if (nouveaux.length) await _supa.upsert('mouvements_cc', nouveaux);
   }
   await dbSaveCounters(['cc']);
 }
@@ -225,7 +248,8 @@ async function dbSaveSortie(s) {
 async function dbSaveDecaissement(d) {
   await _supa.upsert('decaissements', {
     id:d.id, date:d.date, categorie:d.categorie||null,
-    description:d.description||null, montant:d.montant||0, saisi_par:d.saisiPar||null
+    description:d.description||null, montant:d.montant||0, saisi_par:d.saisiPar||null,
+    origine_type:d.origineType||null, origine_id:d.origineId||null
   });
   await dbSaveCounters(['d']);
 }
@@ -471,7 +495,9 @@ function mapVente(v) {
     local:v.local||0, importe:v.importe||0, paiement:v.paiement,
     montant:v.montant||0, acompte:v.acompte||0, restant:v.restant||0,
     numFacture:v.num_facture, compteClientId:v.compte_client_id,
-    noteComplement:v.note_complement };
+    noteComplement:v.note_complement,
+    annulee:v.annulee===true, annuleeLe:v.annulee_le, annuleeMotif:v.annulee_motif,
+    payeParCompte:v.paye_par_compte||0 };
 }
 function mapStock(s) {
   return { ref:s.ref, nom:s.nom, typeBijou:s.type_bijou, carat:s.carat,
@@ -485,7 +511,8 @@ function mapSortie(s) {
 }
 function mapDecaiss(d) {
   return { id:d.id, date:d.date, categorie:d.categorie,
-    description:d.description, montant:d.montant||0, saisiPar:d.saisi_par||d.saisiPar };
+    description:d.description, montant:d.montant||0, saisiPar:d.saisi_par||d.saisiPar,
+    origineType:d.origine_type||null, origineId:d.origine_id||null };
 }
 function mapCompte(cc) {
   return { id:cc.id, client:cc.client,
@@ -610,6 +637,10 @@ async function syncVente(v) {
   if (v.numFacture)     row.num_facture      = v.numFacture;
   if (v.compteClientId) row.compte_client_id = v.compteClientId;
   if (v.noteComplement) row.note_complement  = v.noteComplement;
+  row.paye_par_compte = v.payeParCompte || 0;
+  row.annulee = v.annulee === true;
+  if (v.annuleeLe)    row.annulee_le    = v.annuleeLe;
+  if (v.annuleeMotif) row.annulee_motif = v.annuleeMotif;
   return supaWriteReadRender('ventes', row, mapVente, 'ventes',
     function(){ renderJournal(); renderDashboard(); });
 }
@@ -689,7 +720,8 @@ async function syncCompteClient(cc) {
 
 async function syncDecaissement(d) {
   var row = { id:d.id, date:d.date, categorie:d.categorie||null,
-    description:d.description||null, montant:d.montant||0, saisi_par:d.saisiPar||null };
+    description:d.description||null, montant:d.montant||0, saisi_par:d.saisiPar||null,
+    origine_type:d.origineType||null, origine_id:d.origineId||null };
   return supaWriteReadRender('decaissements', row, mapDecaissement, 'decaissements',
     function(){ renderDecaissements(); renderDashboard(); });
 }

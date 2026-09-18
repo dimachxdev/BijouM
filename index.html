@@ -293,9 +293,10 @@
         <div class="metric-card"><div class="metric-label">Total reprises (tout)</div><div class="metric-value" id="metric-ac-total">—</div></div>
         <div class="metric-card"><div class="metric-label">Poids total repris</div><div class="metric-value" id="metric-ac-poids">—</div></div>
       </div>
+      <div id="ac-alerte-caisse" style="display:none;align-items:center;gap:8px;padding:10px 14px;margin-bottom:12px;background:var(--warning-bg,#faeeda);color:var(--warning-text);border-radius:var(--radius-md);font-size:12.5px;line-height:1.45"></div>
       <div class="card"><div class="table-wrap">
         <table>
-          <thead><tr><th>Date</th><th>Client</th><th>Description</th><th>Photo</th><th>Carat</th><th>Poids (g)</th><th>Prix reprise</th><th>Saisi par</th><th>Actions</th></tr></thead>
+          <thead><tr><th>Date</th><th>Client</th><th>Description</th><th>Photo</th><th>Carat</th><th>Poids (g)</th><th>Prix reprise</th><th>Sortie caisse</th><th>Saisi par</th><th>Actions</th></tr></thead>
           <tbody id="achats-clients-body"></tbody>
         </table>
       </div></div>
@@ -788,31 +789,6 @@
     <div class="modal-actions">
       <button class="btn btn-secondary" onclick="closeModal('modal-add-sortie')">Annuler</button>
       <button class="btn btn-primary" onclick="enregistrerSortie()">Valider la sortie</button>
-    </div>
-  </div>
-</div>
-
-<!-- ACHAT -->
-<div class="modal-backdrop" id="modal-add-achat">
-  <div class="modal modal-large">
-    <div class="modal-header"><div class="modal-title">Nouvel achat de bijoux</div><button class="modal-close" onclick="closeModal('modal-add-achat')">✕</button></div>
-    <div class="form-row">
-      <div class="form-group"><label class="form-label">Date *</label><input class="form-input" type="date" id="a-date" /></div>
-      <div class="form-group"><label class="form-label">Fournisseur *</label><input class="form-input" type="text" placeholder="Nom du fournisseur" id="a-fournisseur" /></div>
-    </div>
-    <div class="form-group" style="margin-bottom:12px"><label class="form-label">Description *</label><input class="form-input" type="text" placeholder="ex: Lot or brut 22k, Parures or blanc..." id="a-description" /></div>
-    <div class="form-row-3">
-      <div class="form-group"><label class="form-label">Carat</label><select class="form-input" id="a-carat"></select></div>
-      <div class="form-group"><label class="form-label">Poids (g) *</label><input class="form-input" type="number" step="0.01" min="0" placeholder="0,00" id="a-poids" oninput="calcAchatTotal()" /></div>
-      <div class="form-group"><label class="form-label">Prix / g (F CFA) *</label><input class="form-input" type="number" min="0" placeholder="0" id="a-prix-g" oninput="calcAchatTotal()" /></div>
-    </div>
-    <div class="form-group" style="margin-bottom:12px">
-      <label class="form-label">Montant total calculé</label>
-      <input class="form-input restant-display" type="text" id="a-total-disp" readonly placeholder="—" />
-    </div>
-    <div class="modal-actions">
-      <button class="btn btn-secondary" onclick="closeModal('modal-add-achat')">Annuler</button>
-      <button class="btn btn-primary" onclick="enregistrerAchat()">Enregistrer l'achat</button>
     </div>
   </div>
 </div>

@@ -34,7 +34,7 @@ const PAIEMENT_LABELS = {
 function save() {
   const keyMap = {
     ventes:'ventes', clients:'clients', stock:'stock',
-    sorties:'sorties', decaissements:'decaiss', achats:'achats',
+    sorties:'sorties', decaissements:'decaiss',
     achatsClients:'ac', comptesClients:'cc', bijouxArr:'ba',
     connexions:'connexions', counters:'counters'
   };
@@ -197,6 +197,81 @@ function isAdmin() {
 }
 
 // ============================================
+// CAISSE — règles de calcul
+// ============================================
+
+/**
+ * Argent réellement entré en caisse pour une vente.
+ *
+ * `acompte` mélange deux natures : ce que la cliente a sorti de sa poche, et
+ * ce qui a été prélevé sur son compte épargne. Le second était déjà dans le
+ * tiroir depuis son dépôt — le recompter gonflerait la caisse.
+ *
+ * Fonctionne aussi pour un paiement mixte (compte + espèces) : seule la part
+ * hors compte est retenue.
+ */
+function encaisseReel(v) {
+  return Math.max(0, (v.acompte || 0) - (v.payeParCompte || 0));
+}
+
+/** Somme des mouvements d'un compte épargne — la seule vérité sur son solde. */
+function soldeDepuisMouvements(cc) {
+  return (cc.mouvements || []).reduce(function (s, m) {
+    return s + (m.type === 'retrait' ? -(m.montant || 0) : (m.montant || 0));
+  }, 0);
+}
+
+/**
+ * Recale le solde d'un compte sur son historique.
+ * Le solde est une colonne stockée à côté des mouvements : les deux peuvent
+ * diverger, et c'est arrivé. On les resynchronise à chaque écriture.
+ */
+function recalerSolde(cc) {
+  cc.solde = soldeDepuisMouvements(cc);
+  return cc.solde;
+}
+
+/**
+ * Dépôts d'épargne entrés en caisse.
+ *
+ * Un dépôt est une avance sur un futur achat : l'argent entre physiquement
+ * dans le tiroir le jour du versement. Quand la cliente choisit son bijou,
+ * la vente n'ajoute rien de plus (encaisseReel vaut alors zéro pour la part
+ * prélevée sur le compte) — elle ne verse que le complément éventuel.
+ */
+function totalDepotsEpargne(filtreMois) {
+  return STATE.comptesClients.reduce(function (s, cc) {
+    return s + (cc.mouvements || []).reduce(function (t, m) {
+      if (m.type === 'retrait') return t;                 // conversion en bijou : rien n'entre ni ne sort
+      if (filtreMois && !isMois(m.date)) return t;
+      return t + (m.montant || 0);
+    }, 0);
+  }, 0);
+}
+
+/** Argent réellement présent en caisse : ventes encaissées + dépôts − décaissements. */
+function soldeCaisse(filtreMois) {
+  var ventes = STATE.ventes
+    .filter(function (v) { return !filtreMois || isMois(v.date); })
+    .reduce(function (s, v) { return s + encaisseReel(v); }, 0);
+  var decaiss = STATE.decaissements
+    .filter(function (d) { return !filtreMois || isMois(d.date); })
+    .reduce(function (s, d) { return s + (d.montant || 0); }, 0);
+  return ventes + totalDepotsEpargne(filtreMois) - decaiss;
+}
+
+/**
+ * Avances déjà encaissées que les clientes n'ont pas encore converties en
+ * bijou. Information, non déduite du solde : cet argent est bien à vous,
+ * simplement pas encore transformé en vente.
+ */
+function totalAvancesAConvertir() {
+  return STATE.comptesClients
+    .filter(function (cc) { return cc.actif !== false; })
+    .reduce(function (s, cc) { return s + Math.max(0, cc.solde || 0); }, 0);
+}
+
+// ============================================
 // AUTH
 // ============================================
 document.getElementById('login-pass').addEventListener('keydown', e => { if(e.key==='Enter') doLogin(); });
@@ -208,7 +283,7 @@ document.getElementById('login-user').addEventListener('keydown', e => { if(e.ke
 function resetAppData() {
   if (!confirm('Vider le cache local ?\n\nLes données restent dans Supabase et seront rechargées à la prochaine connexion.')) return;
   ['marjan_users','marjan_ventes','marjan_clients','marjan_stock','marjan_sorties',
-   'marjan_decaiss','marjan_achats','marjan_ac','marjan_cc','marjan_ba',
+   'marjan_decaiss','marjan_ac','marjan_cc','marjan_ba',
    'marjan_connexions','marjan_counters','marjan_clients_pin',
    'kayor_session'].forEach(k => localStorage.removeItem(k));
   location.reload();
@@ -714,16 +789,23 @@ function renderDashboard(){
   const now=new Date();
   document.getElementById('dashboard-date').textContent=now.toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
 
-  const ventesMois=STATE.ventes.filter(v=>isMois(v.date));
+  // Chiffre d'affaires : une vente annulée n'en fait plus partie.
+  // L'encaissé, lui, la conserve — l'argent est bien entré en caisse, et c'est
+  // le décaissement de remboursement qui le fait ressortir à sa date.
+  const ventesMois=STATE.ventes.filter(v=>isMois(v.date)&&!v.annulee);
   const totalMois =ventesMois.reduce((s,v)=>s+(v.montant||0),0);
-  const totalEncaisse=STATE.ventes.reduce((s,v)=>s+(v.acompte||0),0);  // argent réellement reçu
+  // Argent réellement reçu au comptoir. On retire la part réglée avec le solde
+  // d'un compte épargne : cet argent est déjà dans le tiroir depuis le dépôt,
+  // le compter ici le ferait apparaître une seconde fois.
+  const totalEncaisse=STATE.ventes.reduce((s,v)=>s+encaisseReel(v),0);
   const totalDecaiss =STATE.decaissements.reduce((s,d)=>s+(d.montant||0),0);
-  const soldeNet     =totalEncaisse - totalDecaiss;                      // en caisse net
-  const totalRestants=STATE.ventes.reduce((s,v)=>s+(v.restant||0),0);
-  const nbRestants   =STATE.ventes.filter(v=>(v.restant||0)>0).length;
+  const totalDepots  =totalDepotsEpargne(false);
+  const soldeNet     =soldeCaisse(false);   // ventes encaissées + dépôts − décaissements
+  const totalRestants=STATE.ventes.filter(v=>!v.annulee).reduce((s,v)=>s+(v.restant||0),0);
+  const nbRestants   =STATE.ventes.filter(v=>!v.annulee&&(v.restant||0)>0).length;
   const decMois      =STATE.decaissements.filter(d=>isMois(d.date));
   const totalDecMois =decMois.reduce((s,d)=>s+(d.montant||0),0);
-  const arrhesEnCours=STATE.ventes.filter(v=>(v.restant||0)>0);
+  const arrhesEnCours=STATE.ventes.filter(v=>!v.annulee&&(v.restant||0)>0);
   const totalArrhes  =arrhesEnCours.reduce((s,v)=>s+(v.restant||0),0);
 
   document.getElementById('metric-ca').textContent=fmt(totalMois);
@@ -732,7 +814,7 @@ function renderDashboard(){
   document.getElementById('metric-nb-restants').textContent=nbRestants+' client'+(nbRestants>1?'s':'');
   document.getElementById('metric-decaiss').textContent=fmt(soldeNet);
   document.getElementById('metric-nb-decaiss').textContent=
-    fmt(totalEncaisse)+' encaissé − '+fmt(totalDecaiss)+' décaissé';
+    fmt(totalEncaisse)+' ventes + '+fmt(totalDepots)+' dépôts − '+fmt(totalDecaiss)+' décaissé';
   document.getElementById('metric-arrhes').textContent=fmt(totalArrhes);
   document.getElementById('metric-nb-arrhes').textContent=arrhesEnCours.length+' bijou'+(arrhesEnCours.length>1?'x':'');
 
@@ -759,7 +841,7 @@ function renderDashboard(){
   STATE.stock.filter(i=>i.qty===0).forEach(i=>alertes.push({type:'danger',msg:`Rupture stock : ${i.nom}`}));
   STATE.stock.filter(i=>i.qty>0&&i.qty<=i.seuil).forEach(i=>alertes.push({type:'warn',msg:`Stock bas : ${i.nom} (${i.qty} restant${i.qty>1?'s':''})`}));
   // (alertes arrhes supprimées — géré via ventes avec restant)
-  STATE.ventes.filter(v=>(v.restant||0)>0).forEach(v=>alertes.push({type:'warn',msg:`Restant dû : ${v.client} — ${fmt(v.restant)}`}));
+  STATE.ventes.filter(v=>!v.annulee&&(v.restant||0)>0).forEach(v=>alertes.push({type:'warn',msg:`Restant dû : ${v.client} — ${fmt(v.restant)}`}));
   document.getElementById('dash-alertes').innerHTML=alertes.slice(0,6).map(a=>`<div style="display:flex;align-items:center;gap:8px;padding:9px 16px;border-bottom:0.5px solid var(--border-light);font-size:12px"><span class="stock-badge ${a.type==='danger'?'stock-out':'stock-low'}" style="flex-shrink:0">${a.type==='danger'?'!':'⚠'}</span><span>${a.msg}</span></div>`).join('')||'<div style="padding:14px 16px;font-size:13px;color:var(--text-tertiary)">Aucune alerte en cours</div>';
 }
 
@@ -902,6 +984,7 @@ async function enregistrerVente(){
   }
 
   let compteClientId=null;
+  let payeParCompte=0;   // part réglée avec le solde épargne, hors caisse
   if(paiement==='compte'){
     const cc=STATE.comptesClients.find(c=>c.client===client&&c.actif!==false);
     if(!cc){showToast('Aucun compte epargne actif pour ce client.');return;}
@@ -910,10 +993,12 @@ async function enregistrerVente(){
       ouvrirComplementCC(cc, montant, date, desc, carat, typeBijou);
       return;
     }
-    cc.solde-=montant;
     cc.mouvements.push({date:date,type:'retrait',montant:montant,note:'Vente - '+desc});
+    recalerSolde(cc);
+    saveCompteClient(cc);   // sans cela le retrait restait en mémoire et le solde repartait à la hausse au rechargement
     compteClientId=cc.id;
-    acompte=montant; // compte = soldé d'office
+    acompte=montant;        // vente soldée
+    payeParCompte=montant;  // ...mais aucun argent n'entre en caisse
   } else {
     // Si acompte non rempli (0 ou vide) → vente soldée directement
     const acompteEl = document.getElementById('v-acompte');
@@ -930,7 +1015,7 @@ async function enregistrerVente(){
     var ok = await deduireStock(stockRef, poidsVente, nbArticlesV);
     if(!ok) return;
   }
-  const venteObj={id,date,client,description:desc,local,importe,poids:poidsVente,carat,typeBijou,paiement,montant,acompte,restant:montant-acompte,compteClientId,numFacture};
+  const venteObj={id,date,client,description:desc,local,importe,poids:poidsVente,carat,typeBijou,paiement,montant,acompte,restant:montant-acompte,compteClientId,numFacture,payeParCompte};
   STATE.ventes.unshift(venteObj);
   saveAndSyncVente(venteObj);
   closeModal('modal-nouvelle-vente');renderJournal();renderDashboard();renderStocks();
@@ -1276,32 +1361,11 @@ async function enregistrerSortie(){
 }
 
 
-// ============================================
-// ACHATS
-// ============================================
-function calcAchatTotal(){
-  const p=parseFloat(document.getElementById('a-poids')?.value)||0,g=parseFloat(document.getElementById('a-prix-g')?.value)||0;
-  const el=document.getElementById('a-total-disp');if(el)el.value=p>0&&g>0?fmt(Math.round(p*g)):'—';
-}
-function renderAchats(){
-  const mois=STATE.achats.filter(a=>isMois(a.date));
-  document.getElementById('achats-count-label').textContent=`${STATE.achats.length} achat${STATE.achats.length>1?'s':''} enregistré${STATE.achats.length>1?'s':''}`;
-  document.getElementById('metric-achat-mois').textContent=fmt(mois.reduce((s,a)=>s+(a.montantTotal||0),0));
-  document.getElementById('metric-achat-total').textContent=fmt(STATE.achats.reduce((s,a)=>s+(a.montantTotal||0),0));
-  document.getElementById('metric-achat-poids').textContent=STATE.achats.reduce((s,a)=>s+(a.poids||0),0).toFixed(2)+' g';
-  document.getElementById('achats-body').innerHTML=[...STATE.achats].sort((a,b)=>b.date.localeCompare(a.date)).map(a=>{
-    const c=getCarat(a.carat);const dot=c?`<span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${c.couleur};margin-right:4px;vertical-align:middle"></span>`:'';
-    return`<tr><td style="white-space:nowrap;font-size:12px;color:var(--text-secondary)">${fmtDate(a.date)}</td><td>${a.fournisseur}</td><td>${a.description}</td><td><span class="carat-pill">${dot}${(a.carat||'—').toUpperCase()}</span></td><td style="text-align:center">${a.poids}g</td><td>${fmt(a.prixUnitaire)}/g</td><td style="font-weight:500">${fmt(a.montantTotal)}</td><td><span class="role-pill role-${a.saisiPar}">${a.saisiPar}</span></td><td><button class="btn small btn-danger" onclick="supprimerAchat('${a.id}')">✕</button></td></tr>`;
-  }).join('');
-}
-function enregistrerAchat(){
-  const date=document.getElementById('a-date').value,four=document.getElementById('a-fournisseur').value.trim(),desc=document.getElementById('a-description').value.trim(),carat=document.getElementById('a-carat').value,poids=parseFloat(document.getElementById('a-poids').value)||0,prixG=parseFloat(document.getElementById('a-prix-g').value)||0;
-  if(!date||!four||!desc||!carat||poids<=0||prixG<=0){showToast('⚠ Tous les champs sont obligatoires.');return;}
-  const id=nextId('A','a');
-  STATE.achats.unshift({id,date,fournisseur:four,description:desc,carat,poids,prixUnitaire:Math.round(prixG),montantTotal:Math.round(poids*prixG),saisiPar:STATE.currentUser?.role||'admin'});
-  save();closeModal('modal-add-achat');renderAchats();renderDashboard();showToast(`✓ Achat ${id} enregistré.`);
-}
-function supprimerAchat(id){if(!confirm('Supprimer ?'))return;STATE.achats=STATE.achats.filter(a=>a.id!==id);save();renderAchats();showToast('Achat supprimé.');}
+// Le module « Achats fournisseurs » a été supprimé : STATE.achats n'était
+// jamais initialisé, l'onglet n'existait pas dans la navigation, aucune table
+// Supabase ne lui correspondait, et ses fonctions visaient des éléments HTML
+// absents. Les sorties d'argent vers les fournisseurs se saisissent en
+// décaissement, comme les autres.
 
 // ============================================
 // DÉCAISSEMENTS
@@ -1315,11 +1379,14 @@ function renderDecaissements(){
   const mois=STATE.decaissements.filter(d=>isMois(d.date));
   const totalAll=STATE.decaissements.reduce((s,d)=>s+(d.montant||0),0);
   const totalMois=mois.reduce((s,d)=>s+(d.montant||0),0);
-  // Encaissé réel = somme des acomptes reçus (pas montant total)
-  const encaisseMois=STATE.ventes.filter(v=>isMois(v.date)).reduce((s,v)=>s+(v.acompte||0),0);
-  const encaisseTotal=STATE.ventes.reduce((s,v)=>s+(v.acompte||0),0);
-  const soldeNetMois=encaisseMois-totalMois;
-  const soldeNetTotal=encaisseTotal-totalAll;
+  // Encaissé = argent réellement entré, hors part réglée sur compte épargne.
+  const encaisseMois=STATE.ventes.filter(v=>isMois(v.date)).reduce((s,v)=>s+encaisseReel(v),0);
+  const encaisseTotal=STATE.ventes.reduce((s,v)=>s+encaisseReel(v),0);
+  const depotsMois   =totalDepotsEpargne(true);
+  const depotsTotal  =totalDepotsEpargne(false);
+  const soldeNetMois =soldeCaisse(true);
+  const soldeNetTotal=soldeCaisse(false);
+  const avances      =totalAvancesAConvertir();
   document.getElementById('decaiss-count-label').textContent=`${STATE.decaissements.length} décaissement${STATE.decaissements.length>1?'s':''}`;
   document.getElementById('metric-decaiss-mois').textContent=fmt(totalMois);
   document.getElementById('metric-decaiss-all').textContent=fmt(totalAll);
@@ -1331,7 +1398,10 @@ function renderDecaissements(){
   }
   // Sous-titre explicatif
   const soldeSubEl=document.getElementById('metric-solde-net-sub');
-  if(soldeSubEl) soldeSubEl.textContent=fmt(encaisseTotal)+' encaissé − '+fmt(totalAll)+' décaissé';
+  if(soldeSubEl){
+    soldeSubEl.textContent=fmt(encaisseTotal)+' ventes + '+fmt(depotsTotal)+' dépôts − '+fmt(totalAll)+' décaissé'
+      +(avances>0?' · dont '+fmt(avances)+' d\'avances à convertir en bijoux':'');
+  }
   document.getElementById('decaiss-body').innerHTML=[...STATE.decaissements].sort((a,b)=>b.date.localeCompare(a.date)).map(d=>`<tr><td style="white-space:nowrap;font-size:12px;color:var(--text-secondary)">${fmtDate(d.date)}</td><td><span class="cat-badge">${d.categorie}</span></td><td>${d.description}</td><td style="font-weight:500;color:var(--danger-text)">${fmt(d.montant)}</td><td><span class="role-pill role-${d.saisiPar}">${d.saisiPar}</span></td><td><button class="btn small btn-danger" onclick="supprimerDecaiss('${d.id}')">✕</button></td></tr>`).join('');
 }
 function enregistrerDecaissement(){
@@ -1502,6 +1572,7 @@ function renderBijouxArr(){
 
   // Source = ventes avec restant > 0 (en cours) + soldées ce mois (soldé récent)
   var data=STATE.ventes.filter(function(v){
+    if(v.annulee) return false;
     if(filtre==='en_cours') return (v.restant||0)>0;
     if(filtre==='solde')    return (v.restant||0)===0 && (v.acompte||0)>0 && isMois(v.date);
     // tous = en cours + soldés ce mois
@@ -1510,7 +1581,7 @@ function renderBijouxArr(){
   if(q) data=data.filter(function(v){ return (v.client||'').toLowerCase().includes(q)||(v.description||'').toLowerCase().includes(q); });
   data.sort(function(a,b){ return b.date.localeCompare(a.date); });
 
-  const nbEnCours=STATE.ventes.filter(function(v){return (v.restant||0)>0;}).length;
+  const nbEnCours=STATE.ventes.filter(function(v){return !v.annulee&&(v.restant||0)>0;}).length;
   document.getElementById('ba-count-label').textContent=nbEnCours+' commande'+(nbEnCours>1?'s':'')+' avec restant dû · '+data.length+' affichée'+(data.length>1?'s':'');
 
   if(!data.length){
@@ -1618,7 +1689,12 @@ function confirmerRemboursement(){
   const v=STATE.ventes.find(x=>x.id===venteId);
   if(!v||!date){showToast('⚠ Date obligatoire.');return;}
   if(montant<0){showToast('⚠ Montant invalide.');return;}
-  // Créer un décaissement pour le remboursement
+  if(montant>(v.acompte||0)){
+    showToast(`⚠ Impossible de rembourser plus que le versé (${fmt(v.acompte||0)}).`);
+    return;
+  }
+
+  // Le décaissement porte la sortie d'argent, à sa date réelle.
   if(montant>0){
     const dId=nextId('D','d');
     const dec={id:dId,date,categorie:'Remboursement client',description:`Remb. ${v.client||''} — ${v.description||''}${motif?' ('+motif+')':''}`,montant,saisiPar:STATE.currentUser?.nom||'admin'};
@@ -1627,8 +1703,15 @@ function confirmerRemboursement(){
     saveDecaissement(dec);
     renderDecaissements();
   }
-  // Annuler la vente : acompte et restant à zéro
-  v.acompte=0;v.restant=0;
+
+  // L'acompte n'est PAS remis à zéro : cet argent est bien entré en caisse le
+  // jour de la vente. Le décaissement ci-dessus le fait ressortir. Effacer
+  // l'acompte ferait baisser la caisse une seconde fois pour le même
+  // remboursement, et perdrait la trace de l'encaissement d'origine.
+  v.annulee = true;
+  v.annuleeLe = new Date().toISOString();
+  v.annuleeMotif = motif;
+  v.restant = 0;                 // plus rien à réclamer
   save();
   saveVente(v);
   closeModal('modal-remboursement');
@@ -1670,10 +1753,74 @@ function renderAchatsClients(){
       <td><span class="carat-pill">${dot}${(a.carat||'—').toUpperCase()}</span></td>
       <td style="text-align:center">${a.poids}g</td>
       <td style="font-weight:500;color:var(--success-text)">${fmt(a.prixPropose)}</td>
+      <td>${celluleSortieCaisse(a)}</td>
       <td><span class="role-pill role-${a.saisiPar}">${a.saisiPar}</span></td>
       <td>${btnSuppr}</td>
     </tr>`;
   }).join('');
+
+  // Bandeau récapitulatif : une reprise sans décaissement est de l'argent sorti
+  // du tiroir que la caisse ignore encore.
+  const sansSortie = STATE.achatsClients.filter(a=>!decaissementDeLaPiece('reprise',a.id));
+  const montantSansSortie = sansSortie.reduce((s,a)=>s+(a.prixPropose||0),0);
+  const bandeau = document.getElementById('ac-alerte-caisse');
+  if(bandeau){
+    if(sansSortie.length){
+      bandeau.style.display='flex';
+      bandeau.innerHTML=`<span>⚠</span><span>${sansSortie.length} reprise${sansSortie.length>1?'s':''} sans décaissement — <strong>${fmt(montantSansSortie)}</strong> payé${sansSortie.length>1?'s':''} aux clientes mais pas encore déduit${sansSortie.length>1?'s':''} de la caisse.</span>`;
+    } else {
+      bandeau.style.display='none';
+    }
+  }
+}
+
+/** Décaissement rattaché à une pièce (reprise, achat, vente), s'il existe. */
+function decaissementDeLaPiece(type, id){
+  return STATE.decaissements.find(function(d){
+    return d.origineType===type && d.origineId===id;
+  }) || null;
+}
+
+function celluleSortieCaisse(a){
+  const dec = decaissementDeLaPiece('reprise', a.id);
+  if(dec){
+    return `<span class="stock-badge stock-ok" title="Décaissement ${esc(dec.id)} du ${fmtDate(dec.date)}">✓ ${fmt(dec.montant)}</span>`;
+  }
+  return `<button class="btn small" style="color:var(--warning-text);border-color:var(--warning-text)"
+            onclick="creerDecaissementReprise('${escJs(a.id)}')"
+            title="Cette somme est sortie du tiroir mais n'apparaît pas encore en décaissement">+ Enregistrer</button>`;
+}
+
+/**
+ * Crée le décaissement correspondant à une reprise.
+ *
+ * La saisie reste volontairement manuelle — le paiement d'une reprise peut
+ * être différé — mais le rattachement évite qu'un oubli passe inaperçu.
+ */
+function creerDecaissementReprise(repriseId){
+  if(!isAdmin()){showToast('⛔ Réservé à l\'administrateur.');return;}
+  const a = STATE.achatsClients.find(x=>x.id===repriseId);
+  if(!a) return;
+  if(decaissementDeLaPiece('reprise', a.id)){showToast('Un décaissement existe déjà pour cette reprise.');return;}
+
+  const montant = a.prixPropose||0;
+  if(montant<=0){showToast('⚠ Montant de reprise invalide.');return;}
+  if(!confirm(`Enregistrer une sortie de caisse de ${fmt(montant)} pour la reprise de ${a.client} ?`)) return;
+
+  const dId=nextId('D','d');
+  const dec={
+    id:dId, date:a.date, categorie:'Reprise client',
+    description:`Reprise ${a.id} — ${a.client} — ${a.description||''}`,
+    montant, saisiPar:STATE.currentUser?.nom||'admin',
+    origineType:'reprise', origineId:a.id
+  };
+  STATE.decaissements.unshift(dec);
+  save();
+  saveDecaissement(dec);
+  renderAchatsClients();
+  renderDecaissements();
+  renderDashboard();
+  showToast(`✓ Sortie de ${fmt(montant)} enregistrée.`);
 }
 
 function enregistrerAchatClient(){
@@ -2015,10 +2162,11 @@ function validerAjustCC(){
   if(montant<=0){showToast('Montant obligatoire.');return;}
   if(!desc){showToast('Description obligatoire.');return;}
   if(montant>cc.solde){showToast('Solde insuffisant ('+fmt(cc.solde)+' disponible).');return;}
-  cc.solde-=montant;
   cc.mouvements.push({date:today(),type:'retrait',montant:montant,note:'Vente - '+desc});
+  recalerSolde(cc);
+  saveCompteClient(cc);   // le retrait n'atteignait pas la base : le solde remontait au rechargement
   var vid=nextId('V','v');
-  STATE.ventes.unshift({id:vid,date:today(),client:cc.client,description:desc,local:0,importe:0,carat:carat,typeBijou:'',paiement:'compte',montant:montant,acompte:montant,restant:0,compteClientId:cc.id});
+  STATE.ventes.unshift({id:vid,date:today(),client:cc.client,description:desc,local:0,importe:0,carat:carat,typeBijou:'',paiement:'compte',montant:montant,acompte:montant,payeParCompte:montant,restant:0,compteClientId:cc.id});
   save();closeModal('modal-ajust-cc');renderComptesClients();renderJournal();renderDashboard();
   showToast('Vente '+vid+' creee - '+fmt(montant)+' deduit du compte de '+cc.client);
 }
@@ -2208,9 +2356,9 @@ function validerComplementCC() {
   if(cc.solde + montantComp < montant){ showToast('Complement insuffisant. Manque : '+fmt(montant - cc.solde - montantComp)); return; }
 
   // Déduire tout le solde du compte
-  var soldeUtilise = cc.solde;
+  var soldeUtilise = cc.solde;   // part venant du compte : hors caisse
   cc.mouvements.push({date:date, type:'retrait', montant:soldeUtilise, note:'Vente (solde compte) - '+desc});
-  cc.solde = 0;
+  recalerSolde(cc);
 
   // Créer la vente avec acompte = montant total (soldée)
   STATE.counters.fac++;
@@ -2220,7 +2368,7 @@ function validerComplementCC() {
     id, date, client: cc.client,
     description: desc, local:0, importe:0, carat, typeBijou,
     paiement: 'compte+'+paiementComp,
-    montant, acompte: montant, restant: 0,
+    montant, acompte: montant, restant: 0, payeParCompte: soldeUtilise,
     compteClientId: cc.id,
     numFacture,
     noteComplement: 'Compte: '+fmt(soldeUtilise)+' + '+paiementComp+': '+fmt(montantComp)

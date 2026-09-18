@@ -20,8 +20,8 @@ const ROLES = {
 
 // Permissions par rôle
 const PERM_MAP = {
-  proprietaire: ['all','journal','stocks','achats','sorties','decaissements','clients','compte_client','bijou_arr','historique','comptes_users','rapport_jour'],
-  admin:        ['all','journal','stocks','achats','sorties','decaissements','clients','compte_client','bijou_arr','historique','comptes_users','rapport_jour'],
+  proprietaire: ['all','journal','stocks','sorties','decaissements','clients','compte_client','bijou_arr','historique','comptes_users','rapport_jour'],
+  admin:        ['all','journal','stocks','sorties','decaissements','clients','compte_client','bijou_arr','historique','comptes_users','rapport_jour'],
   gestionnaire: ['journal','stocks','achats_clients','clients','compte_client','bijou_arr','rapport_jour'],
   vendeur:      ['journal','clients','compte_client','bijou_arr','rapport_jour'],
 };
@@ -154,16 +154,6 @@ const INITIAL_DECAISSEMENTS = [
   { id:'D-0003', date:'2026-03-05', categorie:'Dépenses fournisseurs / achats', description:'Achat matériaux soudure',  montant:45000,  saisiPar:'admin' },
   { id:'D-0004', date:'2026-03-10', categorie:'Électricité / Eau',          description:'Facture électricité — Mars',    montant:28000,  saisiPar:'admin' },
   { id:'D-0005', date:'2026-03-15', categorie:'Transport et livraison',     description:'Livraison commande client',     montant:5000,   saisiPar:'vendeur' },
-];
-
-// ============================================
-// ACHATS
-// ============================================
-const INITIAL_ACHATS = [
-  { id:'A-0001', date:'2026-01-20', fournisseur:'Diallo Orpaillage',   description:'Lot or brut 22k',          carat:'18k-local',       poids:45,  prixUnitaire:28000, montantTotal:1260000, saisiPar:'admin' },
-  { id:'A-0002', date:'2026-02-03', fournisseur:'Bijoux Import Dakar', description:'Parures or blanc 18k x3',  carat:'18k-importe', poids:6.6, prixUnitaire:52000, montantTotal:343200,  saisiPar:'gestionnaire' },
-  { id:'A-0003', date:'2026-02-18', fournisseur:'Diallo Orpaillage',   description:'Or local brut 18k',        carat:'18k-local',       poids:20,  prixUnitaire:30000, montantTotal:600000,  saisiPar:'admin' },
-  { id:'A-0004', date:'2026-03-08', fournisseur:'Argent Pro Sénégal',  description:'Argent 925 — barres 500g', carat:'18k-local',       poids:500, prixUnitaire:1200,  montantTotal:600000,  saisiPar:'gestionnaire' },
 ];
 
 // ============================================
