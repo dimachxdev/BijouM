@@ -296,11 +296,24 @@ async function dbSaveConnexion(c) {
   await dbSaveCounters(['cn']);
 }
 
+/**
+ * Enregistre les compteurs de numérotation.
+ *
+ * `organisation_id` est indispensable : la clé primaire de `compteurs` est
+ * devenue (organisation_id, cle) au passage multi-boutique. Sans lui,
+ * PostgREST ne sait pas sur quoi fusionner et l'écriture échoue — le compteur
+ * restait figé, le navigateur refabriquait des numéros déjà pris, et les
+ * lignes existantes étaient écrasées.
+ */
+function _ligneCompteur(k) {
+  var row = { cle:k, valeur:STATE.counters[k]||0 };
+  if (typeof Auth !== 'undefined' && Auth.orgId()) row.organisation_id = Auth.orgId();
+  return row;
+}
+
 async function dbSaveCounters(cles) {
   if (!cles || !cles.length) return;
-  await _supa.upsert('compteurs', cles.map(function(k){
-    return { cle:k, valeur:STATE.counters[k]||0 };
-  }));
+  await _supa.upsert('compteurs', cles.map(_ligneCompteur));
 }
 
 // ============================================
@@ -1103,10 +1116,16 @@ async function saveConnexion(c) {
 async function saveCompteurs(cles) {
   if (!cles || !cles.length) return;
   try {
-    await _supa.upsert('compteurs', cles.map(function(k){
-      return {cle:k, valeur:STATE.counters[k]||0};
-    }));
-  } catch(e) { console.error('compteurs:', e); }
+    await _supa.upsert('compteurs', cles.map(_ligneCompteur));
+  } catch(e) {
+    // Une erreur ici ne doit plus passer inaperçue : c'est elle qui a laissé
+    // le compteur figé pendant des jours, avec des identifiants réattribués
+    // et des lignes écrasées en silence.
+    console.error('compteurs:', e);
+    if (typeof showToast === 'function') {
+      showToast('⚠ Numérotation non sauvegardée — prévenez l\'administrateur.');
+    }
+  }
 }
 
 async function nextIdSupa(prefix, key) {
