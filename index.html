@@ -104,6 +104,9 @@
       <!-- Repère de version : permet de voir d'un coup d'œil si le poste
            affiche la dernière version ou une copie en cache / non redéployée. -->
       <div id="app-version" style="margin-top:10px;font-size:10px;color:var(--text-tertiary);letter-spacing:.4px"></div>
+      <!-- La console opérateur est protégée côté serveur (`app.est_operateur`) :
+           ce lien ne donne accès à rien, il évite de retenir l'URL. -->
+      <div style="margin-top:6px"><a class="lien-auth" href="operateur.html">Console opérateur</a></div>
     </div>
   </div>
 </div>
@@ -115,7 +118,7 @@
 
 <!-- TOPBAR MOBILE -->
 <div class="topbar">
-  <div class="topbar-logo"><span style="font-weight:700;font-size:16px;letter-spacing:1px;color:#C9A84C">KAYOR</span></div>
+  <div class="topbar-logo"><span id="topbar-nom" style="font-weight:700;font-size:16px;letter-spacing:1px;color:#C9A84C">Bijouterie</span></div>
   <div class="topbar-right"><span class="topbar-user-badge" id="topbar-role-badge"></span><button class="btn-logout-top" onclick="refreshAll()" title="Actualiser les données" style="margin-right:4px;font-size:16px">⟳</button><button class="btn-logout-top" onclick="doLogout()" title="Déconnexion">⏻</button><button class="btn-menu" onclick="toggleDrawer()" aria-label="Menu">☰</button></div>
 </div>
 
@@ -126,8 +129,8 @@
   <!-- SIDEBAR -->
   <aside class="sidebar">
     <div class="logo">
-      <img src="assets/logo-kayor.jpg" alt="KAYOR" style="max-width:120px;display:block;margin:0 auto" />
-      <div class="brand-tagline">Brillez sans effort</div>
+      <img id="sidebar-logo" src="assets/logo-kayor.jpg" alt="" style="max-width:120px;display:block;margin:0 auto" />
+      <div class="brand-tagline" id="sidebar-slogan"></div>
       <div class="logo-sub">Système de gestion</div>
     </div>
 
@@ -169,6 +172,7 @@
           <div class="nav-section-label" style="margin-top:8px">Sécurité</div>
       <button class="nav-item" data-section="historique" data-perm="historique"><span class="nav-icon">◷</span> Historique connexions</button>
       <button class="nav-item" data-section="comptes_users" data-perm="historique"><span class="nav-icon">⊛</span> Gestion comptes</button>
+      <button class="nav-item" data-section="profil_boutique" data-perm="profil_boutique"><span class="nav-icon">⌂</span> Profil boutique</button>
       <button class="nav-item" data-section="rapport_jour" data-perm="all"><span class="nav-icon">◈</span> Rapport journalier</button>
     </nav>
 
@@ -384,6 +388,73 @@
     </section>
 
     <!-- MEMBRES DE LA BOUTIQUE -->
+    <!-- PROFIL DE LA BOUTIQUE — propriétaire uniquement -->
+    <section class="section" id="profil_boutique">
+      <div class="page-header">
+        <div>
+          <h1 class="page-title">Profil de la boutique</h1>
+          <p class="page-sub">Ces informations apparaissent sur vos factures, reçus et rapports.</p>
+        </div>
+        <button class="btn btn-primary" id="btn-save-boutique" onclick="enregistrerProfilBoutique()">✓ Enregistrer</button>
+      </div>
+
+      <div class="card" style="padding:18px">
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Nom commercial *</label>
+            <input class="form-input" id="b-nom" placeholder="Bijouterie KAYOR" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Slogan ou mention</label>
+            <input class="form-input" id="b-slogan" placeholder="Brillez sans effort" />
+          </div>
+        </div>
+
+        <div class="form-row" style="margin-top:12px">
+          <div class="form-group">
+            <label class="form-label">Adresse</label>
+            <input class="form-input" id="b-adresse" placeholder="Rue, quartier, ville" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Téléphone</label>
+            <input class="form-input" id="b-telephone" placeholder="77 000 00 00" />
+          </div>
+        </div>
+
+        <div class="form-row" style="margin-top:12px">
+          <div class="form-group">
+            <label class="form-label">NINEA</label>
+            <input class="form-input" id="b-ninea" placeholder="Identifiant fiscal" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">RCCM</label>
+            <input class="form-input" id="b-rccm" placeholder="Registre du commerce" />
+          </div>
+        </div>
+
+        <div class="form-group" style="margin-top:12px">
+          <label class="form-label">Mentions en bas de facture</label>
+          <input class="form-input" id="b-pied" placeholder="Conditions de vente, garantie…" />
+        </div>
+
+        <div class="form-group" style="margin-top:18px">
+          <label class="form-label">Logo</label>
+          <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
+            <div id="b-logo-apercu" style="width:96px;height:96px;border:0.5px solid var(--border-light);border-radius:var(--radius-md);display:flex;align-items:center;justify-content:center;background:var(--bg-secondary);overflow:hidden;flex-shrink:0">
+              <span style="font-size:11px;color:var(--text-tertiary)">aucun</span>
+            </div>
+            <div>
+              <input type="file" id="b-logo-fichier" accept="image/*" onchange="chargerLogoBoutique(this)" style="font-size:12px" />
+              <div class="form-hint" style="margin-top:6px">Format carré de préférence. 200 Ko maximum — il est relu à chaque impression.</div>
+              <button class="btn small" style="margin-top:8px" onclick="retirerLogoBoutique()">Retirer le logo</button>
+            </div>
+          </div>
+        </div>
+
+        <div id="b-message" style="display:none;margin-top:16px;padding:10px 14px;border-radius:var(--radius-md);font-size:12.5px"></div>
+      </div>
+    </section>
+
     <section class="section" id="comptes_users">
       <div class="page-header">
         <div><h1 class="page-title">Membres de la boutique</h1><p class="page-sub" id="gc-count-label"></p></div>

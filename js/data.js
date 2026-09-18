@@ -20,7 +20,7 @@ const ROLES = {
 
 // Permissions par rôle
 const PERM_MAP = {
-  proprietaire: ['all','journal','stocks','sorties','decaissements','clients','compte_client','bijou_arr','historique','comptes_users','rapport_jour'],
+  proprietaire: ['all','profil_boutique','journal','stocks','sorties','decaissements','clients','compte_client','bijou_arr','historique','comptes_users','rapport_jour'],
   admin:        ['all','journal','stocks','sorties','decaissements','clients','compte_client','bijou_arr','historique','comptes_users','rapport_jour'],
   // `rapport_jour` retiré aux deux : il affiche le solde de caisse et le
   // détail des décaissements, réservés aux administrateurs.

@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Console opérateur — Gestion Bijouterie</title>
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="css/style.css" />
+  <style>
+    /* La console vit hors de l'application boutique : pas de sidebar. */
+    .op-wrap { max-width: 1100px; margin: 0 auto; padding: 18px 16px 40px; }
+    .op-topbar { display: flex; align-items: center; justify-content: space-between;
+                 gap: 12px; flex-wrap: wrap; margin-bottom: 18px; }
+    .op-marque { font-size: 11px; font-weight: 700; letter-spacing: 2px;
+                 text-transform: uppercase; color: var(--text-tertiary); }
+    #op-login { position: fixed; inset: 0; display: flex; align-items: center;
+                justify-content: center; background: var(--bg-tertiary); z-index: 9999; padding: 16px; }
+    #op-message { margin-bottom: 14px; }
+  </style>
+</head>
+<body>
+
+<!-- ============================================================
+     CONNEXION
+     ============================================================ -->
+<div id="op-login">
+  <div class="login-card">
+    <div class="op-marque" style="text-align:center">Console opérateur</div>
+    <div class="login-sub" style="margin-top:6px">
+      Réservée à l'exploitant du service. Les propriétaires de boutique
+      se connectent sur la page habituelle.
+    </div>
+
+    <div class="form-group" style="margin-top:24px">
+      <label class="form-label" for="op-email">Adresse email</label>
+      <input class="form-input" type="email" id="op-email" autocomplete="email"
+             placeholder="vous@exemple.com" />
+    </div>
+    <div class="form-group" style="margin:12px 0 20px">
+      <label class="form-label" for="op-pass">Mot de passe</label>
+      <input class="form-input" type="password" id="op-pass" autocomplete="current-password"
+             placeholder="••••••••" />
+    </div>
+
+    <div class="login-error" id="op-login-error"></div>
+    <button class="btn btn-primary" id="op-btn-login"
+            style="width:100%;justify-content:center">Se connecter</button>
+
+    <div style="text-align:center;margin-top:14px">
+      <a class="lien-auth" href="index.html">← Retour à l'application</a>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================
+     CONSOLE
+     ============================================================ -->
+<div id="op-console" style="display:none">
+  <div class="op-wrap">
+
+    <div class="op-topbar">
+      <div>
+        <div class="op-marque">Console opérateur</div>
+        <div class="page-title" style="margin-top:2px">Boutiques du service</div>
+        <div class="page-sub" id="op-total"></div>
+      </div>
+      <div class="page-header-actions">
+        <span class="page-sub" id="op-identite"></span>
+        <button class="btn small" id="op-btn-refresh" title="Recharger">⟳ Actualiser</button>
+        <button class="btn small btn-primary" id="op-btn-nouvelle">+ Nouvelle boutique</button>
+        <button class="btn small btn-danger" id="op-btn-logout">Déconnexion</button>
+      </div>
+    </div>
+
+    <div id="op-message" style="display:none"></div>
+
+    <!-- ---------- CRÉATION ---------- -->
+    <div class="card" id="op-form-creation" style="display:none">
+      <div class="card-header"><div class="card-title">Ouvrir une boutique</div></div>
+      <div class="card-body">
+        <div class="two-col">
+          <div class="form-group">
+            <label class="form-label" for="c-nom">Nom commercial</label>
+            <input class="form-input" id="c-nom" placeholder="Bijouterie Diamant" />
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="c-slug">Code boutique</label>
+            <input class="form-input" id="c-slug" maxlength="6" placeholder="DIA"
+                   style="text-transform:uppercase" />
+            <span class="form-hint">2 à 6 lettres majuscules ou chiffres. Sert de préfixe interne, non modifiable.</span>
+          </div>
+        </div>
+        <div class="two-col">
+          <div class="form-group">
+            <label class="form-label" for="c-nom-proprio">Nom de la propriétaire</label>
+            <input class="form-input" id="c-nom-proprio" placeholder="Awa Diop" />
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="c-email">Email de la propriétaire</label>
+            <input class="form-input" type="email" id="c-email" placeholder="awa@exemple.sn" />
+            <span class="form-hint">Une invitation est posée sur cette adresse : elle s'inscrit
+              elle-même via « J'ai une invitation » et devient propriétaire.</span>
+          </div>
+        </div>
+        <div class="two-col">
+          <div class="form-group">
+            <label class="form-label" for="c-plan">Plan</label>
+            <select class="form-input" id="c-plan">
+              <option value="essai">Essai</option>
+              <option value="pro">Pro</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="c-jours">Durée d'essai (jours)</label>
+            <input class="form-input" type="number" id="c-jours" value="30" min="0" />
+            <span class="form-hint">0 = sans date d'expiration.</span>
+          </div>
+        </div>
+        <button class="btn btn-primary" id="op-btn-creer">✓ Créer la boutique</button>
+      </div>
+    </div>
+
+    <!-- ---------- LISTE ---------- -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">Boutiques</div>
+        <span class="page-sub">Aucune donnée commerciale n'est visible ici : ventes,
+          clientes et comptes restent dans leur boutique.</span>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Boutique</th><th>Code</th><th>Plan</th><th>Statut</th>
+              <th>Membres</th><th>Ventes</th><th>Dernière vente</th><th></th>
+            </tr>
+          </thead>
+          <tbody id="op-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script src="js/supabase.js"></script>
+<script src="js/operateur.js"></script>
+</body>
+</html>

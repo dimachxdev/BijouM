@@ -307,7 +307,9 @@
     // renvoyait le premier membre venu — en pratique le propriétaire — et
     // chacun se retrouvait affiché avec son nom et ses droits.
     var url = URL_BASE + '/rest/v1/membres'
-            + '?select=user_id,organisation_id,nom,role,actif,organisations(slug,nom,plan,actif,expire_le)'
+            + '?select=user_id,organisation_id,nom,role,actif,'
+            + 'organisations(slug,nom,plan,actif,expire_le,devise,'
+            + 'slogan,adresse,telephone,ninea,rccm,pied_facture,logo)'
             + '&user_id=eq.' + encodeURIComponent(uid)
             + '&actif=eq.true&limit=1';
 
@@ -339,7 +341,9 @@
       role:            m.role,
       org_slug:        org.slug,
       org_nom:         org.nom,
-      org_plan:        org.plan
+      org_plan:        org.plan,
+      // Identité commerciale, imprimée sur les factures et les reçus.
+      boutique:        org
     };
     return profil;
   }
@@ -453,6 +457,8 @@
     role:              function () { return profil ? profil.role : null; },
     orgId:             function () { return profil ? profil.organisation_id : null; },
     orgSlug:           function () { return profil ? profil.org_slug : null; },
+    /** Identité de la boutique pour les documents imprimés. */
+    boutique:          function () { return (profil && profil.boutique) || {}; },
     estAdmin:          function () { return !!profil && (profil.role === 'admin' || profil.role === 'proprietaire'); },
     aRole:             function () {
       if (!profil) return false;

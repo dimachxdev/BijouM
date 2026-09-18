@@ -162,6 +162,24 @@ métier — l'isolation ne repose pas sur sa bonne volonté.
 Fonctions réservées : `boutiques_du_service()`, `creer_boutique()`,
 `basculer_boutique()`.
 
+### La console opérateur
+
+`operateur.html` + `js/operateur.js`, page autonome, atteignable depuis le lien
+discret sous l'écran de connexion. Elle a **sa propre session** : `Auth` de
+l'application principale déconnecterait l'opérateur, faute de ligne dans
+`membres`.
+
+Elle ne parle à la base que par les trois fonctions ci-dessus, et chacune
+revérifie `app.est_operateur()`. Un compte ordinaire qui ouvre la page se
+connecte peut-être, mais `boutiques_du_service()` lui répond « Réservé à
+l'opérateur du service. » : la console referme alors la session au lieu
+d'afficher une page vide. Rien côté navigateur ne protège quoi que ce soit.
+
+Ce que l'opérateur voit d'une boutique : nom, code, plan, statut, nombre de
+membres, nombre de ventes, date de la dernière vente. **Jamais** une vente, une
+cliente ou un compte — les policies RLS le lui refusent, et les fonctions ne
+les exposent pas.
+
 ### Arrivée d'une nouvelle boutique
 
 Vous la créez à la demande — pas d'inscription libre. `creer_boutique()` pose
