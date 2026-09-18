@@ -895,6 +895,22 @@ async function saveStockBatch(items) {
   }), reloadStock);
 }
 
+/**
+ * Demande au serveur le prochain identifiant d'une série (D-0002, V-0006…).
+ *
+ * Le calculer dans le navigateur à partir du compteur en cache refabriquait
+ * un numéro déjà pris dès que ce cache était en retard — et l'écriture en
+ * upsert écrasait alors la ligne existante au lieu d'en créer une.
+ */
+async function prochainId(cle, prefixe, largeur) {
+  var r = await fetch(SUPABASE_URL + '/rest/v1/rpc/prochain_id', {
+    method: 'POST', headers: H(),
+    body: JSON.stringify({ p_cle: cle, p_prefixe: prefixe, p_largeur: largeur || 4 })
+  });
+  if (!r.ok) throw new Error('Numérotation indisponible (' + r.status + ').');
+  return r.json();   // PostgREST renvoie la chaîne directement
+}
+
 /** Ouvre un compte épargne avec son dépôt initial — une seule transaction. */
 async function ouvrirCompteEpargne(compteId, client, date, depotInitial) {
   var r = await fetch(SUPABASE_URL + '/rest/v1/rpc/ouvrir_compte_epargne', {

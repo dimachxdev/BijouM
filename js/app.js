@@ -1878,20 +1878,27 @@ function creerDecaissementReprise(repriseId){
   if(montant<=0){showToast('⚠ Montant de reprise invalide.');return;}
   if(!confirm(`Enregistrer une sortie de caisse de ${fmt(montant)} pour la reprise de ${a.client} ?`)) return;
 
-  const dId=nextId('D','d');
-  const dec={
-    id:dId, date:a.date, categorie:'Reprise client',
-    description:`Reprise ${a.id} — ${a.client} — ${a.description||''}`,
-    montant, saisiPar:STATE.currentUser?.nom||'admin',
-    origineType:'reprise', origineId:a.id
-  };
-  STATE.decaissements.unshift(dec);
-  save();
-  saveDecaissement(dec);
-  renderAchatsClients();
-  renderDecaissements();
-  renderDashboard();
-  showToast(`✓ Sortie de ${fmt(montant)} enregistrée.`);
+  // Numéro attribué par le serveur : le calculer ici à partir du compteur en
+  // cache refabriquait un identifiant déjà pris, et l'écriture en upsert
+  // écrasait alors le décaissement d'une autre reprise.
+  prochainId('d','D',4)
+    .then(function(dId){
+      const dec={
+        id:dId, date:a.date, categorie:'Reprise client',
+        description:`Reprise ${a.id} — ${a.client} — ${a.description||''}`,
+        montant, saisiPar:STATE.currentUser?.nom||'admin',
+        origineType:'reprise', origineId:a.id
+      };
+      return saveDecaissement(dec).then(function(){ return dId; });
+    })
+    .then(function(dId){
+      // On relit le serveur plutôt que de deviner : c'est lui qui fait foi.
+      return chargerDonnees().then(function(){
+        renderAchatsClients(); renderDecaissements(); renderDashboard();
+        showToast(`✓ Sortie de ${fmt(montant)} enregistrée (${dId}).`);
+      });
+    })
+    .catch(function(e){ showToast('⚠ '+e.message); });
 }
 
 function enregistrerAchatClient(){
