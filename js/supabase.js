@@ -839,12 +839,21 @@ async function reloadCompteurs() {
 
 // ── Fonctions de sauvegarde avec rechargement ──────────────────────────────
 async function saveVente(v) {
+  // Attention : trois fonctions écrivent dans `ventes` (dbSaveVente, syncVente,
+  // saveVente). Toute nouvelle colonne doit être ajoutée aux trois — l'oubli
+  // ici a fait que `annulee` ne partait jamais en base : un remboursement
+  // créait bien le décaissement, mais la vente restait comptée au chiffre
+  // d'affaires.
   await _writeAndRefresh('ventes', {
     id:v.id, date:v.date, client:v.client||null,
     description:v.description||null, type_bijou:v.typeBijou||null,
     carat:v.carat||null, poids:v.poids||0,
     local:v.local||0, importe:v.importe||0, paiement:v.paiement||null,
     montant:v.montant||0, acompte:v.acompte||0, restant:v.restant||0,
+    paye_par_compte: v.payeParCompte||0,
+    annulee: v.annulee === true,
+    ...(v.annuleeLe       && {annulee_le:       v.annuleeLe}),
+    ...(v.annuleeMotif    && {annulee_motif:    v.annuleeMotif}),
     ...(v.numFacture      && {num_facture:      v.numFacture}),
     ...(v.compteClientId  && {compte_client_id: v.compteClientId}),
     ...(v.noteComplement  && {note_complement:  v.noteComplement})

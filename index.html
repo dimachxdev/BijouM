@@ -328,7 +328,7 @@
       <div class="metrics-grid" style="grid-template-columns:repeat(3,1fr)">
         <div class="metric-card"><div class="metric-label">Total décaissé (mois)</div><div class="metric-value" id="metric-decaiss-mois">—</div></div>
         <div class="metric-card"><div class="metric-label">Total décaissé (tout)</div><div class="metric-value" id="metric-decaiss-all">—</div></div>
-        <div class="metric-card"><div class="metric-label">Solde net (encaissé − décaissé)</div><div class="metric-value" id="metric-solde-net">—</div><span class="metric-badge badge-info" id="metric-solde-net-sub">—</span></div>
+        <div class="metric-card"><div class="metric-label">💰 Solde net caisse</div><div class="metric-value" id="metric-solde-net">—</div><span class="metric-badge badge-info" id="metric-solde-net-sub">—</span></div>
       </div>
       <div class="card"><div class="table-wrap">
         <table>
@@ -378,18 +378,6 @@
         </select>
       </div>
       <div class="card" id="ba-list"></div>
-    </section>
-
-    <!-- RAPPORT JOURNALIER -->
-    <section class="section" id="rapport_journalier">
-      <div class="page-header">
-        <div><h1 class="page-title">Rapport journalier</h1><p class="page-sub" id="rapport-date-label"></p></div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap">
-          <input type="date" class="form-input" id="rapport-date" style="width:auto" onchange="renderRapportJournalier()"/>
-          <button class="btn btn-primary" onclick="imprimerRapportJournalier()">&#x1F5A8; Imprimer / PDF</button>
-        </div>
-      </div>
-      <div id="rapport-journalier-content"></div>
     </section>
 
     <!-- MEMBRES DE LA BOUTIQUE -->
@@ -755,18 +743,6 @@
     <input type="hidden" id="s-type-bijou" value="" />
     <input type="hidden" id="s-carat" value="" />
     <input type="hidden" id="s-provenance" value="" />
-    <!-- Poids + Nombre articles -->
-    <div class="form-row">
-      <div class="form-group">
-        <label class="form-label">Poids a sortir (g) *</label>
-        <input class="form-input" type="number" step="0.01" min="0" placeholder="0,00" id="s-poids" oninput="previewSortie()" />
-      </div>
-      <div class="form-group">
-        <label class="form-label">Nombre d'articles</label>
-        <input class="form-input" type="number" min="0" placeholder="0" id="s-qty" />
-        <span class="form-hint">Informatif uniquement</span>
-      </div>
-    </div>
     <!-- Motif (optionnel) + champ libre -->
     <div class="form-row">
       <div class="form-group">
@@ -889,68 +865,6 @@
   </div>
 </div>
 
-<!-- BIJOU EN ARRHES -->
-<div class="modal-backdrop" id="modal-add-bijou-arr">
-  <div class="modal modal-large">
-    <div class="modal-header"><div class="modal-title">Nouvelle réservation — Bijou en arrhes</div><button class="modal-close" onclick="closeModal('modal-add-bijou-arr')">✕</button></div>
-    <div class="form-row">
-      <div class="form-group"><label class="form-label">Date *</label><input class="form-input" type="date" id="ba-date" /></div>
-      <div class="form-group client-picker-group">
-        <label class="form-label">Client *</label>
-        <div class="client-picker" id="picker-ba-client">
-          <input class="form-input client-picker-input" type="text"
-            placeholder="Nom ou téléphone..."
-            id="ba-client-search"
-            autocomplete="off"
-            oninput="filtrerClientPicker('ba-client')"
-            onfocus="ouvrirClientPicker('ba-client')"
-            onblur="fermerClientPicker('ba-client', 300)" />
-          <input type="hidden" id="ba-client" />
-          <div class="client-picker-dropdown" id="picker-drop-ba-client" style="display:none"></div>
-        </div>
-        <button type="button" class="btn-add-client-inline" onclick="ouvrirMiniClient('ba-client')">+ Nouveau client</button>
-      </div>
-    </div>
-    <div class="form-group" style="margin-bottom:8px"><label class="form-label">Bijou réservé *</label>
-      <select class="form-input" id="ba-article" onchange="remplirPrixBijouArr()"><option value="">— Choisir un article en stock —</option></select>
-    </div>
-    <!-- Info stock -->
-    <div id="ba-stock-info" style="display:none;margin-bottom:12px;padding:10px 14px;background:var(--bg-secondary);border-radius:var(--radius-md)">
-      <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px;margin-bottom:6px">
-        <span style="font-size:12px;color:var(--text-secondary)" id="ba-stock-label">—</span>
-      </div>
-      <div style="display:flex;gap:16px;font-size:11px;color:var(--text-tertiary)">
-        <span>Poids dispo : <strong id="ba-stock-poids-dispo" style="color:var(--success-text)">—</strong></span>
-        <span>Articles dispo : <strong id="ba-stock-qty-dispo" style="color:var(--success-text)">—</strong></span>
-      </div>
-    </div>
-    <div class="form-row">
-      <div class="form-group">
-        <label class="form-label">Poids réservé (g)</label>
-        <input class="form-input" type="number" step="0.01" min="0" placeholder="0,00" id="ba-poids" />
-      </div>
-      <div class="form-group">
-        <label class="form-label">Nombre d'articles</label>
-        <input class="form-input" type="number" min="0" placeholder="0" id="ba-nb-articles" />
-      </div>
-      <div class="form-group"><label class="form-label">Prix total (F CFA) *</label><input class="form-input" type="number" min="0" id="ba-prix" oninput="calcBijouArrRestant()" /></div>
-      <div class="form-group"><label class="form-label">Arrhes versées *</label><input class="form-input" type="number" min="0" placeholder="0" id="ba-arrhes" oninput="calcBijouArrRestant()" /></div>
-    </div>
-    <div class="form-row">
-      <div class="form-group"><label class="form-label">Restant dû</label><input class="form-input restant-display" type="text" id="ba-restant-disp" readonly placeholder="—" /></div>
-      <div class="form-group"><label class="form-label">Date d'échéance *</label><input class="form-input" type="date" id="ba-echeance" /></div>
-    </div>
-    <div class="modal-actions">
-      <button class="btn btn-secondary" onclick="closeModal('modal-add-bijou-arr')">Annuler</button>
-      <button class="btn btn-primary" onclick="enregistrerBijouArr()">Créer la réservation</button>
-    </div>
-  </div>
-</div>
-
-<!-- PAIEMENT ARRHES (ancien) -->
-<div class="modal-backdrop" id="modal-paiement-arr" style="display:none">
-  <div class="modal"><input type="hidden" id="paiement-arr-id" /></div>
-</div>
 
 <!-- FINALISER PAIEMENT VENTE -->
 <div class="modal-backdrop" id="modal-finaliser">
