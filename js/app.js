@@ -1673,16 +1673,29 @@ function confirmerFinalisation(){
   if(!v||!date){showToast('⚠ Date obligatoire.');return;}
   if(montant<=0){showToast('⚠ Montant obligatoire.');return;}
   if(montant>(v.restant||0)){showToast(`⚠ Montant supérieur au restant dû (${fmt(v.restant)})`);return;}
-  v.acompte=(v.acompte||0)+montant;
-  v.restant=Math.max(0,(v.restant||0)-montant);
-  if(paiement) v.paiement=paiement;
-  save();
-  saveVente(v);
-  closeModal('modal-finaliser');
-  renderBijouxArr();
-  renderJournal();
-  renderDashboard();
-  showToast(v.restant===0?`✓ Commande entièrement soldée ! Paiement de ${fmt(montant)} enregistré.`:`✓ Paiement de ${fmt(montant)} enregistré. Restant : ${fmt(v.restant)}`);
+
+  const btn=document.getElementById('btn-finaliser');
+  if(btn){ btn.disabled=true; btn.textContent='Enregistrement…'; }
+
+  // Passe par une opération serveur dédiée : encaisser est ouvert à toute
+  // l'équipe, alors que modifier une vente (montant, cliente, description)
+  // est réservé aux administrateurs. Sans cette séparation, ouvrir l'un
+  // reviendrait à ouvrir l'autre — c'est la même ligne en base.
+  enregistrerPaiementVente(venteId, montant, date, paiement)
+    .then(function(res){
+      if(!res || res.ok===false){ showToast('⛔ '+((res&&res.erreur)||'Paiement refusé.')); return; }
+      v.acompte = res.acompte;
+      v.restant = res.restant;
+      if(paiement) v.paiement = paiement;
+      save();
+      closeModal('modal-finaliser');
+      renderBijouxArr(); renderJournal(); renderDashboard();
+      showToast(res.solde
+        ? `✓ Commande soldée ! Paiement de ${fmt(montant)} encaissé.`
+        : `✓ Paiement de ${fmt(montant)} encaissé. Restant : ${fmt(res.restant)}`);
+    })
+    .catch(function(e){ showToast('⚠ '+e.message); })
+    .finally(function(){ if(btn){ btn.disabled=false; btn.textContent="✓ Valider l'encaissement"; } });
 }
 
 function ouvrirRemboursement(venteId){

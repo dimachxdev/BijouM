@@ -896,6 +896,25 @@ async function saveStockBatch(items) {
 }
 
 /**
+ * Encaisse un versement sur une commande en arrhes.
+ *
+ * Ouvert à toute l'équipe, contrairement à la modification d'une vente.
+ * Le serveur ne laisse toucher que l'acompte et le restant, et refuse un
+ * montant supérieur au reste dû ou une vente annulée.
+ */
+async function enregistrerPaiementVente(venteId, montant, date, paiement) {
+  var r = await fetch(SUPABASE_URL + '/rest/v1/rpc/enregistrer_paiement_vente', {
+    method: 'POST', headers: H(),
+    body: JSON.stringify({
+      p_vente_id: venteId, p_montant: montant,
+      p_date: date || null, p_paiement: paiement || null
+    })
+  });
+  if (!r.ok) throw new Error('Paiement refusé (' + r.status + ').');
+  return r.json();
+}
+
+/**
  * Pose ou retire le code PIN d'accès au portail.
  * Le code est haché par PostgreSQL ; il n'est jamais stocké en clair, ni
  * renvoyé. Passer une chaîne vide retire l'accès au portail.
