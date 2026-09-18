@@ -167,27 +167,34 @@ async function chargerDonnees(){
   COMMANDES = res.commandes || [];
 }
 
-/** Reprise de session au rechargement de la page. */
+/**
+ * Reprise de session au chargement de la page.
+ *
+ * Le voile de chargement est visible par défaut dans le CSS : c'est ce code
+ * qui doit le retirer, quel que soit le chemin pris. Sortir sans le masquer
+ * laissait la page tourner indéfiniment pour toute première visite.
+ */
 async function reprendreSession(){
   var jeton = null;
   try { jeton = sessionStorage.getItem(CLE_JETON); } catch(e){}
 
-  // Le balisage pose display:none sur les deux pages : sans jeton valide, il
-  // faut afficher explicitement l'écran de connexion, sinon la page reste noire.
-  if(!jeton){ showPage('page-login'); return; }
-
-  JETON = jeton;
-  showLoading(true);
   try {
-    await chargerDonnees();
-    afficherDashboard();
+    if(jeton){
+      JETON = jeton;
+      await chargerDonnees();
+      afficherDashboard();
+      return;
+    }
   } catch(e){
     // Jeton expiré ou révoqué : on repart proprement de l'écran de connexion.
     JETON = null;
     try { sessionStorage.removeItem(CLE_JETON); } catch(_){}
-    showLoading(false);
-    showPage('page-login');
   }
+
+  // Le balisage pose display:none sur les deux pages : il faut afficher
+  // explicitement l'écran de connexion, sinon la page reste noire.
+  showPage('page-login');
+  showLoading(false);
 }
 
 // ─── Tableau de bord ───────────────────────────────────────
