@@ -22,8 +22,12 @@ const ROLES = {
 const PERM_MAP = {
   proprietaire: ['all','journal','stocks','sorties','decaissements','clients','compte_client','bijou_arr','historique','comptes_users','rapport_jour'],
   admin:        ['all','journal','stocks','sorties','decaissements','clients','compte_client','bijou_arr','historique','comptes_users','rapport_jour'],
-  gestionnaire: ['journal','stocks','achats_clients','clients','compte_client','bijou_arr','rapport_jour'],
-  vendeur:      ['journal','clients','compte_client','bijou_arr','rapport_jour'],
+  // `rapport_jour` retiré aux deux : il affiche le solde de caisse et le
+  // détail des décaissements, réservés aux administrateurs.
+  // `achats_clients` ouvert au vendeur : le serveur l'autorisait déjà à
+  // enregistrer une reprise, seul l'onglet le masquait.
+  gestionnaire: ['journal','stocks','achats_clients','clients','compte_client','bijou_arr'],
+  vendeur:      ['journal','achats_clients','clients','compte_client','bijou_arr'],
 };
 
 // ============================================

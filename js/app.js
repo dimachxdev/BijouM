@@ -2935,6 +2935,8 @@ function imprimerFacture() {
 // ============================================
 function renderRapportJour(){ renderRapportJournalier(); }
 function renderRapportJournalier() {
+  // Ce rapport expose le solde de caisse et le détail des décaissements.
+  if(!isAdmin()){ showToast('⛔ Rapport réservé à l\'administrateur.'); return; }
   const date = document.getElementById('rapport-date-picker')?.value || today();
   const dLabel = fmtDateLong(date);
   document.getElementById('rapport-date-label').textContent = dLabel;
