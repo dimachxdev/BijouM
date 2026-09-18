@@ -59,6 +59,19 @@ const _supa = {
   },
   async upsert(table, data) {
     var rows = Array.isArray(data) ? data : [data];
+
+    // Les clés primaires sont (organisation_id, id) depuis le passage
+    // multi-boutique. PostgREST déduit de la clé primaire la cible de fusion
+    // d'un upsert : sans `organisation_id` dans le corps, il ne peut pas la
+    // construire et l'écriture échoue. On l'injecte ici, une fois pour toutes,
+    // plutôt que dans la trentaine de fonctions d'écriture.
+    if (typeof Auth !== 'undefined' && Auth.orgId()) {
+      rows = rows.map(function (row) {
+        return row.organisation_id ? row
+                                   : Object.assign({}, row, { organisation_id: Auth.orgId() });
+      });
+    }
+
     var r = await fetch(SUPABASE_URL + '/rest/v1/' + table, {
       method:  'POST',
       headers: H({ 'Prefer': 'resolution=merge-duplicates,return=representation' }),

@@ -136,6 +136,56 @@ effacer une trace, pas même le propriétaire.
 
 ---
 
+## 4 bis. Organisation des comptes en SaaS
+
+Décisions arrêtées le 2026-09-18.
+
+### Un compte = une boutique
+
+Pas d'appartenance multiple. Une personne qui travaille dans deux bijouteries
+aura deux adresses email. `membres` supporterait techniquement le contraire —
+sa clé est `(user_id, organisation_id)` — mais rien dans l'application ne le
+propose, et `app.current_org()` retourne volontairement une seule boutique.
+
+### Trois niveaux, pas deux
+
+| Niveau | Qui | Voit quoi |
+|---|---|---|
+| **Opérateur du service** | vous | la liste des boutiques, leur plan, leur volume d'activité — **jamais** leurs ventes, clientes ou comptes |
+| **Propriétaire / Admin** | la bijoutière | tout, dans sa boutique uniquement |
+| Gestionnaire / Vendeur | son équipe | selon la matrice des droits |
+
+L'opérateur vit dans une table à part, `operateurs`, et **n'est pas membre**
+des boutiques. Les policies RLS continuent donc de lui refuser tout accès
+métier — l'isolation ne repose pas sur sa bonne volonté.
+
+Fonctions réservées : `boutiques_du_service()`, `creer_boutique()`,
+`basculer_boutique()`.
+
+### Arrivée d'une nouvelle boutique
+
+Vous la créez à la demande — pas d'inscription libre. `creer_boutique()` pose
+l'organisation et l'invitation de sa propriétaire en une transaction ; celle-ci
+s'inscrit avec l'adresse invitée et devient automatiquement propriétaire.
+
+Une boutique démarre en `essai` avec une date d'expiration. Passée cette date,
+ou si vous la suspendez, `app.org_active()` la bascule en **lecture seule** :
+elle consulte son historique mais ne peut plus rien écrire. Aucune donnée
+n'est supprimée.
+
+### Numérotation : chaque boutique repart à 1
+
+Les clés primaires sont devenues `(organisation_id, id)`. Deux bijouteries ont
+chacune leur `V-0001` et leur `FAC-0001`, comme l'exige une comptabilité par
+entreprise.
+
+**Conséquence à ne jamais oublier** : PostgREST déduit la cible de fusion d'un
+upsert depuis la clé primaire. Toute écriture doit inclure `organisation_id`
+dans son corps. L'injection est centralisée dans `_supa.upsert()`.
+
+C'est précisément ce qui manquait pour `compteurs` — clé composée depuis la
+migration 001 — et qui figeait la numérotation en silence.
+
 ## 5. Migrations livrées
 
 | Fichier | Rôle |
