@@ -937,6 +937,12 @@ async function prochainId(cle, prefixe, largeur) {
   return r.json();   // PostgREST renvoie la chaîne directement
 }
 
+/** Identifiant de vente + numéro de facture, attribués par le serveur. */
+async function prochainsIdsVente() {
+  var r = await Promise.all([prochainId('v','V',4), prochainId('fac','FAC',4)]);
+  return { id: r[0], numFacture: r[1] };
+}
+
 /** Ouvre un compte épargne avec son dépôt initial — une seule transaction. */
 async function ouvrirCompteEpargne(compteId, client, date, depotInitial) {
   var r = await fetch(SUPABASE_URL + '/rest/v1/rpc/ouvrir_compte_epargne', {
