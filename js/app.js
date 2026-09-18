@@ -884,8 +884,7 @@ function renderJournal(){
   document.getElementById('poids-local-total').textContent  = tLoc.toFixed(2)+'g';
   document.getElementById('poids-importe-total').textContent= tImp.toFixed(2)+'g';
 
-  const admin    = isAdmin();
-  const canEdit  = admin || STATE.currentUser?.role === 'gestionnaire' || STATE.currentUser?.role === 'vendeur';
+  const admin = isAdmin();
 
   document.getElementById('journal-body').innerHTML=ventes.map(v=>{
     const c=getCarat(v.carat);
@@ -896,11 +895,12 @@ function renderJournal(){
 
     const nonFinalisee = (v.restant||0) > 0;
 
-    // Modifier : admin toujours, gestionnaire/vendeur seulement si non finalisée
-    const peutModifier = admin || (canEdit && nonFinalisee);
-    const btnModif = peutModifier
-      ? `<button class="btn small" onclick="ouvrirEditVente('${v.id}')" title="${nonFinalisee?'Modifier (non finalisée)':'Modifier'}">✎</button>`
-      : `<span class="perm-lock" title="${nonFinalisee?'Non autorisé':'Vente finalisée — admin uniquement'}">🔒</span>`;
+    // Modifier une vente : administrateurs seulement. Le serveur applique la
+    // même règle — afficher le bouton aux autres rôles leur ouvrirait un
+    // formulaire qui échouerait à l'enregistrement.
+    const btnModif = admin
+      ? `<button class="btn small" onclick="ouvrirEditVente('${v.id}')" title="Modifier">✎</button>`
+      : `<span class="perm-lock" title="Modification réservée à l'administrateur">🔒</span>`;
 
     // Supprimer : admin uniquement
     const btnSuppr = admin
@@ -995,12 +995,25 @@ async function enregistrerVente(){
       ouvrirComplementCC(cc, montant, date, desc, carat, typeBijou);
       return;
     }
-    cc.mouvements.push({date:date,type:'retrait',montant:montant,note:'Vente - '+desc});
-    recalerSolde(cc);
-    saveCompteClient(cc);   // sans cela le retrait restait en mémoire et le solde repartait à la hausse au rechargement
-    compteClientId=cc.id;
-    acompte=montant;        // vente soldée
-    payeParCompte=montant;  // ...mais aucun argent n'entre en caisse
+    // Vente + retrait en une seule transaction serveur : les enchaîner ici
+    // laissait passer le retrait quand la vente échouait.
+    const idCpt = nextId('V','v');
+    STATE.counters.fac++;
+    const facCpt = 'FAC-'+String(STATE.counters.fac).padStart(4,'0');
+    try {
+      const res = await venteSurCompteEpargne({
+        id: idCpt, compteId: cc.id, date: date, description: desc,
+        montant: montant, montantCompte: montant,
+        paiement: 'compte', carat: carat, typeBijou: typeBijou, numFacture: facCpt
+      });
+      if(!res || res.ok===false){ showToast('⛔ '+((res&&res.erreur)||'Vente refusée.')); return; }
+      if(stockRef && (poids>0 || nbArticlesV>0)) await deduireStock(stockRef, poids, nbArticlesV);
+      await chargerDonnees();
+      closeModal('modal-nouvelle-vente');
+      renderJournal(); renderStocks();
+      showToast('Vente '+idCpt+' — '+fmt(montant)+' déduit du compte de '+client);
+    } catch(e){ showToast('⚠ '+e.message); }
+    return;
   } else {
     // Si acompte non rempli (0 ou vide) → vente soldée directement
     const acompteEl = document.getElementById('v-acompte');
@@ -1028,13 +1041,11 @@ function ouvrirEditVente(id){
   const v=STATE.ventes.find(x=>x.id===id);if(!v)return;
   const nonFinalisee = (v.restant||0) > 0;
   const admin = isAdmin();
-  const role  = STATE.currentUser?.role;
-  // Admin = toujours. Gestionnaire/Vendeur = seulement si non finalisée
-  if(!admin && !nonFinalisee){
-    showToast('⛔ Vente finalisée — modification réservée à l\'administrateur.');return;
-  }
-  if(!admin && role !== 'gestionnaire' && role !== 'vendeur'){
-    showToast('⛔ Accès non autorisé.');return;
+  // Modifier une vente : administrateurs seulement, comme côté serveur.
+  // Pour encaisser un versement, les autres rôles utilisent « + Paiement »
+  // dans Arrhes & Commandes, qui passe par une opération dédiée.
+  if(!admin){
+    showToast('⛔ Modification réservée à l\'administrateur.');return;
   }
   peuplerSelect('edit-v-carat',v.carat);peuplerTypeBijou('edit-v-type-bijou',v.typeBijou||'');peuplerClientSelect('edit-v-client',v.client);
   document.getElementById('edit-v-id').value=id;
@@ -1064,11 +1075,8 @@ function ouvrirEditVente(id){
 function sauvegarderVente(){
   const id=document.getElementById('edit-v-id').value;
   const v=STATE.ventes.find(x=>x.id===id);if(!v)return;
-  const nonFinalisee=(v.restant||0)>0;
   const admin=isAdmin();
-  const role=STATE.currentUser?.role;
-  if(!admin && !nonFinalisee){showToast('⛔ Vente finalisée — modification réservée à l\'administrateur.');return;}
-  if(!admin && role!=='gestionnaire' && role!=='vendeur'){showToast('⛔ Accès non autorisé.');return;}
+  if(!admin){showToast('⛔ Modification réservée à l\'administrateur.');return;}
 
   // Non-admin : seulement acompte et description modifiables
   const montant = admin ? (parseInt(document.getElementById('edit-v-montant').value)||0) : v.montant;
@@ -1532,9 +1540,18 @@ function creerCompteClient(){
   const client=document.getElementById('cc-client').value,date=document.getElementById('cc-date').value,depot=parseInt(document.getElementById('cc-depot-init').value)||0;
   if(!client||!date||depot<=0){showToast('⚠ Client, date et dépôt initial sont obligatoires.');return;}
   const id=nextId('CC','cc');
-  const newCC={id,client,dateOuverture:date,solde:depot,actif:true,mouvements:[{date,type:'depot',montant:depot,note:'Ouverture compte'}]};
-  STATE.comptesClients.push(newCC);
-  saveCompteClient(newCC).then(function(){closeModal('modal-add-compte-client');renderDashboard();showToast('Compte '+id+' créé pour '+client+'.');});
+  // Le compte et son dépôt d'ouverture dans une seule transaction serveur :
+  // séparés, un compte pouvait exister avec un solde sans mouvement en face.
+  ouvrirCompteEpargne(id, client, date, depot)
+    .then(function(res){
+      if(!res || res.ok===false){ showToast('⛔ '+((res&&res.erreur)||'Création refusée.')); return; }
+      return chargerDonnees().then(function(){
+        closeModal('modal-add-compte-client');
+        renderComptesClients(); renderDashboard();
+        showToast('Compte '+id+' créé pour '+client+'.');
+      });
+    })
+    .catch(function(e){ showToast('⚠ '+e.message); });
 }
 function openDepotCC(id){
   const cc=STATE.comptesClients.find(c=>c.id===id); if(!cc)return;
@@ -1553,10 +1570,19 @@ function ajouterDepotCC(){
   const id=document.getElementById('depot-cc-id').value,date=document.getElementById('depot-cc-date').value,montant=parseInt(document.getElementById('depot-cc-montant').value)||0,note=document.getElementById('depot-cc-note').value||'Dépôt';
   if(!date||montant<=0){showToast('⚠ Date et montant obligatoires.');return;}
   const cc=STATE.comptesClients.find(c=>c.id===id);if(!cc)return;
-  cc.solde+=montant;cc.mouvements.push({date,type:'depot',montant,note});
-  save();
-  saveCompteClient(cc); // App → Supabase → App
-  closeModal('modal-depot-cc');
+  // Un dépôt est une saisie de comptoir, ouverte à toute l'équipe — mais c'est
+  // techniquement un UPDATE du solde, désormais fermé au vendeur. L'opération
+  // serveur écrit le mouvement et recale le solde sur son historique.
+  depotCompteEpargne(id, montant, date, note)
+    .then(function(res){
+      if(!res || res.ok===false){ showToast('⛔ '+((res&&res.erreur)||'Dépôt refusé.')); return; }
+      return chargerDonnees().then(function(){
+        closeModal('modal-depot-cc');
+        renderComptesClients(); renderDashboard();
+        showToast('✓ Dépôt de '+fmt(montant)+' enregistré. Nouveau solde : '+fmt(res.nouveau_solde));
+      });
+    })
+    .catch(function(e){ showToast('⚠ '+e.message); });
 }
 function cloturerCC(id){
   const cc=STATE.comptesClients.find(c=>c.id===id);if(!cc)return;
@@ -2385,29 +2411,32 @@ function validerComplementCC() {
   if(montantComp <= 0){ showToast('Saisissez le montant du complement.'); return; }
   if(cc.solde + montantComp < montant){ showToast('Complement insuffisant. Manque : '+fmt(montant - cc.solde - montantComp)); return; }
 
-  // Déduire tout le solde du compte
   var soldeUtilise = cc.solde;   // part venant du compte : hors caisse
-  cc.mouvements.push({date:date, type:'retrait', montant:soldeUtilise, note:'Vente (solde compte) - '+desc});
-  recalerSolde(cc);
-
-  // Créer la vente avec acompte = montant total (soldée)
   STATE.counters.fac++;
   var numFacture = 'FAC-'+String(STATE.counters.fac).padStart(4,'0');
   var id = nextId('V','v');
-  const venteComplement = {
-    id, date, client: cc.client,
-    description: desc, local:0, importe:0, carat, typeBijou,
-    paiement: 'compte+'+paiementComp,
-    montant, acompte: montant, restant: 0, payeParCompte: soldeUtilise,
-    compteClientId: cc.id,
-    numFacture,
+
+  // Une seule transaction serveur : la vente et le retrait aboutissent
+  // ensemble, ou aucun des deux. L'ancienne version les lançait en parallèle
+  // sans intercepter l'échec — le retrait passait, la vente non.
+  venteSurCompteEpargne({
+    id: id, compteId: cc.id, date: date, description: desc,
+    montant: montant, montantCompte: soldeUtilise,
+    paiement: 'compte+'+paiementComp, carat: carat, typeBijou: typeBijou,
+    numFacture: numFacture,
     noteComplement: 'Compte: '+fmt(soldeUtilise)+' + '+paiementComp+': '+fmt(montantComp)
-  };
-  STATE.ventes.unshift(venteComplement);
-  saveVente(venteComplement);
-  Promise.all([saveVente(STATE.ventes[0]), saveCompteClient(cc)])
-    .then(function(){closeModal('modal-complement-cc');closeModal('modal-nouvelle-vente');showToast('Vente '+id+' — Compte: '+fmt(soldeUtilise)+' + Complement: '+fmt(montantComp));});
+  })
+  .then(function(res){
+    if(!res || res.ok===false){ showToast('⛔ '+((res&&res.erreur)||'Vente refusée.')); return; }
+    // On relit depuis le serveur plutôt que de reconstituer l'état à la main.
+    return chargerDonnees().then(function(){
+      closeModal('modal-complement-cc'); closeModal('modal-nouvelle-vente');
+      showToast('Vente '+id+' — Compte : '+fmt(soldeUtilise)+' + '+paiementComp+' : '+fmt(montantComp));
+    });
+  })
+  .catch(function(e){ showToast('⚠ '+e.message); });
 }
+
 
 
 // ============================================

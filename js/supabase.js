@@ -895,6 +895,61 @@ async function saveStockBatch(items) {
   }), reloadStock);
 }
 
+/** Ouvre un compte épargne avec son dépôt initial — une seule transaction. */
+async function ouvrirCompteEpargne(compteId, client, date, depotInitial) {
+  var r = await fetch(SUPABASE_URL + '/rest/v1/rpc/ouvrir_compte_epargne', {
+    method: 'POST', headers: H(),
+    body: JSON.stringify({ p_compte_id: compteId, p_client: client,
+                           p_date: date, p_depot_initial: depotInitial })
+  });
+  if (!r.ok) throw new Error('Création refusée (' + r.status + ').');
+  return r.json();
+}
+
+/**
+ * Enregistre un dépôt sur un compte épargne.
+ * Ouvert à toute l'équipe : c'est une saisie de comptoir. Le serveur écrit le
+ * mouvement puis recale le solde sur l'historique, donc les deux ne peuvent
+ * plus diverger.
+ */
+async function depotCompteEpargne(compteId, montant, date, note) {
+  var r = await fetch(SUPABASE_URL + '/rest/v1/rpc/depot_compte_epargne', {
+    method: 'POST', headers: H(),
+    body: JSON.stringify({ p_compte_id: compteId, p_montant: montant,
+                           p_date: date || null, p_note: note || null })
+  });
+  if (!r.ok) throw new Error('Dépôt refusé (' + r.status + ').');
+  return r.json();
+}
+
+/**
+ * Vente réglée en tout ou partie sur l'épargne d'une cliente.
+ *
+ * La vente et le retrait sur le compte sont écrits dans une seule transaction
+ * serveur. Les enchaîner depuis le navigateur laissait passer le retrait
+ * quand la vente échouait — une cliente y a perdu 40 000 F d'épargne.
+ */
+async function venteSurCompteEpargne(p) {
+  var r = await fetch(SUPABASE_URL + '/rest/v1/rpc/vente_sur_compte_epargne', {
+    method: 'POST', headers: H(),
+    body: JSON.stringify({
+      p_vente_id:        p.id,
+      p_compte_id:       p.compteId,
+      p_date:            p.date,
+      p_description:     p.description || null,
+      p_montant:         p.montant || 0,
+      p_montant_compte:  p.montantCompte || 0,
+      p_paiement:        p.paiement || 'compte',
+      p_carat:           p.carat || null,
+      p_type_bijou:      p.typeBijou || null,
+      p_num_facture:     p.numFacture || null,
+      p_note_complement: p.noteComplement || null
+    })
+  });
+  if (!r.ok) throw new Error('Vente refusée (' + r.status + ').');
+  return r.json();
+}
+
 /**
  * Encaisse un versement sur une commande en arrhes.
  *
