@@ -96,6 +96,18 @@ serveur. `creer_boutique()` et `app.normaliser_tel()` sont les modèles à suivr
 - Après toute migration, passer le linter Supabase (*Advisors → Security*) et
   traiter ou justifier chaque ligne.
 
+### Relire la matrice, pas les migrations
+
+Une policy `UPDATE` sans contrôle de rôle ne se voit pas en lisant le code :
+ses voisines en ont un, on suppose qu'elle en a un. Deux trous sont restés
+ouverts des semaines ainsi — `mouvements_arrhes` modifiable par un vendeur, et
+les douze compteurs remettables à zéro par n'importe qui (migration 011).
+
+**Interroger `pg_policy` pour obtenir le tableau complet** — table × commande ×
+rôles exigés × `current_org` × `org_active` — et chercher les cases vides.
+Le linter ne voit pas ces trous : les policies existent, elles sont seulement
+trop larges.
+
 ### Alertes du linter qui sont normales ici
 
 Ne pas les « corriger » : ce sont des choix.
@@ -217,13 +229,53 @@ côté base, pas côté interface.
   traitement idempotent, et **déblocage uniquement sur confirmation du
   prestataire** — jamais sur un appel venu du navigateur.
 
+### Paiement des dépôts clientes (PayTech / PayDunya)
+
+Prévu, pas encore construit. Ces règles valent dès la première ligne de code.
+
+**Le montant crédité vient du prestataire, jamais du navigateur.** Aujourd'hui
+`portail_depot()` croit la cliente sur parole : elle déclare un montant, il
+entre dans `mouvements_cc` et gonfle le solde de caisse. C'est le trou que le
+paiement doit fermer — pas seulement compléter.
+
+Le sens de circulation, à ne pas inverser :
+
+1. le portail demande au **serveur** de créer une intention de paiement ;
+2. la cliente paie chez le prestataire (Wave, Orange Money, carte) ;
+3. le prestataire appelle **notre** webhook ;
+4. le serveur vérifie, puis écrit le dépôt.
+
+Le retour du navigateur après paiement n'est qu'un affichage. Il ne crédite rien.
+
+**Ne pas se contenter de la vérification documentée par PayDunya.** Leur IPN se
+valide par un SHA-512 de la clé maîtresse : un hash **statique**, qui prouve
+seulement que l'appelant connaît la clé. Il ne signe ni le montant ni le statut.
+Quiconque l'intercepte peut fabriquer une notification valide.
+
+Donc, dans tous les cas : **rappeler le prestataire pour confirmer la facture**
+avant de créditer, et comparer le montant et la référence à ce qui est en base.
+PayTech propose un HMAC-SHA256 — le préférer, mais garder la confirmation
+serveur-à-serveur.
+
+**Idempotence obligatoire.** Une notification est rejouée. Dédupliquer sur la
+référence de transaction du prestataire, stockée en colonne unique sur le
+mouvement. Sans quoi un dépôt est crédité deux fois.
+
+**Refuser une clé vide.** Un HMAC calculé sur une clé vide est valide : si le
+secret n'est pas configuré, le webhook doit renvoyer une erreur, jamais accepter.
+
+Le webhook sera une Edge Function appelable sans JWT (`verify_jwt: false`) —
+c'est le seul point d'entrée du projet sans authentification Supabase. Sa
+signature **est** son authentification.
+
 ---
 
 ## 6. Dépendances tierces
 
-**Ce projet n'a ni `package.json`, ni `node_modules`, ni étape de compilation.
-C'est un atout de sécurité : la surface d'approvisionnement est presque nulle.
-Le défaut est zéro dépendance.**
+**Ce projet n'a ni `package.json`, ni `node_modules`, ni étape de compilation,
+et plus aucun script tiers depuis le 2026-10-14. Zéro dépendance, au sens
+littéral : aucune page ne charge quoi que ce soit en dehors de son propre
+domaine. C'est un atout de sécurité rare — le conserver est une règle.**
 
 Ajouter une bibliothèque est une décision, pas une commodité. Si c'est
 inévitable :
@@ -262,12 +314,9 @@ Y consigner tout geste sensible, pas seulement les connexions.
 - [ ] Activer la **protection des mots de passe compromis** (Supabase vérifie
       HaveIBeenPwned) — désactivée aujourd'hui, c'est une case à cocher.
 - [ ] Activer la **MFA** (TOTP) et l'exiger des rôles `proprietaire` et `admin`.
-- [ ] Retirer **EmailJS** de `client.html` : script tiers chargé depuis un CDN
-      en version flottante, sans SRI, sur la page qui manipule le PIN et le
-      jeton de la cliente — pour une fonction qui ne marche pas (sa configuration
-      est lue dans le `localStorage` de l'administratrice, absent chez la cliente).
-- [ ] Supprimer la table résiduelle `public.utilisateurs_archive` (2 lignes,
-      sans mot de passe depuis la migration 004).
+- [x] ~~Retirer **EmailJS**~~ et ~~supprimer `public.utilisateurs_archive`~~ —
+      faits le 2026-10-14. Le portail cliente ne fait plus **aucune** requête
+      vers un domaine tiers.
 - [x] ~~Réactiver **Confirm email**~~ — vérifié actif le 2026-10-14
       (`mailer_autoconfirm: false`). **Attention** : tant que le SMTP ne part
       pas, l'inscription par email est donc impossible — c'est WhatsApp ou rien.

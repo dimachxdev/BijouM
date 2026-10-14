@@ -17,7 +17,7 @@ const KAYOR_LOGO_B64 = 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAgAAZABkAAD/7AARR
  * qui « peut tout faire » alors que les droits sont restreints, c'est presque
  * toujours ça.
  */
-const APP_VERSION = '2026-09-23-whatsapp';
+const APP_VERSION = '2026-10-14-annulees';
 
 function loadLS(k, fb) { try { const s=localStorage.getItem(k); return s?JSON.parse(s):fb; } catch { return fb; } }
 
@@ -1137,8 +1137,9 @@ function renderJournal(){
     if(fc&&v.carat!==fc)return false;
     if(ft==='local'&&!(parseFloat(v.local)||0))return false;
     if(ft==='importe'&&!(parseFloat(v.importe)||0))return false;
-    if(fr==='solde'&&(v.restant||0)>0)return false;
-    if(fr==='en-cours'&&!(v.restant||0))return false;
+    if(fr==='annulee') return !!v.annulee;
+    if(fr==='solde'&&((v.restant||0)>0||v.annulee))return false;
+    if(fr==='en-cours'&&(!(v.restant||0)||v.annulee))return false;
     return true;
   });
 
@@ -1153,7 +1154,13 @@ function renderJournal(){
   const tLoc      = STATE.ventes.reduce((s,v)=>s+(parseFloat(v.local)||0),0);
   const tImp      = STATE.ventes.reduce((s,v)=>s+(parseFloat(v.importe)||0),0);
 
-  document.getElementById('journal-count-label').textContent=`${STATE.ventes.length} ventes · ${ventes.length} affichées`;
+  // Les annulées sont comptées à part : « Total ventes » les exclut, mais
+  // elles restent dans la liste. Sans ce rappel, additionner les montants
+  // affichés ne retombe pas sur le cumul, et le chiffre paraît faux.
+  const nbAnnulees = STATE.ventes.filter(v=>v.annulee).length;
+  document.getElementById('journal-count-label').textContent =
+    `${STATE.ventes.length} ventes · ${ventes.length} affichées`
+    + (nbAnnulees ? ` · ${nbAnnulees} annulée${nbAnnulees>1?'s':''} (hors total)` : '');
   document.getElementById('montant-cumul').textContent   = fmt(tCumul);
   document.getElementById('montant-encaisse').textContent= fmt(tSoldeNet); // encaissé − décaissé
   document.getElementById('total-restants').textContent  = fmt(tRest);
@@ -1165,9 +1172,11 @@ function renderJournal(){
   document.getElementById('journal-body').innerHTML=ventes.map(v=>{
     const c=getCarat(v.carat);
     const dot=c?`<span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${c.couleur};margin-right:4px;vertical-align:middle"></span>`:'';
-    const rb=(v.restant||0)>0
-      ? `<span class="stock-badge stock-low">${fmt(v.restant)}</span>`
-      : `<span class="stock-badge stock-ok">Soldé</span>`;
+    const rb = v.annulee
+      ? `<span class="stock-badge" style="background:var(--danger-bg);color:var(--danger-text)" title="${esc(v.annuleeMotif||'Vente annulée')}">Annulée</span>`
+      : (v.restant||0)>0
+        ? `<span class="stock-badge stock-low">${fmt(v.restant)}</span>`
+        : `<span class="stock-badge stock-ok">Soldé</span>`;
 
     const nonFinalisee = (v.restant||0) > 0;
 
@@ -1188,7 +1197,7 @@ function renderJournal(){
       ? `<button class="btn small" style="background:var(--warning-bg);color:var(--warning-text);border-color:transparent" onclick="ouvrirAjoutAcompte('${v.id}')" title="Ajouter un acompte">+&nbsp;Acompte</button>`
       : '';
 
-    return`<tr>
+    return`<tr${v.annulee?' style="opacity:.6"':''}>
       <td style="white-space:nowrap;font-size:12px;color:var(--text-secondary)">${fmtDate(v.date)}</td>
       <td><div style="display:flex;align-items:center;gap:7px">
         <div style="width:28px;height:28px;border-radius:50%;background:var(--info-bg);color:var(--info-text);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:600;flex-shrink:0">${ini(v.client)}</div>
@@ -1198,7 +1207,7 @@ function renderJournal(){
       <td style="text-align:center">${(parseFloat(v.local)||0)>0?`<span class="badge-local">${fmtG(v.local)}</span>`:'<span style="color:var(--text-tertiary)">—</span>'}</td>
       <td style="text-align:center">${(parseFloat(v.importe)||0)>0?`<span class="badge-importe">${fmtG(v.importe)}</span>`:'<span style="color:var(--text-tertiary)">—</span>'}</td>
       <td><span class="carat-pill">${dot}${(v.carat||'—').toUpperCase()}</span></td>
-      <td style="font-weight:500;white-space:nowrap">${fmt(v.montant)}</td>
+      <td style="font-weight:500;white-space:nowrap${v.annulee?';text-decoration:line-through;color:var(--text-tertiary)':''}">${fmt(v.montant)}</td>
       
       <td><span class="paiement-pill paiement-${v.paiement||'especes'}">${PAIEMENT_LABELS[v.paiement||'especes']||''}</span></td>
       <td>${rb}</td>
