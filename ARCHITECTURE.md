@@ -463,3 +463,34 @@ grant all privileges on all tables in schema public to anon;
 3. **Ne pas déployer en production** avant la fin de la phase 2.
 4. **Supprimer `fix_tout.sql`** une fois `002` appliqué, pour que personne ne le
    rejoue par réflexe : il rouvrirait tout.
+
+## 8. Identité de l'équipe : WhatsApp
+
+Décidé le 2026-09-23, migration `009_invitations_whatsapp.sql`.
+
+Une invitation porte désormais un **numéro**, une adresse, ou les deux —
+contrainte `invitations_contact_present`. Le numéro est le canal principal.
+
+`app.normaliser_tel()` range tout au format de `auth.users.phone` : chiffres
+seuls, indicatif 221 ajouté aux mobiles sénégalais à 9 chiffres. Les cinq
+écritures d'un même numéro (`77 123 45 67`, `+221 …`, `00221 …`, …) convergent.
+La même règle existe en JavaScript, pour l'affichage uniquement.
+
+`app.handle_new_user()` cherche l'invitation sur le numéro **ou** sur l'email,
+et recopie les deux sur `membres`.
+
+### Pourquoi cela ferme le dossier email
+
+Un compte ouvert par code WhatsApp **n'a pas de mot de passe**. Donc rien à
+réinitialiser, donc aucune dépendance au SMTP pour l'équipe. Les comptes
+existants gardent leur mot de passe : les deux voies coexistent sur l'écran
+de connexion.
+
+Les **clientes** gardent leur code PIN (migration 003). Un OTP facturé à chaque
+consultation de solde n'aurait aucun sens.
+
+### Limite connue
+
+Une invitation n'agit qu'à la **création** du compte : le trigger est sur
+`insert` de `auth.users`. Réinviter quelqu'un qui possède déjà un compte ne
+produit rien — il faudrait une fonction `rejoindre_boutique()`, qui n'existe pas.

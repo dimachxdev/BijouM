@@ -24,6 +24,15 @@
     });
   }
 
+  /** Même règle que `app.normaliser_tel()` côté serveur : chiffres seuls, 221 par défaut. */
+  function normaliserTel(tel) {
+    var v = String(tel || '').replace(/[^0-9]/g, '');
+    if (!v) return '';
+    if (v.slice(0, 2) === '00') v = v.slice(2);
+    if (v.length === 9 && v[0] === '7') v = '221' + v;
+    return v;
+  }
+
   function fmtDate(d) {
     if (!d) return '—';
     var t = new Date(d);
@@ -218,13 +227,17 @@
     var nom   = $('c-nom').value.trim();
     var slug  = $('c-slug').value.trim().toUpperCase();
     var email = $('c-email').value.trim().toLowerCase();
+    var tel   = normaliserTel($('c-tel').value);
     var nomP  = $('c-nom-proprio').value.trim();
     var plan  = $('c-plan').value;
     var jours = parseInt($('c-jours').value, 10);
     if (isNaN(jours) || jours < 0) jours = 0;
 
-    if (!nom || !slug || !email || !nomP) {
-      message('Nom, code, nom et email de la propriétaire sont obligatoires.', true); return;
+    if (!nom || !slug || !nomP) {
+      message('Le nom de la boutique, son code et le nom de la propriétaire sont obligatoires.', true); return;
+    }
+    if (!tel && !email) {
+      message('Indiquez au moins un numéro WhatsApp pour la propriétaire.', true); return;
     }
     if (!/^[A-Z0-9]{2,6}$/.test(slug)) {
       message('Le code boutique doit faire 2 à 6 lettres majuscules ou chiffres.', true); return;
@@ -235,17 +248,19 @@
     try {
       var d = await rpc('creer_boutique', {
         p_nom: nom, p_slug: slug,
-        p_email_proprietaire: email, p_nom_proprietaire: nomP,
-        p_plan: plan, p_jours_essai: jours
+        p_email_proprietaire: email || null, p_tel_proprietaire: tel || null,
+        p_nom_proprietaire: nomP, p_plan: plan, p_jours_essai: jours
       });
-      ['c-nom', 'c-slug', 'c-email', 'c-nom-proprio'].forEach(function (id) { $(id).value = ''; });
+      ['c-nom', 'c-slug', 'c-tel', 'c-email', 'c-nom-proprio'].forEach(function (id) { $(id).value = ''; });
       basculerFormulaire();
       await rafraichir();   // efface le bandeau : le message vient donc après
-      // Pas d'email automatique : la propriétaire s'inscrit elle-même depuis
-      // l'écran de connexion, bouton « J'ai une invitation ».
+      // Rien n'est envoyé automatiquement : c'est la propriétaire qui ouvre
+      // l'application, et l'invitation l'attend sur son numéro.
       message('✓ « ' + nom + ' » créée (code ' + d.slug + '). Invitation posée pour '
-            + d.invitation_envoyee_a + ' — elle doit s\'inscrire avec cette adresse '
-            + 'via « J\'ai une invitation » sur l\'écran de connexion.');
+            + (d.invitation_telephone ? '+' + d.invitation_telephone : d.invitation_email)
+            + (d.invitation_telephone
+                ? ' — elle ouvre l\'application et choisit « Continuer avec WhatsApp ».'
+                : ' — elle s\'inscrit avec cette adresse via « J\'ai une invitation ».'));
     } catch (e) {
       message(e.message, true);
     } finally {

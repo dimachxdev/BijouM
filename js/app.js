@@ -17,7 +17,7 @@ const KAYOR_LOGO_B64 = 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAgAAZABkAAD/7AARR
  * qui « peut tout faire » alors que les droits sont restreints, c'est presque
  * toujours ça.
  */
-const APP_VERSION = '2026-09-18-caisse';
+const APP_VERSION = '2026-09-23-whatsapp';
 
 function loadLS(k, fb) { try { const s=localStorage.getItem(k); return s?JSON.parse(s):fb; } catch { return fb; } }
 
@@ -590,15 +590,74 @@ async function doLogout() {
 // ============================================
 // INSCRIPTION / MOT DE PASSE OUBLIÉ
 // ============================================
-const PANNEAUX_AUTH = ['panel-login','panel-signup','panel-forgot','panel-reset'];
+const PANNEAUX_AUTH = ['panel-login','panel-signup','panel-forgot','panel-reset',
+                       'panel-wa-num','panel-wa-code'];
 
 function afficherPanneau(id) {
   PANNEAUX_AUTH.forEach(p => {
     const el = document.getElementById(p);
     if (el) el.style.display = (p === id) ? 'block' : 'none';
   });
-  ['login-error','signup-error','signup-ok','forgot-error','forgot-ok','reset-error','reset-ok']
+  ['login-error','signup-error','signup-ok','forgot-error','forgot-ok','reset-error','reset-ok',
+   'wa-num-error','wa-code-error','wa-code-ok']
     .forEach(i => { const el = document.getElementById(i); if (el) el.style.display = 'none'; });
+}
+
+// ============================================
+// CONNEXION PAR WHATSAPP (code à six chiffres)
+// ============================================
+// Un seul parcours pour l'inscription et la connexion : au premier code
+// validé, Supabase crée le compte et le serveur le rattache à la boutique si
+// une invitation porte ce numéro (migration 009). Ensuite, le même écran
+// ouvre simplement la session.
+
+/** Numéro saisi à l'étape 1, conservé pour l'étape 2 et pour le renvoi. */
+let WA_NUMERO = '';
+
+function ouvrirWhatsApp() {
+  afficherPanneau('panel-wa-num');
+  const champ = document.getElementById('wa-tel');
+  if (champ) champ.focus();
+}
+
+async function doWhatsAppEnvoyer(renvoi) {
+  // Au renvoi, on repart du numéro déjà validé : le champ n'est plus à l'écran.
+  const saisi = renvoi ? WA_NUMERO : (document.getElementById('wa-tel').value || '').trim();
+  const cibleErreur = renvoi ? 'wa-code-error' : 'wa-num-error';
+
+  if (!saisi) { messageAuth('wa-num-error', 'Indiquez votre numéro WhatsApp.'); return; }
+
+  const btn = document.getElementById(renvoi ? 'lien-wa-renvoyer' : 'btn-wa-envoyer');
+  const libelle = btn.textContent;
+  btn.disabled = true; btn.textContent = 'Envoi…';
+  try {
+    WA_NUMERO = await Auth.envoyerCodeWhatsApp(saisi);
+    afficherPanneau('panel-wa-code');
+    document.getElementById('wa-rappel-num').textContent = '+' + WA_NUMERO;
+    if (renvoi) messageAuth('wa-code-ok', '✓ Nouveau code envoyé.');
+    document.getElementById('wa-code').value = '';
+    document.getElementById('wa-code').focus();
+  } catch (e) {
+    messageAuth(cibleErreur, e.message);
+  } finally {
+    btn.disabled = false; btn.textContent = libelle;
+  }
+}
+
+async function doWhatsAppVerifier() {
+  const code = (document.getElementById('wa-code').value || '').trim();
+  const btn  = document.getElementById('btn-wa-verifier');
+  btn.disabled = true; btn.textContent = 'Vérification…';
+  try {
+    const profil = await Auth.verifierCodeWhatsApp(WA_NUMERO, code);
+    ouvrirSession(profil);
+  } catch (e) {
+    // Le cas « code bon, mais aucune boutique » vient de chargerProfil() :
+    // le compte existe, il n'est simplement rattaché à rien.
+    messageAuth('wa-code-error', e.message);
+  } finally {
+    btn.disabled = false; btn.textContent = 'Valider';
+  }
 }
 
 function messageAuth(id, texte) {
@@ -2973,7 +3032,8 @@ async function renderGestionComptes() {
   const lignesMembres = membres.map(m => {
     const role   = ROLES[m.role] || { label:m.role, color:'#888', bg:'#eee' };
     const estMoi = m.user_id === moi;
-    const email  = m.email || '—';
+    // Le numéro identifie les comptes WhatsApp, l'email les comptes historiques.
+    const email  = m.telephone ? '+' + m.telephone : (m.email || '—');
     return `<tr>
       <td><div style="display:flex;align-items:center;gap:10px">
         <div style="width:32px;height:32px;border-radius:50%;background:${role.bg};color:${role.color};display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0">${esc(ini(m.nom))}</div>
@@ -2997,7 +3057,7 @@ async function renderGestionComptes() {
         <div style="width:32px;height:32px;border-radius:50%;background:var(--warning-bg,#faeeda);color:var(--warning-text);display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0">✉</div>
         <div><div style="font-size:13px;font-weight:500">${esc(i.nom)}</div><span style="font-size:10px;color:var(--warning-text)">Invitation en attente</span></div>
       </div></td>
-      <td><span class="ref-code">${esc(i.email)}</span></td>
+      <td><span class="ref-code">${esc(i.telephone ? '+' + i.telephone : (i.email || '—'))}</span></td>
       <td><span class="role-pill role-${esc(i.role)}">${esc((ROLES[i.role]||{}).label||i.role)}</span></td>
       <td><span class="stock-badge stock-low">Expire le ${esc((i.expire_le||'').slice(0,10))}</span></td>
       <td style="font-size:12px;color:var(--text-secondary)">${esc((i.created_at||'').slice(0,10))}</td>
@@ -3012,7 +3072,7 @@ async function chargerMembres() {
   // `email` est recopié sur `membres` : PostgREST n'expose que le schéma
   // `public`, auth.users n'est donc pas embarquable depuis une requête REST.
   const r = await fetch(SUPABASE_URL +
-    '/rest/v1/membres?select=user_id,nom,email,role,actif,created_at' +
+    '/rest/v1/membres?select=user_id,nom,email,telephone,role,actif,created_at' +
     '&order=created_at.asc', { headers: H() });
   if (!r.ok) throw new Error('Membres inaccessibles (' + r.status + ').');
   return r.json();
@@ -3020,7 +3080,7 @@ async function chargerMembres() {
 
 async function chargerInvitations() {
   const r = await fetch(SUPABASE_URL +
-    '/rest/v1/invitations?select=id,email,nom,role,expire_le,created_at' +
+    '/rest/v1/invitations?select=id,email,telephone,nom,role,expire_le,created_at' +
     '&utilisee_le=is.null&order=created_at.desc', { headers: H() });
   if (!r.ok) return [];   // table absente tant que 005 n'est pas appliquée
   return r.json();
@@ -3031,6 +3091,8 @@ function ouvrirInvitation() {
   document.getElementById('u-edit-id').value = '';
   document.getElementById('u-nom').value     = '';
   document.getElementById('u-email').value   = '';
+  document.getElementById('u-tel').value     = '';
+  document.getElementById('u-tel').disabled  = false;
   document.getElementById('u-role').value    = 'vendeur';
   document.getElementById('u-email').disabled = false;
   document.getElementById('modal-user-title').textContent = 'Inviter un membre';
@@ -3047,6 +3109,8 @@ async function ouvrirEditMembre(userId) {
   document.getElementById('u-nom').value     = m.nom;
   document.getElementById('u-email').value   = m.email || '';
   document.getElementById('u-email').disabled = true;   // l'email appartient au compte Auth
+  document.getElementById('u-tel').value      = m.telephone ? '+' + m.telephone : '';
+  document.getElementById('u-tel').disabled   = true;   // le numéro aussi : il identifie le compte
   document.getElementById('u-role').value    = m.role;
   document.getElementById('modal-user-title').textContent = 'Modifier — ' + m.nom;
   document.getElementById('btn-save-user').textContent    = 'Sauvegarder';
@@ -3059,6 +3123,7 @@ async function sauvegarderMembre() {
   const userId = document.getElementById('u-edit-id').value;
   const nom    = document.getElementById('u-nom').value.trim();
   const email  = document.getElementById('u-email').value.trim().toLowerCase();
+  const tel    = Auth.normaliserTel(document.getElementById('u-tel').value);
   const role   = document.getElementById('u-role').value;
 
   if (!nom) { showToast('⚠ Le nom est obligatoire.'); return; }
@@ -3071,13 +3136,22 @@ async function sauvegarderMembre() {
       if (!r.ok) throw new Error(await r.text());
       showToast(`✓ ${nom} — rôle mis à jour.`);
     } else {
-      if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { showToast('⚠ Adresse email invalide.'); return; }
+      // Le numéro est le canal principal ; l'email reste accepté pour qui
+      // préfère le mot de passe. Il en faut au moins un — le serveur le
+      // vérifie aussi (contrainte `invitations_contact_present`).
+      if (!tel && !email) { showToast('⚠ Indiquez un numéro WhatsApp, ou à défaut une adresse email.'); return; }
+      if (tel && tel.length < 8) { showToast('⚠ Numéro incomplet.'); return; }
+      if (email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { showToast('⚠ Adresse email invalide.'); return; }
+
       const r = await fetch(SUPABASE_URL + '/rest/v1/invitations', {
         method: 'POST', headers: H(),
-        body: JSON.stringify({ email, nom, role, organisation_id: Auth.orgId(), invite_par: STATE.currentUser.id })
+        body: JSON.stringify({ email: email || null, telephone: tel || null, nom, role,
+                               organisation_id: Auth.orgId(), invite_par: STATE.currentUser.id })
       });
       if (!r.ok) throw new Error(await r.text());
-      showToast(`✓ Invitation envoyée à ${email}. La personne crée son mot de passe en s'inscrivant avec cette adresse.`);
+      showToast(tel
+        ? `✓ ${nom} est invitée. Elle ouvre l'application, choisit « Continuer avec WhatsApp » et saisit le +${tel}.`
+        : `✓ Invitation créée pour ${email}. La personne s'inscrit avec cette adresse.`);
     }
     closeModal('modal-add-user');
     renderGestionComptes();

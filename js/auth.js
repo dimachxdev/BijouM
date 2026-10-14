@@ -418,6 +418,95 @@
   }
 
   // =========================================================================
+  // WHATSAPP — code à six chiffres
+  // =========================================================================
+  // Un même geste couvre l'inscription et la connexion : Supabase crée le
+  // compte au premier code validé, et le trigger `app.handle_new_user` le
+  // rattache à la boutique si une invitation porte ce numéro. Les fois
+  // suivantes, le même appel ouvre simplement une session.
+  //
+  // Conséquence voulue : ces comptes n'ont pas de mot de passe, donc rien à
+  // réinitialiser, donc aucune dépendance à l'email. Voir migration 009.
+
+  /**
+   * Numéro en chiffres seuls, comme `auth.users.phone` et la table
+   * `invitations`. Reprend la règle de `app.normaliser_tel()` — un numéro
+   * sénégalais à 9 chiffres reçoit l'indicatif 221.
+   */
+  function normaliserTel(tel) {
+    var v = String(tel || '').replace(/[^0-9]/g, '');
+    if (!v) return '';
+    if (v.slice(0, 2) === '00') v = v.slice(2);
+    if (v.length === 9 && v[0] === '7') v = '221' + v;
+    return v;
+  }
+
+  /** Demande l'envoi du code sur WhatsApp. */
+  async function envoyerCodeWhatsApp(tel) {
+    var num = normaliserTel(tel);
+    if (num.length < 8) throw new Error('Numéro incomplet.');
+
+    var r = await fetchTimeout(URL_BASE + '/auth/v1/otp', {
+      method:  'POST',
+      headers: enTetesAnon(),
+      body:    JSON.stringify({ phone: num, channel: 'whatsapp' })
+    });
+
+    if (!r.ok) {
+      var d = await r.json().catch(function () { return {}; });
+      var m = (d.msg || d.error_description || d.message || '').toLowerCase();
+
+      // Tant que le fournisseur n'est pas configuré côté Supabase, la réponse
+      // est « 400 phone_provider_disabled / Unsupported phone provider » —
+      // incompréhensible au comptoir. On la traduit. (Code relevé sur le vrai
+      // serveur ; le libellé dépend de la version, d'où le double test.)
+      if (d.error_code === 'phone_provider_disabled'
+          || (m.indexOf('phone provider') !== -1)
+          || (m.indexOf('phone') !== -1 && m.indexOf('disabled') !== -1)) {
+        throw new Error('La connexion par WhatsApp n\'est pas encore activée. Utilisez votre email et mot de passe.');
+      }
+      if (r.status === 429) {
+        throw new Error('Trop de demandes. Patientez une minute avant de redemander un code.');
+      }
+      throw new Error('Envoi impossible. Vérifiez le numéro, ou connectez-vous par email.');
+    }
+    return num;
+  }
+
+  /** Valide le code reçu et ouvre la session. */
+  async function verifierCodeWhatsApp(tel, code) {
+    var num = normaliserTel(tel);
+    var jeton = String(code || '').replace(/[^0-9]/g, '');
+    if (jeton.length !== 6) throw new Error('Le code comporte six chiffres.');
+
+    // `type: 'sms'` quel que soit le canal : c'est le type d'OTP téléphone
+    // côté Supabase, WhatsApp n'est que le moyen d'acheminement.
+    var r = await fetchTimeout(URL_BASE + '/auth/v1/verify', {
+      method:  'POST',
+      headers: enTetesAnon(),
+      body:    JSON.stringify({ type: 'sms', phone: num, token: jeton })
+    });
+
+    var data = await r.json().catch(function () { return {}; });
+    if (!r.ok || !data.access_token) {
+      throw new Error('Code incorrect ou expiré. Redemandez-en un.');
+    }
+
+    ecrireSession({
+      access_token:  data.access_token,
+      refresh_token: data.refresh_token,
+      expires_at:    Date.now() + (data.expires_in || 3600) * 1000,
+      user:          data.user
+    });
+
+    // chargerProfil() échoue si aucune invitation ne portait ce numéro : le
+    // compte existe alors sans boutique. Le message vient de là et dit quoi faire.
+    await chargerProfil();
+    programmerRefresh();
+    return profil;
+  }
+
+  // =========================================================================
   // CHANGEMENT DE MOT DE PASSE
   // =========================================================================
   async function changerMotDePasse(nouveau) {
@@ -447,6 +536,9 @@
     detecterRecuperation:    detecterRecuperation,
     definirMotDePasse:       definirMotDePasse,
     deconnexion:             deconnexion,
+    envoyerCodeWhatsApp:     envoyerCodeWhatsApp,
+    verifierCodeWhatsApp:    verifierCodeWhatsApp,
+    normaliserTel:           normaliserTel,
     restaurer:               restaurer,
     rafraichir:              rafraichir,
     chargerProfil:           chargerProfil,

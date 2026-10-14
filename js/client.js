@@ -355,49 +355,7 @@ function afficherRecu(){
     return '<tr><td>' + esc(l[0]) + '</td><td>' + esc(l[1]) + '</td></tr>';
   }).join('');
 
-  var btn = document.getElementById('btn-send-email');
-  if(btn) btn.style.display = CLIENT.email ? '' : 'none';
-
   openModal('modal-recu');
-}
-
-async function envoyerRecu(){
-  if(!DERNIER_DEPOT) return;
-  if(!CLIENT.email){ showToast('Aucun email associé à votre compte.'); return; }
-
-  // EmailJS se configure depuis le navigateur de l'administrateur : sur
-  // l'appareil d'une cliente, cette configuration est absente. L'envoi de
-  // reçus devra passer par le serveur (voir ARCHITECTURE.md).
-  var conf = {};
-  try { conf = JSON.parse(localStorage.getItem('marjan_emailjs') || '{}'); } catch(e){}
-  if(!conf.serviceId || !conf.templateId || !conf.publicKey){
-    showToast('L\'envoi par email n\'est pas disponible pour le moment.');
-    return;
-  }
-
-  var btn = document.getElementById('btn-send-email');
-  btn.textContent = '⏳ Envoi…';
-  btn.disabled = true;
-
-  try {
-    emailjs.init(conf.publicKey);
-    await emailjs.send(conf.serviceId, conf.templateId, {
-      to_email:      CLIENT.email,
-      to_name:       CLIENT.nom,
-      depot_montant: Number(DERNIER_DEPOT.montant).toLocaleString('fr-FR'),
-      nouveau_solde: Number(DERNIER_DEPOT.nouveauSolde).toLocaleString('fr-FR'),
-      date_depot:    fmtDate(DERNIER_DEPOT.date),
-      note_depot:    DERNIER_DEPOT.note || ''
-    });
-    showToast('✓ Reçu envoyé à ' + CLIENT.email);
-    closeModal('modal-recu');
-  } catch(e){
-    showToast('Erreur email : ' + e.message);
-    console.error(e);
-  } finally {
-    btn.textContent = '📧 Recevoir par email';
-    btn.disabled = false;
-  }
 }
 
 // ─── Déconnexion ───────────────────────────────────────────
