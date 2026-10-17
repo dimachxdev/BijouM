@@ -334,5 +334,8 @@ Y consigner tout geste sensible, pas seulement les connexions.
 
 ## Documents de référence
 
+- `OPERATIONS.md` — chaque geste sur les ventes, acomptes et comptes épargne,
+  qui peut le faire et son effet sur la caisse. **À relire avant de toucher à
+  un calcul de solde.**
 - `ARCHITECTURE.md` — audit, modèle multi-boutiques, console opérateur, identité WhatsApp.
 - `migrations/` — l'historique des décisions de sécurité, chacune commentée.

@@ -17,7 +17,7 @@ const KAYOR_LOGO_B64 = 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAgAAZABkAAD/7AARR
  * qui « peut tout faire » alors que les droits sont restreints, c'est presque
  * toujours ça.
  */
-const APP_VERSION = '2026-10-14-annulees';
+const APP_VERSION = '2026-10-16-restant-epargne';
 
 function loadLS(k, fb) { try { const s=localStorage.getItem(k); return s?JSON.parse(s):fb; } catch { return fb; } }
 
@@ -432,7 +432,14 @@ function recalerSolde(cc) {
 function totalDepotsEpargne(filtreMois) {
   return STATE.comptesClients.reduce(function (s, cc) {
     return s + (cc.mouvements || []).reduce(function (t, m) {
-      if (m.type === 'retrait') return t;                 // conversion en bijou : rien n'entre ni ne sort
+      // Seuls les dépôts font entrer de l'argent dans le tiroir.
+      //
+      // La règle était « tout ce qui n'est pas un retrait » : elle comptait
+      // donc comme argent entrant toute écriture corrective, par exemple
+      // l'annulation d'un retrait — qui ne fait pourtant rien entrer, elle
+      // rend seulement à la cliente un droit de tirage qu'elle n'a jamais
+      // dépensé.
+      if (m.type !== 'depot') return t;
       if (filtreMois && !isMois(m.date)) return t;
       return t + (m.montant || 0);
     }, 0);
@@ -1163,6 +1170,16 @@ function renderJournal(){
     + (nbAnnulees ? ` · ${nbAnnulees} annulée${nbAnnulees>1?'s':''} (hors total)` : '');
   document.getElementById('montant-cumul').textContent   = fmt(tCumul);
   document.getElementById('montant-encaisse').textContent= fmt(tSoldeNet); // encaissé − décaissé
+  // Le même détail que sur le tableau de bord : sans lui, impossible de
+  // retomber sur le total à partir des chiffres affichés à côté.
+  const dSol = document.getElementById('detail-solde-caisse');
+  if (dSol) {
+    const encaisse = STATE.ventes.reduce((s,v)=>s+encaisseReel(v),0);
+    const depots   = totalDepotsEpargne(false);
+    const dec      = STATE.decaissements.reduce((s,d)=>s+(d.montant||0),0);
+    dSol.textContent = '(' + fmt(encaisse) + ' encaissé + ' + fmt(depots)
+                     + ' dépôts − ' + fmt(dec) + ' décaissé)';
+  }
   document.getElementById('total-restants').textContent  = fmt(tRest);
   document.getElementById('poids-local-total').textContent  = tLoc.toFixed(2)+'g';
   document.getElementById('poids-importe-total').textContent= tImp.toFixed(2)+'g';
@@ -1837,11 +1854,81 @@ function renderComptesClients(filtre=''){
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button class="btn small btn-primary" onclick="openDepotCC('${cc.id}')">+ Depot</button>
         <button class="btn small" onclick="imprimerCompteClient('${cc.id}')">Imprimer</button>
+        ${isAdmin() && soldeDepuisMouvements(cc) > 0
+          ? `<button class="btn small" style="color:var(--warning-text);border-color:var(--warning-text)" onclick="ouvrirViderCompte('${cc.id}')">Solder</button>`
+          : ''}
         <button class="btn small btn-danger" onclick="supprimerCC('${cc.id}')">Supprimer</button>
       </div>
     </div>`;
   }).join('');
 }
+// ============================================
+// SOLDER UN COMPTE ÉPARGNE
+// ============================================
+/**
+ * Mettre un compte à zéro n'a pas un seul sens, et les deux ne font pas la
+ * même chose à la caisse :
+ *
+ *   espèces — la cliente reprend son argent : il SORT du tiroir, donc un
+ *             décaissement est créé en même temps.
+ *   bijou   — le solde part en bijou : l'argent était entré au dépôt et
+ *             reste dans le tiroir en règlement. Aucun décaissement.
+ *
+ * L'opératrice doit donc dire laquelle. Le serveur fait le reste en une
+ * transaction — voir vider_compte_epargne() (migration 013).
+ */
+function ouvrirViderCompte(id) {
+  if (!isAdmin()) { showToast('⛔ Réservé aux administrateurs.'); return; }
+  var cc = STATE.comptesClients.find(function (c) { return c.id === id; });
+  if (!cc) return;
+  var solde = soldeDepuisMouvements(cc);
+  if (solde <= 0) { showToast('Ce compte est déjà à zéro.'); return; }
+
+  document.getElementById('vc-id').value     = id;
+  document.getElementById('vc-client').textContent = cc.client;
+  document.getElementById('vc-solde').textContent  = fmt(solde);
+  document.getElementById('vc-date').value   = today();
+  document.getElementById('vc-motif').value  = 'especes';
+  document.getElementById('vc-note').value   = '';
+  majAvertissementVider();
+  openModal('modal-vider-compte');
+}
+
+/** Dit à l'écran ce que le geste va faire à la caisse. */
+function majAvertissementVider() {
+  var motif = document.getElementById('vc-motif').value;
+  var el    = document.getElementById('vc-avertissement');
+  var solde = document.getElementById('vc-solde').textContent;
+  if (!el) return;
+  el.innerHTML = motif === 'especes'
+    ? '<strong>' + solde + '</strong> sortiront de la caisse. Un décaissement sera créé automatiquement.'
+    : 'La caisse ne bouge pas : cet argent y est entré au moment des dépôts et y reste en règlement du bijou.';
+}
+
+async function confirmerViderCompte() {
+  if (!isAdmin()) { showToast('⛔ Réservé aux administrateurs.'); return; }
+  var id    = document.getElementById('vc-id').value;
+  var motif = document.getElementById('vc-motif').value;
+  var date  = document.getElementById('vc-date').value;
+  var note  = document.getElementById('vc-note').value.trim();
+  if (!date) { showToast('⚠ Date obligatoire.'); return; }
+
+  var btn = document.getElementById('btn-vider-compte');
+  btn.disabled = true; btn.textContent = 'Enregistrement…';
+  try {
+    var r = await viderCompteEpargne(id, motif, date, note);
+    closeModal('modal-vider-compte');
+    await chargerDonnees();
+    renderComptesClients(); renderJournal(); renderDecaissements(); renderDashboard();
+    showToast('✓ Compte de ' + r.client + ' soldé — ' + fmt(r.montant)
+            + (r.decaissement ? ' (décaissement ' + r.decaissement + ')' : ''));
+  } catch (e) {
+    showToast('⚠ ' + e.message);
+  } finally {
+    btn.disabled = false; btn.textContent = '✓ Solder le compte';
+  }
+}
+
 function creerCompteClient(){
   const client=document.getElementById('cc-client').value,date=document.getElementById('cc-date').value,depot=parseInt(document.getElementById('cc-depot-init').value)||0;
   if(!client||!date||depot<=0){showToast('⚠ Client, date et dépôt initial sont obligatoires.');return;}
@@ -2758,7 +2845,45 @@ function ouvrirComplementCC(cc, montantVente, date, desc, carat, typeBijou) {
   document.getElementById('complement-cc-montant-comp').value = manque;
   // Peupler modes de paiement complément
   document.getElementById('complement-cc-paiement').value = 'especes';
+  majResteComplementCC();
   document.getElementById('modal-complement-cc').classList.add('show');
+}
+
+/**
+ * Dit ce qui restera dû si la cliente ne complète pas tout.
+ *
+ * Avant, le complément devait couvrir la totalité : impossible de régler une
+ * partie avec l'épargne, de verser un peu, et de laisser le bijou en commande.
+ * C'est pourtant le cas courant — et la vente partait enregistrée comme
+ * soldée, ce qui gonflait la caisse du reste jamais versé.
+ */
+function majResteComplementCC() {
+  var total   = parseInt(document.getElementById('complement-cc-montant').value) || 0;
+  var cc      = STATE.comptesClients.find(function (c) {
+                  return c.id === document.getElementById('complement-cc-id').value; });
+  var solde   = cc ? soldeDepuisMouvements(cc) : 0;
+  var verse   = parseInt(document.getElementById('complement-cc-montant-comp').value) || 0;
+  var reste   = total - solde - verse;
+  var el      = document.getElementById('complement-cc-reste');
+  var btn     = document.getElementById('btn-complement-cc');
+  if (!el) return;
+
+  if (verse < 0 || reste < 0) {
+    el.style.background = 'var(--danger-bg)'; el.style.color = 'var(--danger-text)';
+    el.textContent = 'Le total versé dépasse le prix du bijou.';
+    if (btn) btn.disabled = true;
+    return;
+  }
+  if (btn) btn.disabled = false;
+
+  if (reste === 0) {
+    el.style.background = 'var(--success-bg)'; el.style.color = 'var(--success-text)';
+    el.textContent = '✓ Vente entièrement réglée.';
+  } else {
+    el.style.background = 'var(--warning-bg)'; el.style.color = 'var(--warning-text)';
+    el.innerHTML = 'Restera dû : <strong>' + fmt(reste) + '</strong>'
+                 + ' — la vente ira dans « Arrhes & Commandes ».';
+  }
 }
 
 function validerComplementCC() {
@@ -2772,10 +2897,14 @@ function validerComplementCC() {
   var paiementComp= document.getElementById('complement-cc-paiement').value;
   var cc = STATE.comptesClients.find(function(c){ return c.id===ccId; });
   if(!cc) return;
-  if(montantComp <= 0){ showToast('Saisissez le montant du complement.'); return; }
-  if(cc.solde + montantComp < montant){ showToast('Complement insuffisant. Manque : '+fmt(montant - cc.solde - montantComp)); return; }
-
-  var soldeUtilise = cc.solde;   // part venant du compte : hors caisse
+  // Le complément peut être partiel : le reste devient un restant dû et la
+  // vente rejoint « Arrhes & Commandes ». Seul le trop-perçu est refusé.
+  if(montantComp < 0){ showToast('⚠ Montant invalide.'); return; }
+  var soldeUtilise = soldeDepuisMouvements(cc);   // part venant du compte : hors caisse
+  if(soldeUtilise + montantComp > montant){
+    showToast('⚠ Le total versé dépasse le prix du bijou.'); return;
+  }
+  var resteDu = montant - soldeUtilise - montantComp;
   var id;
 
   // Une seule transaction serveur : la vente et le retrait aboutissent
@@ -2786,10 +2915,11 @@ function validerComplementCC() {
     id = num.id;
     return venteSurCompteEpargne({
       id: id, compteId: cc.id, date: date, description: desc,
-      montant: montant, montantCompte: soldeUtilise,
+      montant: montant, montantCompte: soldeUtilise, espece: montantComp,
       paiement: 'compte+'+paiementComp, carat: carat, typeBijou: typeBijou,
       numFacture: num.numFacture,
       noteComplement: 'Compte: '+fmt(soldeUtilise)+' + '+paiementComp+': '+fmt(montantComp)
+                    + (resteDu > 0 ? ' — restant dû : '+fmt(resteDu) : '')
     });
   })
   .then(function(res){
@@ -2797,7 +2927,10 @@ function validerComplementCC() {
     // On relit depuis le serveur plutôt que de reconstituer l'état à la main.
     return chargerDonnees().then(function(){
       closeModal('modal-complement-cc'); closeModal('modal-nouvelle-vente');
-      showToast('Vente '+id+' — Compte : '+fmt(soldeUtilise)+' + '+paiementComp+' : '+fmt(montantComp));
+      renderJournal(); renderBijouxArr(); renderComptesClients(); renderDashboard();
+      showToast(res.restant > 0
+        ? 'Vente '+id+' — reste '+fmt(res.restant)+' dû. Suivi dans Arrhes & Commandes.'
+        : 'Vente '+id+' — Compte : '+fmt(soldeUtilise)+' + '+paiementComp+' : '+fmt(montantComp));
     });
   })
   .catch(function(e){ showToast('⚠ '+e.message); });

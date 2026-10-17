@@ -303,9 +303,10 @@
         </select>
       </div>
       <div class="cumul-bar">
-        <span class="cumul-label">Total ventes :</span><span class="cumul-value" id="montant-cumul">—</span>
+        <span class="cumul-label" title="Chiffre d'affaires, ventes annulées exclues. Ce n'est pas l'argent en caisse.">CA (hors annulées) :</span><span class="cumul-value" id="montant-cumul">—</span>
         <span class="cumul-sep">|</span>
         <span id="cumul-solde-caisse"><span class="cumul-label">💰 Solde net caisse :</span><span class="cumul-value" id="montant-encaisse">—</span>
+        <span class="cumul-detail" id="detail-solde-caisse" style="font-size:11px;color:var(--text-secondary);margin-left:6px"></span>
         <span class="cumul-sep">|</span></span>
         <span class="cumul-label">⏳ Restants :</span><span class="cumul-warn" id="total-restants">—</span>
         <span class="cumul-sep">|</span>
@@ -1077,6 +1078,47 @@
 
 
 <!-- MODAL CRÉER UTILISATEUR -->
+<!-- MODAL SOLDER UN COMPTE ÉPARGNE -->
+<div class="modal-backdrop" id="modal-vider-compte">
+  <div class="modal" style="width:460px">
+    <div class="modal-header">
+      <div class="modal-title">Solder le compte</div>
+      <button class="modal-close" onclick="closeModal('modal-vider-compte')">✕</button>
+    </div>
+    <div class="role-banner role-admin" style="margin-bottom:12px"><span>🔒</span> Réservé à l'administrateur</div>
+    <input type="hidden" id="vc-id" />
+
+    <div style="background:var(--bg-secondary);border-radius:var(--radius-md);padding:12px;margin-bottom:14px">
+      <div style="font-size:15px;font-weight:600" id="vc-client">—</div>
+      <div style="font-size:12px;color:var(--text-secondary);margin-top:2px">
+        Solde à solder : <strong id="vc-solde">—</strong>
+      </div>
+    </div>
+
+    <div class="form-group" style="margin-bottom:12px">
+      <label class="form-label" for="vc-motif">Que devient cet argent ? *</label>
+      <select class="form-input" id="vc-motif" onchange="majAvertissementVider()">
+        <option value="especes">Rendu à la cliente, en espèces</option>
+        <option value="bijou">Converti en bijou</option>
+      </select>
+    </div>
+
+    <div id="vc-avertissement" style="background:var(--warning-bg);color:var(--warning-text);border-radius:var(--radius-md);padding:10px 12px;margin-bottom:12px;font-size:12px;line-height:1.5"></div>
+
+    <div class="form-row">
+      <div class="form-group"><label class="form-label" for="vc-date">Date *</label>
+        <input class="form-input" type="date" id="vc-date" /></div>
+      <div class="form-group"><label class="form-label" for="vc-note">Note</label>
+        <input class="form-input" id="vc-note" placeholder="facultatif" /></div>
+    </div>
+
+    <div class="modal-actions" style="margin-top:14px">
+      <button class="btn btn-secondary" onclick="closeModal('modal-vider-compte')">Annuler</button>
+      <button class="btn btn-primary" id="btn-vider-compte" onclick="confirmerViderCompte()">✓ Solder le compte</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-backdrop" id="modal-add-user">
   <div class="modal">
     <div class="modal-header"><div class="modal-title" id="modal-user-title">Inviter un membre</div><button class="modal-close" onclick="closeModal('modal-add-user')">✕</button></div>
@@ -1269,7 +1311,7 @@
 <div class="modal-backdrop" id="modal-complement-cc">
   <div class="modal modal-large">
     <div class="modal-header">
-      <div class="modal-title">Solde insuffisant — Complément requis</div>
+      <div class="modal-title">Le solde ne couvre pas tout</div>
       <button class="modal-close" onclick="closeModal('modal-complement-cc')">✕</button>
     </div>
     <input type="hidden" id="complement-cc-id" />
@@ -1297,12 +1339,15 @@
       </div>
     </div>
     <div style="font-size:13px;color:var(--text-secondary);margin-bottom:14px;padding:10px 14px;background:var(--warning-bg);border-radius:var(--radius-md)">
-      Le solde du compte sera utilisé entièrement. Le client doit compléter le montant manquant par un autre mode de paiement.
+      Le solde du compte sera utilisé entièrement. La cliente peut compléter en totalité,
+      ou <strong>ne verser qu'une partie</strong> et laisser le reste en commande.
     </div>
     <div class="form-row">
       <div class="form-group">
-        <label class="form-label">Montant du complément (F CFA) *</label>
-        <input class="form-input" type="number" min="0" id="complement-cc-montant-comp" />
+        <label class="form-label">Versé aujourd'hui en plus du compte (F CFA)</label>
+        <input class="form-input" type="number" min="0" id="complement-cc-montant-comp"
+               oninput="majResteComplementCC()" />
+        <span class="form-hint">0 si elle ne verse rien de plus aujourd'hui.</span>
       </div>
       <div class="form-group">
         <label class="form-label">Mode de paiement du complément</label>
@@ -1315,9 +1360,10 @@
         </select>
       </div>
     </div>
+    <div id="complement-cc-reste" style="font-size:13px;border-radius:var(--radius-md);padding:10px 14px;margin:4px 0 14px"></div>
     <div class="modal-actions">
       <button class="btn btn-secondary" onclick="closeModal('modal-complement-cc')">Annuler</button>
-      <button class="btn btn-primary" onclick="validerComplementCC()">Valider la vente avec complément</button>
+      <button class="btn btn-primary" id="btn-complement-cc" onclick="validerComplementCC()">Valider la vente</button>
     </div>
   </div>
 </div>

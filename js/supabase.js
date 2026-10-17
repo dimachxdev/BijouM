@@ -991,7 +991,11 @@ async function venteSurCompteEpargne(p) {
       p_carat:           p.carat || null,
       p_type_bijou:      p.typeBijou || null,
       p_num_facture:     p.numFacture || null,
-      p_note_complement: p.noteComplement || null
+      p_note_complement: p.noteComplement || null,
+      // Ce que la cliente verse aujourd'hui EN PLUS du compte. Le serveur en
+      // déduit l'acompte et le restant dû : une vente sur épargne peut donc
+      // rester partiellement due (migration 014).
+      p_espece:          p.espece || 0
     })
   });
   if (!r.ok) throw new Error('Vente refusée (' + r.status + ').');
@@ -1029,6 +1033,23 @@ async function definirPinClient(clientId, pin) {
   });
   if (!r.ok) throw new Error('Enregistrement du code refusé (' + r.status + ').');
   return r.json();
+}
+
+/**
+ * Solde un compte épargne : mouvement, solde recalé et, si l'argent est rendu
+ * en espèces, le décaissement qui le fait sortir de la caisse — le tout en une
+ * transaction côté serveur. Voir migration 013.
+ */
+async function viderCompteEpargne(compteId, motif, date, note) {
+  var r = await fetch(SUPABASE_URL + '/rest/v1/rpc/vider_compte_epargne', {
+    method: 'POST', headers: H(),
+    body: JSON.stringify({ p_compte_id: compteId, p_motif: motif,
+                           p_date: date || null, p_note: note || null })
+  });
+  if (!r.ok) throw new Error('Opération refusée (' + r.status + ').');
+  var d = await r.json();
+  if (d && d.ok === false) throw new Error(d.erreur || 'Opération refusée.');
+  return d;
 }
 
 async function saveClient(c) {

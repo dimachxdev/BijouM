@@ -1,0 +1,42 @@
+-- ============================================================================
+-- KAYOR SaaS — 014 : une vente sur épargne peut rester partiellement due
+-- Appliquée le 2026-10-16.
+-- ============================================================================
+--
+-- Cas réel, signalé par l'utilisateur : la cliente a 20 000 F d'épargne,
+-- choisit un bijou à 50 000 F, verse 10 000 F et laisse le bijou en commande.
+-- Elle doit encore 20 000 F.
+--
+-- C'ÉTAIT IMPOSSIBLE, à deux niveaux :
+--
+--   * la fonction posait `acompte = montant` et `restant = 0` EN DUR : toute
+--     vente sur compte était enregistrée comme soldée ;
+--   * la fenêtre de complément refusait tout versement partiel
+--     (« Complément insuffisant »), forçant à payer la totalité.
+--
+-- Deux conséquences :
+--   * la commande n'apparaissait jamais dans « Arrhes & Commandes » ;
+--   * la caisse était gonflée du reste jamais versé, puisque
+--     encaisseReel = acompte − paye_par_compte comptait cet argent comme encaissé.
+--
+-- Vu en base : V-0006 du 2026-10-15, intitulée « Commande plus restant »,
+-- enregistrée avec restant = 0 et 35 000 F comptés en caisse.
+--
+-- Nouveau paramètre `p_espece` : ce qui est réellement versé aujourd'hui en
+-- plus du compte. L'ancien appel (montant_compte = montant, pas d'espèce)
+-- donne exactement le même résultat qu'avant — les trois autres appels de
+-- js/app.js sont donc inchangés.
+--
+--   acompte = montant_compte + espece
+--   restant = montant − acompte
+--
+-- ============================================================================
+-- VÉRIFIÉ APRÈS APPLICATION, sous l'identité d'une vendeuse
+-- ============================================================================
+--   bijou 50 000 · compte 20 000 · versé 10 000
+--   → acompte 30 000, restant 20 000, caisse +10 000
+--   (et non +30 000 comme avant : seul l'argent réellement versé entre)
+-- ============================================================================
+--
+-- Le corps complet de la fonction est celui appliqué en base ; il est
+-- reproduit dans l'historique Supabase sous le nom `vente_epargne_avec_restant`.
