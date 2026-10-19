@@ -17,7 +17,7 @@ const KAYOR_LOGO_B64 = 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAgAAZABkAAD/7AARR
  * qui « peut tout faire » alors que les droits sont restreints, c'est presque
  * toujours ça.
  */
-const APP_VERSION = '2026-10-19-comptes-equipe';
+const APP_VERSION = '2026-10-19-comptes-equipe-b';
 
 function loadLS(k, fb) { try { const s=localStorage.getItem(k); return s?JSON.parse(s):fb; } catch { return fb; } }
 
@@ -3247,6 +3247,22 @@ async function chargerInvitations() {
 // masquer des boutons.
 
 function estProprietaire() { return STATE.currentUser?.role === 'proprietaire'; }
+
+/**
+ * Affiche ou masque un mot de passe.
+ *
+ * Masqué par défaut : au comptoir, l'écran est vu par les clientes, et une
+ * capture d'écran emporte le mot de passe avec elle. Révélable le temps de le
+ * dicter, puis remasqué.
+ */
+function basculerVisibilite(idChamp, bouton) {
+  var el = document.getElementById(idChamp);
+  if (!el) return;
+  var cache = el.type === 'password';
+  el.type = cache ? 'text' : 'password';
+  bouton.textContent = cache ? '🙈' : '👁';
+  bouton.title = cache ? 'Masquer' : 'Afficher';
+}
 
 /**
  * « fatou@kay.kayor.app » → « fatou@kay ».

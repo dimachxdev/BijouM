@@ -1,3 +1,4 @@
+console.log('KAYOR · supabase.js', '2026-10-19c');
 /**
  * KAYOR — Couche Supabase
  * Architecture : App → Supabase → Realtime → App
@@ -1060,9 +1061,16 @@ async function viderCompteEpargne(compteId, motif, date, note) {
  * propriétaire de SA boutique avant d'agir — le navigateur ne décide rien.
  */
 async function appelMembresAdmin(corps) {
-  var r = await fetch(SUPABASE_URL + '/functions/v1/membres-admin', {
-    method: 'POST', headers: H(), body: JSON.stringify(corps)
-  });
+  var r;
+  try {
+    r = await fetch(SUPABASE_URL + '/functions/v1/membres-admin', {
+      method: 'POST', headers: H(), body: JSON.stringify(corps)
+    });
+  } catch (e) {
+    // fetch ne lève que sur un échec réseau. « Failed to fetch » tout nu
+    // n'apprend rien à la personne devant l'écran.
+    throw new Error('Serveur injoignable. Vérifiez votre connexion, puis réessayez.');
+  }
   var d = await r.json().catch(function () { return {}; });
   if (!r.ok || d.ok === false) {
     throw new Error(d.erreur || 'Opération refusée (' + r.status + ').');

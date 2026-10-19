@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>KAYOR — Brillez sans effort</title>
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml" />
-  <link rel="stylesheet" href="css/style.css" />
+  <link rel="stylesheet" href="css/style.css?v=2026-10-19c" />
 </head>
 <body>
 
@@ -1110,7 +1110,10 @@
 
     <div class="form-group" style="margin-bottom:12px">
       <label class="form-label" for="cc-mdp">Mot de passe *</label>
-      <input class="form-input" id="cc-mdp" autocomplete="new-password" placeholder="8 caractères minimum" />
+      <div style="display:flex;gap:6px">
+        <input class="form-input" type="password" id="cc-mdp" autocomplete="new-password" placeholder="8 caractères minimum" style="flex:1" />
+        <button type="button" class="btn small" onclick="basculerVisibilite('cc-mdp', this)" title="Afficher">👁</button>
+      </div>
       <span class="form-hint">C'est vous qui le choisissez et le lui communiquez. Personne ne pourra le relire ensuite.</span>
     </div>
 
@@ -1138,7 +1141,10 @@
     </div>
     <div class="form-group" style="margin-bottom:12px">
       <label class="form-label" for="mdp-valeur">Mot de passe *</label>
-      <input class="form-input" id="mdp-valeur" autocomplete="new-password" placeholder="8 caractères minimum" />
+      <div style="display:flex;gap:6px">
+        <input class="form-input" type="password" id="mdp-valeur" autocomplete="new-password" placeholder="8 caractères minimum" style="flex:1" />
+        <button type="button" class="btn small" onclick="basculerVisibilite('mdp-valeur', this)" title="Afficher">👁</button>
+      </div>
       <span class="form-hint">L'ancien est remplacé immédiatement. Communiquez-le-lui de vive voix.</span>
     </div>
     <div class="login-error" id="mdp-erreur"></div>
@@ -1441,11 +1447,11 @@
 
 <div class="toast" id="toast"></div>
   <!-- Supabase SDK -->
-  <script src="js/security.js"></script>
-  <script src="js/auth.js"></script>
-  <script src="js/data.js"></script>
-  <script src="js/supabase.js"></script>
-  <script src="js/app.js"></script>
+  <script src="js/security.js?v=2026-10-19c"></script>
+  <script src="js/auth.js?v=2026-10-19c"></script>
+  <script src="js/data.js?v=2026-10-19c"></script>
+  <script src="js/supabase.js?v=2026-10-19c"></script>
+  <script src="js/app.js?v=2026-10-19c"></script>
 
 <!-- MODAL AJUSTER STOCK -->
 <div class="modal-backdrop" id="modal-ajust-stock">
