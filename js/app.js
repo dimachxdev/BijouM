@@ -17,7 +17,7 @@ const KAYOR_LOGO_B64 = 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAgAAZABkAAD/7AARR
  * qui « peut tout faire » alors que les droits sont restreints, c'est presque
  * toujours ça.
  */
-const APP_VERSION = '2026-10-16-restant-epargne';
+const APP_VERSION = '2026-10-19-comptes-equipe';
 
 function loadLS(k, fb) { try { const s=localStorage.getItem(k); return s?JSON.parse(s):fb; } catch { return fb; } }
 
@@ -3165,6 +3165,9 @@ async function renderGestionComptes() {
     return;
   }
 
+  var btnCreer = document.getElementById('btn-creer-compte');
+  if (btnCreer) btnCreer.style.display = estProprietaire() ? '' : 'none';
+
   document.getElementById('gc-count-label').textContent =
     `${membres.length} membre${membres.length>1?'s':''}` +
     (invitations.length ? ` · ${invitations.length} invitation${invitations.length>1?'s':''} en attente` : '');
@@ -3174,8 +3177,9 @@ async function renderGestionComptes() {
   const lignesMembres = membres.map(m => {
     const role   = ROLES[m.role] || { label:m.role, color:'#888', bg:'#eee' };
     const estMoi = m.user_id === moi;
-    // Le numéro identifie les comptes WhatsApp, l'email les comptes historiques.
-    const email  = m.telephone ? '+' + m.telephone : (m.email || '—');
+    // Identifiant court pour les comptes d'équipe, numéro pour les comptes
+    // WhatsApp, adresse réelle pour les comptes historiques.
+    const email  = loginCourt(m) || (m.telephone ? '+' + m.telephone : '—');
     return `<tr>
       <td><div style="display:flex;align-items:center;gap:10px">
         <div style="width:32px;height:32px;border-radius:50%;background:${role.bg};color:${role.color};display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0">${esc(ini(m.nom))}</div>
@@ -3188,6 +3192,9 @@ async function renderGestionComptes() {
       <td><div style="display:flex;gap:4px;flex-wrap:wrap">
         ${estMoi ? '<span style="font-size:11px;color:var(--text-tertiary)">—</span>' : `
           <button class="btn small" onclick="ouvrirEditMembre('${escJs(m.user_id)}')">✎ Rôle</button>
+          ${estProprietaire()
+            ? `<button class="btn small" onclick="ouvrirMotDePasseMembre('${escJs(m.user_id)}','${escJs(m.nom)}','${escJs(loginCourt(m))}')" title="Poser un nouveau mot de passe">🔑</button>`
+            : ''}
           <button class="btn small" onclick="basculerMembreActif('${escJs(m.user_id)}')" style="${m.actif?'color:var(--warning-text)':'color:var(--success-text)'}">${m.actif?'Suspendre':'Réactiver'}</button>
           <button class="btn small btn-danger" onclick="retirerMembre('${escJs(m.user_id)}','${escJs(m.nom)}')">✕</button>`}
       </div></td>
@@ -3226,6 +3233,112 @@ async function chargerInvitations() {
     '&utilisee_le=is.null&order=created_at.desc', { headers: H() });
   if (!r.ok) return [];   // table absente tant que 005 n'est pas appliquée
   return r.json();
+}
+
+// ============================================
+// COMPTES DE L'ÉQUIPE — créés par la propriétaire
+// ============================================
+// La propriétaire pose elle-même l'identifiant et le mot de passe : aucune
+// invitation, aucun message à envoyer. C'est ce qui rend l'arrivée d'une
+// vendeuse indépendante du SMTP et de Twilio.
+//
+// Toute l'autorisation est côté serveur (fonction `membres-admin`, seule
+// détentrice de la clé de service) : les gardes ci-dessous ne font que
+// masquer des boutons.
+
+function estProprietaire() { return STATE.currentUser?.role === 'proprietaire'; }
+
+/**
+ * « fatou@kay.kayor.app » → « fatou@kay ».
+ * Le suffixe technique n'est jamais montré : la propriétaire ne dicte que la
+ * partie courte, et c'est aussi ce que la vendeuse tape pour se connecter.
+ */
+function loginCourt(m) {
+  var e = m && m.email ? String(m.email) : '';
+  if (!e) return '';
+  return e.endsWith('.kayor.app') ? e.slice(0, -'.kayor.app'.length) : e;
+}
+
+/** Montre à la propriétaire ce qu'elle devra dicter à sa vendeuse. */
+function majApercuLogin() {
+  var id   = (document.getElementById('cc-identifiant').value || '').trim().toLowerCase();
+  var el   = document.getElementById('cc-apercu');
+  var slug = (Auth.orgSlug() || '').toLowerCase();
+  if (!el) return;
+  el.innerHTML = id
+    ? 'Elle se connectera avec <strong>' + esc(id + '@' + slug) + '</strong>'
+    : 'Saisissez un identifiant pour voir ce qu\'elle devra taper.';
+}
+
+function ouvrirCreerCompte() {
+  if (!estProprietaire()) { showToast('⛔ Réservé à la propriétaire.'); return; }
+  ['cc-nom','cc-identifiant','cc-tel','cc-mdp'].forEach(function (i) {
+    document.getElementById(i).value = '';
+  });
+  document.getElementById('cc-role').value = 'vendeur';
+  document.getElementById('cc-erreur').style.display = 'none';
+  majApercuLogin();
+  openModal('modal-creer-compte');
+}
+
+async function validerCreerCompte() {
+  document.getElementById('cc-erreur').style.display = 'none';
+
+  var p = {
+    nom:         document.getElementById('cc-nom').value.trim(),
+    identifiant: document.getElementById('cc-identifiant').value.trim().toLowerCase(),
+    role:        document.getElementById('cc-role').value,
+    motdepasse:  document.getElementById('cc-mdp').value,
+    telephone:   document.getElementById('cc-tel').value
+  };
+
+  if (!p.nom) { messageAuth('cc-erreur', 'Le nom est obligatoire.'); return; }
+  if (!/^[a-z0-9._-]{2,30}$/.test(p.identifiant)) {
+    messageAuth('cc-erreur', 'Identifiant : 2 à 30 caractères, lettres, chiffres, point ou tiret.'); return;
+  }
+  if (p.motdepasse.length < 8) { messageAuth('cc-erreur', 'Mot de passe : 8 caractères minimum.'); return; }
+
+  var btn = document.getElementById('btn-valider-compte');
+  btn.disabled = true; btn.textContent = 'Création…';
+  try {
+    var r = await creerCompteMembre(p);
+    closeModal('modal-creer-compte');
+    renderGestionComptes();
+    // Le mot de passe n'est pas répété ici : elle vient de le choisir.
+    showToast('✓ Compte créé. ' + r.nom + ' se connecte avec « ' + r.login + ' ».');
+  } catch (e) {
+    messageAuth('cc-erreur', e.message);
+  } finally {
+    btn.disabled = false; btn.textContent = '✓ Créer le compte';
+  }
+}
+
+function ouvrirMotDePasseMembre(userId, nom, login) {
+  if (!estProprietaire()) { showToast('⛔ Réservé à la propriétaire.'); return; }
+  document.getElementById('mdp-user-id').value  = userId;
+  document.getElementById('mdp-nom').textContent   = nom;
+  document.getElementById('mdp-login').textContent = login || '';
+  document.getElementById('mdp-valeur').value   = '';
+  document.getElementById('mdp-erreur').style.display = 'none';
+  openModal('modal-mdp-membre');
+}
+
+async function validerMotDePasseMembre() {
+  var userId = document.getElementById('mdp-user-id').value;
+  var mdp    = document.getElementById('mdp-valeur').value;
+  if (mdp.length < 8) { messageAuth('mdp-erreur', 'Mot de passe : 8 caractères minimum.'); return; }
+
+  var btn = document.getElementById('btn-valider-mdp');
+  btn.disabled = true; btn.textContent = 'Enregistrement…';
+  try {
+    var r = await changerMotDePasseMembre(userId, mdp);
+    closeModal('modal-mdp-membre');
+    showToast('✓ Mot de passe remplacé pour ' + r.nom + '.');
+  } catch (e) {
+    messageAuth('mdp-erreur', e.message);
+  } finally {
+    btn.disabled = false; btn.textContent = '✓ Remplacer';
+  }
 }
 
 function ouvrirInvitation() {

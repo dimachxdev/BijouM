@@ -516,7 +516,8 @@
     <section class="section" id="comptes_users">
       <div class="page-header">
         <div><h1 class="page-title">Membres de la boutique</h1><p class="page-sub" id="gc-count-label"></p></div>
-        <button class="btn btn-primary" onclick="ouvrirInvitation()">+ Inviter un membre</button>
+        <button class="btn btn-primary" id="btn-creer-compte" onclick="ouvrirCreerCompte()">+ Créer un compte</button>
+        <button class="btn" onclick="ouvrirInvitation()">Inviter par numéro</button>
       </div>
       <div class="card"><div class="table-wrap">
         <table>
@@ -1078,6 +1079,76 @@
 
 
 <!-- MODAL CRÉER UTILISATEUR -->
+<!-- MODAL CRÉER UN COMPTE D'ÉQUIPE -->
+<div class="modal-backdrop" id="modal-creer-compte">
+  <div class="modal" style="width:480px">
+    <div class="modal-header">
+      <div class="modal-title">Créer un compte</div>
+      <button class="modal-close" onclick="closeModal('modal-creer-compte')">✕</button>
+    </div>
+    <div class="role-banner role-admin" style="margin-bottom:12px"><span>🔒</span> Réservé à la propriétaire</div>
+
+    <div class="form-row">
+      <div class="form-group"><label class="form-label" for="cc-nom">Nom complet *</label>
+        <input class="form-input" id="cc-nom" placeholder="Fatou Ndiaye" /></div>
+      <div class="form-group"><label class="form-label" for="cc-identifiant">Identifiant *</label>
+        <input class="form-input" id="cc-identifiant" placeholder="fatou" autocomplete="off"
+               oninput="majApercuLogin()" />
+        <span class="form-hint">Lettres et chiffres, sans espace.</span></div>
+    </div>
+
+    <div class="form-row">
+      <div class="form-group"><label class="form-label" for="cc-role">Rôle *</label>
+        <select class="form-input" id="cc-role">
+          <option value="vendeur">Vendeur</option>
+          <option value="gestionnaire">Gestionnaire Stock</option>
+          <option value="admin">Administrateur</option>
+        </select></div>
+      <div class="form-group"><label class="form-label" for="cc-tel">Téléphone (facultatif)</label>
+        <input class="form-input" type="tel" id="cc-tel" placeholder="77 123 45 67" /></div>
+    </div>
+
+    <div class="form-group" style="margin-bottom:12px">
+      <label class="form-label" for="cc-mdp">Mot de passe *</label>
+      <input class="form-input" id="cc-mdp" autocomplete="new-password" placeholder="8 caractères minimum" />
+      <span class="form-hint">C'est vous qui le choisissez et le lui communiquez. Personne ne pourra le relire ensuite.</span>
+    </div>
+
+    <div id="cc-apercu" style="background:var(--info-bg);color:var(--info-text);border-radius:var(--radius-md);padding:10px 14px;margin-bottom:12px;font-size:13px"></div>
+    <div class="login-error" id="cc-erreur"></div>
+
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeModal('modal-creer-compte')">Annuler</button>
+      <button class="btn btn-primary" id="btn-valider-compte" onclick="validerCreerCompte()">✓ Créer le compte</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL NOUVEAU MOT DE PASSE -->
+<div class="modal-backdrop" id="modal-mdp-membre">
+  <div class="modal" style="width:420px">
+    <div class="modal-header">
+      <div class="modal-title">Nouveau mot de passe</div>
+      <button class="modal-close" onclick="closeModal('modal-mdp-membre')">✕</button>
+    </div>
+    <input type="hidden" id="mdp-user-id" />
+    <div style="background:var(--bg-secondary);border-radius:var(--radius-md);padding:12px;margin-bottom:14px">
+      <div style="font-size:15px;font-weight:600" id="mdp-nom">—</div>
+      <div style="font-size:12px;color:var(--text-secondary);margin-top:2px" id="mdp-login">—</div>
+    </div>
+    <div class="form-group" style="margin-bottom:12px">
+      <label class="form-label" for="mdp-valeur">Mot de passe *</label>
+      <input class="form-input" id="mdp-valeur" autocomplete="new-password" placeholder="8 caractères minimum" />
+      <span class="form-hint">L'ancien est remplacé immédiatement. Communiquez-le-lui de vive voix.</span>
+    </div>
+    <div class="login-error" id="mdp-erreur"></div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeModal('modal-mdp-membre')">Annuler</button>
+      <button class="btn btn-primary" id="btn-valider-mdp" onclick="validerMotDePasseMembre()">✓ Remplacer</button>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL SOLDER UN COMPTE ÉPARGNE -->
 <div class="modal-backdrop" id="modal-vider-compte">
   <div class="modal" style="width:460px">

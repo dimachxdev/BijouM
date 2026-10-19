@@ -74,11 +74,30 @@
   // =========================================================================
   // CONNEXION
   // =========================================================================
+  /**
+   * Identifiant d'équipe → adresse interne.
+   *
+   * La propriétaire crée les comptes de son équipe et leur donne un
+   * identifiant court : « fatou@kay ». Ce n'est pas une adresse email, rien
+   * n'y est jamais envoyé — c'est la clé que Supabase Auth utilise pour
+   * reconnaître le compte. On la complète ici pour que la vendeuse n'ait que
+   * « fatou@kay » à taper, et pas « fatou@kay.kayor.app ».
+   *
+   * Une vraie adresse (avec un point après l'arobase) passe telle quelle :
+   * les comptes historiques continuent de fonctionner.
+   */
+  var SUFFIXE_EQUIPE = '.kayor.app';
+
+  function normaliserIdentifiant(saisi) {
+    var v = String(saisi || '').trim().toLowerCase();
+    return /^[a-z0-9._-]+@[a-z0-9-]{2,6}$/.test(v) ? v + SUFFIXE_EQUIPE : v;
+  }
+
   async function connexion(email, motDePasse) {
     var r = await fetchTimeout(URL_BASE + '/auth/v1/token?grant_type=password', {
       method:  'POST',
       headers: enTetesAnon(),
-      body:    JSON.stringify({ email: String(email || '').trim().toLowerCase(), password: motDePasse })
+      body:    JSON.stringify({ email: normaliserIdentifiant(email), password: motDePasse })
     });
 
     var data = await r.json().catch(function () { return {}; });

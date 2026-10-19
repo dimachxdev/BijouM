@@ -1052,6 +1052,35 @@ async function viderCompteEpargne(compteId, motif, date, note) {
   return d;
 }
 
+/**
+ * Comptes de l'équipe, créés et repris en main par la propriétaire.
+ *
+ * Passe par la fonction serveur `membres-admin`, seul endroit du projet qui
+ * détient la clé de service. Elle revérifie que l'appelante est bien
+ * propriétaire de SA boutique avant d'agir — le navigateur ne décide rien.
+ */
+async function appelMembresAdmin(corps) {
+  var r = await fetch(SUPABASE_URL + '/functions/v1/membres-admin', {
+    method: 'POST', headers: H(), body: JSON.stringify(corps)
+  });
+  var d = await r.json().catch(function () { return {}; });
+  if (!r.ok || d.ok === false) {
+    throw new Error(d.erreur || 'Opération refusée (' + r.status + ').');
+  }
+  return d;
+}
+
+function creerCompteMembre(p) {
+  return appelMembresAdmin({
+    action: 'creer', identifiant: p.identifiant, nom: p.nom,
+    role: p.role, motdepasse: p.motdepasse, telephone: p.telephone || ''
+  });
+}
+
+function changerMotDePasseMembre(userId, motdepasse) {
+  return appelMembresAdmin({ action: 'motdepasse', user_id: userId, motdepasse: motdepasse });
+}
+
 async function saveClient(c) {
   // Le code PIN ne passe plus par ici : la colonne `clients.pin` a disparu au
   // profit d'une empreinte bcrypt, posée par la fonction serveur

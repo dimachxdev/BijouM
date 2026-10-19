@@ -64,6 +64,23 @@ entièrement sur RLS : chaque policy porte `organisation_id = app.current_org()`
 Toute table métier naît avec `organisation_id` et sa policy, dans la même
 migration.
 
+### La clé de service ne touche jamais le navigateur
+
+Créer un compte ou remplacer un mot de passe exige l'API Admin de Supabase,
+donc `SUPABASE_SERVICE_ROLE_KEY` — la clé qui ignore RLS et peut tout lire.
+
+Elle vit **uniquement** dans l'Edge Function `membres-admin`, où Supabase
+l'injecte automatiquement. Rien à configurer, et rien à fuiter.
+
+Cette fonction revérifie, dans cet ordre : jeton valide, appelant membre actif,
+rôle `proprietaire`, et — pour un changement de mot de passe — cible
+appartenant à **sa** boutique. Sans ce dernier contrôle, une propriétaire
+changerait les accès d'une autre boutique.
+
+**Ne jamais ajouter d'autre point d'entrée à cette clé**, et ne jamais la
+copier dans `js/`, un fichier de configuration ou une variable d'environnement
+Vercel.
+
 ### Chaque nouvelle fonction exposée se ferme explicitement
 
 Une fonction dans `public` est une route HTTP (`/rest/v1/rpc/<nom>`). Par défaut
@@ -210,8 +227,24 @@ presque toujours un cache navigateur ou un déploiement en retard, pas un bug.
 - **Le portail cliente compte les échecs** : 5 tentatives de PIN ratées
   bloquent 15 minutes (`portail_tentatives`). Toute nouvelle voie
   d'authentification doit avoir son propre frein.
-- **L'équipe s'identifie par WhatsApp**, donc sans mot de passe à voler ni à
-  réinitialiser. Ne pas réintroduire un mot de passe « pour simplifier ».
+- **L'équipe reçoit ses accès de la propriétaire** (décidé le 2026-10-19, en
+  remplacement de l'identification WhatsApp). Elle choisit l'identifiant et le
+  mot de passe, les communique de vive voix, et peut les remplacer à tout
+  moment. Aucun message n'est envoyé : ce chemin ne dépend ni du SMTP ni de
+  Twilio — c'est ce qui a débloqué la mise en production.
+
+  **Identifiant court** : `fatou@kay` à l'écran, `fatou@kay.kayor.app` en base.
+  Le suffixe n'est jamais montré et n'est pas une adresse : rien n'y est envoyé
+  (`email_confirm: true` à la création). `Auth.normaliserIdentifiant()` le
+  complète à la connexion, `loginCourt()` le retire à l'affichage.
+
+  **Le mot de passe n'est jamais lisible, seulement remplaçable.** Supabase le
+  hache. Ne jamais le stocker, l'afficher, le journaliser, ni le renvoyer dans
+  une réponse — c'est la faille d'origine de ce projet (`admin/admin123` en
+  clair dans `js/data.js` et dans la table `utilisateurs`).
+
+  L'écran WhatsApp reste en place mais ne sert plus à l'équipe ; l'invitation
+  par numéro continue de servir aux propriétaires de nouvelles boutiques.
 
 ---
 
