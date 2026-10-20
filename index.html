@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>KAYOR — Brillez sans effort</title>
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml" />
-  <link rel="stylesheet" href="css/style.css?v=2026-10-19c" />
+  <link rel="stylesheet" href="css/style.css?v=2026-10-20c" />
 </head>
 <body>
 
@@ -231,6 +231,7 @@
       <button class="nav-item" data-section="comptes_users" data-perm="historique"><span class="nav-icon">⊛</span> Gestion comptes</button>
       <button class="nav-item" data-section="profil_boutique" data-perm="profil_boutique"><span class="nav-icon">⌂</span> Profil boutique</button>
       <button class="nav-item" data-section="rapport_jour" data-perm="all"><span class="nav-icon">◈</span> Rapport journalier</button>
+      <button class="nav-item" data-section="ma_journee" data-perm="ma_journee"><span class="nav-icon">▣</span> Ma journée</button>
     </nav>
 
     <div class="sidebar-footer">
@@ -528,6 +529,59 @@
     </section>
 
     <!-- RAPPORT JOURNALIER -->
+    <!-- MA JOURNÉE — relevé de remise de caisse, aujourd'hui seulement -->
+    <section class="section" id="ma_journee">
+      <div class="page-header">
+        <div><h1 class="page-title">Ma journée</h1><p class="page-sub" id="mj-sous-titre"></p></div>
+        <div class="page-header-actions">
+          <button class="btn" onclick="renderMaJournee()">⟳ Actualiser</button>
+          <button class="btn btn-primary" onclick="imprimerMaJournee()">🖨 Imprimer</button>
+        </div>
+      </div>
+
+      <div class="metrics-grid">
+        <div class="metric-card"><div class="metric-label">Encaissé aujourd'hui</div>
+          <div class="metric-value" id="mj-encaisse">—</div>
+          <span class="metric-badge badge-success" id="mj-encaisse-detail">—</span></div>
+        <div class="metric-card"><div class="metric-label">Ventes saisies</div>
+          <div class="metric-value" id="mj-nb-ventes">—</div>
+          <span class="metric-badge badge-info" id="mj-ca">—</span></div>
+        <div class="metric-card"><div class="metric-label">Dépôts épargne</div>
+          <div class="metric-value" id="mj-depots">—</div>
+          <span class="metric-badge badge-info" id="mj-nb-depots">—</span></div>
+        <div class="metric-card"><div class="metric-label">Reprises enregistrées</div>
+          <div class="metric-value" id="mj-reprises">—</div>
+          <span class="metric-badge badge-warn" id="mj-nb-reprises">—</span></div>
+      </div>
+
+      <div class="card">
+        <div class="card-header"><div class="card-title">Encaissé par moyen de paiement</div></div>
+        <div class="table-wrap"><table><thead><tr><th>Moyen</th><th style="text-align:right">Montant</th></tr></thead>
+          <tbody id="mj-paiements"></tbody></table></div>
+      </div>
+
+      <div class="card">
+        <div class="card-header"><div class="card-title">Mes ventes du jour</div></div>
+        <div class="table-wrap"><table><thead><tr>
+          <th>Réf.</th><th>Cliente</th><th>Description</th><th style="text-align:right">Montant</th>
+          <th style="text-align:right">Encaissé</th><th style="text-align:right">Restant</th></tr></thead>
+          <tbody id="mj-ventes"></tbody></table></div>
+      </div>
+
+      <div class="card">
+        <div class="card-header"><div class="card-title">Mes dépôts et reprises du jour</div></div>
+        <div class="table-wrap"><table><thead><tr>
+          <th>Type</th><th>Cliente</th><th>Détail</th><th style="text-align:right">Montant</th></tr></thead>
+          <tbody id="mj-autres"></tbody></table></div>
+      </div>
+
+      <div style="font-size:12px;color:var(--text-secondary);padding:10px 14px;background:var(--bg-secondary);border-radius:var(--radius-md)">
+        Ce relevé ne montre que ce que <strong>vous</strong> avez saisi aujourd'hui. Il sert à remettre
+        la caisse : le total encaissé est ce que vous devez avoir en main, hors paiements Wave,
+        Orange Money ou carte.
+      </div>
+    </section>
+
     <section class="section" id="rapport_jour">
       <div class="page-header">
         <div><h1 class="page-title">Rapport journalier</h1><p class="page-sub" id="rapport-date-label"></p></div>
@@ -1447,11 +1501,11 @@
 
 <div class="toast" id="toast"></div>
   <!-- Supabase SDK -->
-  <script src="js/security.js?v=2026-10-19c"></script>
-  <script src="js/auth.js?v=2026-10-19c"></script>
-  <script src="js/data.js?v=2026-10-19c"></script>
-  <script src="js/supabase.js?v=2026-10-19c"></script>
-  <script src="js/app.js?v=2026-10-19c"></script>
+  <script src="js/security.js?v=2026-10-20c"></script>
+  <script src="js/auth.js?v=2026-10-20c"></script>
+  <script src="js/data.js?v=2026-10-20c"></script>
+  <script src="js/supabase.js?v=2026-10-20c"></script>
+  <script src="js/app.js?v=2026-10-20c"></script>
 
 <!-- MODAL AJUSTER STOCK -->
 <div class="modal-backdrop" id="modal-ajust-stock">

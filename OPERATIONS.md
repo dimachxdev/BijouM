@@ -226,3 +226,38 @@ interroge l'API reçoit une liste vide.
 
 La protection réelle est appliquée par PostgreSQL, pas par les boutons —
 voir `CLAUDE.md`.
+
+---
+
+## 7. « Ma journée » — la remise de caisse
+
+Onglet visible au **vendeur** et au **gestionnaire**. Il montre ce que la
+personne connectée a saisi **aujourd'hui**, et rien d'autre.
+
+| Ce qu'il contient | Ce qu'il ne contient pas |
+|---|---|
+| Ses ventes du jour | Le solde de caisse de la boutique |
+| Ses dépôts épargne du jour | Les décaissements |
+| Ses reprises du jour | Le travail de ses collègues |
+| L'encaissé par moyen de paiement | Les autres journées |
+
+Le bouton **Imprimer** sort une feuille de remise de caisse, avec deux lignes
+de signature — remis par / reçu par.
+
+### Trois exclusions voulues
+
+**Les ventes annulées** n'y figurent pas.
+
+**Les dépôts venus du portail cliente** non plus : ils n'ont pas d'auteur,
+personne ne les a encaissés au comptoir. Les compter ferait réclamer à la
+vendeuse un argent qui n'est jamais passé entre ses mains.
+
+**Une vente réglée sur l'épargne** n'apporte que son complément. Si une cliente
+paie 50 000 F sur son compte et 10 000 F en espèces, la ligne Espèces porte
+10 000 F — les 50 000 F étaient dans le tiroir depuis son dépôt.
+
+### Les dépôts ont leur propre ligne
+
+Aucune colonne n'enregistre par quel moyen un dépôt a été versé. Les ranger
+d'office en espèces serait une affirmation que la base ne permet pas : ils
+restent donc à part.

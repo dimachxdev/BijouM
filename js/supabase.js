@@ -1,4 +1,4 @@
-console.log('KAYOR · supabase.js', '2026-10-19c');
+console.log('KAYOR · supabase.js', '2026-10-20c');
 /**
  * KAYOR — Couche Supabase
  * Architecture : App → Supabase → Realtime → App
@@ -141,7 +141,8 @@ async function chargerDonnees() {
     comptes.forEach(function(cc) {
       cc.mouvements = mouvements
         .filter(function(m){ return m.compte_id === cc.id; })
-        .map(function(m){ return { date:m.date, type:m.type, montant:m.montant, note:m.note }; });
+        .map(function(m){ return { date:m.date, type:m.type, montant:m.montant, note:m.note,
+                                   creePar:m.created_by||null }; });
     });
     arrhes.forEach(function(a) {
       a.mouvements = mvtArrhes
@@ -530,7 +531,7 @@ function mapVente(v) {
     numFacture:v.num_facture, compteClientId:v.compte_client_id,
     noteComplement:v.note_complement,
     annulee:v.annulee===true, annuleeLe:v.annulee_le, annuleeMotif:v.annulee_motif,
-    payeParCompte:v.paye_par_compte||0 };
+    payeParCompte:v.paye_par_compte||0, creePar:v.created_by||null };
 }
 function mapStock(s) {
   return { ref:s.ref, nom:s.nom, typeBijou:s.type_bijou, carat:s.carat,
@@ -556,7 +557,7 @@ function mapReprise(r) {
   return { id:r.id, date:r.date, client:r.client, description:r.description,
     typeBijou:r.type_bijou||r.typeBijou, carat:r.carat, poids:r.poids||0,
     local:r.local||0, importe:r.importe||0, prixPropose:r.prix||r.prixPropose||0,
-    note:r.note, photo:r.photo };
+    note:r.note, photo:r.photo, creePar:r.created_by||null };
 }
 
 // ============================================
@@ -1061,10 +1062,22 @@ async function viderCompteEpargne(compteId, motif, date, note) {
  * propriétaire de SA boutique avant d'agir — le navigateur ne décide rien.
  */
 async function appelMembresAdmin(corps) {
+  // En-têtes construits à la main, SANS le `Prefer` que H() ajoute pour
+  // PostgREST : il ne veut rien dire pour une Edge Function, et le navigateur
+  // refusait tout l'appel parce que la préflight ne l'autorisait pas —
+  // « Failed to fetch », sans autre explication.
+  var h = (typeof Auth !== 'undefined' && Auth.connecte())
+    ? Auth.enTetes()
+    : { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY,
+        'Authorization': 'Bearer ' + SUPABASE_KEY };
+
   var r;
   try {
     r = await fetch(SUPABASE_URL + '/functions/v1/membres-admin', {
-      method: 'POST', headers: H(), body: JSON.stringify(corps)
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json',
+                 'apikey': h['apikey'], 'Authorization': h['Authorization'] },
+      body: JSON.stringify(corps)
     });
   } catch (e) {
     // fetch ne lève que sur un échec réseau. « Failed to fetch » tout nu

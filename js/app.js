@@ -17,7 +17,7 @@ const KAYOR_LOGO_B64 = 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAgAAZABkAAD/7AARR
  * qui « peut tout faire » alors que les droits sont restreints, c'est presque
  * toujours ça.
  */
-const APP_VERSION = '2026-10-19-comptes-equipe-b';
+const APP_VERSION = '2026-10-20-ma-journee';
 
 function loadLS(k, fb) { try { const s=localStorage.getItem(k); return s?JSON.parse(s):fb; } catch { return fb; } }
 
@@ -827,6 +827,7 @@ function renderSection(id) {
   if(id==='comptes_users')  renderGestionComptes();
   if(id==='profil_boutique')renderProfilBoutique();
   if(id==='rapport_jour')    renderRapportJournalier();
+  if(id==='ma_journee')      renderMaJournee();
   if(id==='achats_clients')renderAchatsClients();
   if(id==='sorties')       renderSorties();
   if(id==='decaissements') renderDecaissements();
@@ -3245,6 +3246,167 @@ async function chargerInvitations() {
 // Toute l'autorisation est côté serveur (fonction `membres-admin`, seule
 // détentrice de la clé de service) : les gardes ci-dessous ne font que
 // masquer des boutons.
+
+// ============================================
+// MA JOURNÉE — relevé de remise de caisse
+// ============================================
+// Ce que la personne connectée a saisi AUJOURD'HUI, et rien d'autre.
+//
+// Volontairement absent : le solde de caisse de la boutique, les
+// décaissements, et le travail des collègues. Ce n'est pas le rapport
+// journalier de l'administrateur — c'est ce qu'une vendeuse doit pouvoir
+// poser sur la table en rendant sa caisse.
+
+/** Les lignes du jour saisies par la personne connectée. */
+function maJourneeDonnees() {
+  var moi = STATE.currentUser?.id;
+  var auj = today();
+  var aMoi = function (x) { return x.creePar === moi; };
+
+  var ventes = STATE.ventes.filter(function (v) {
+    return v.date === auj && !v.annulee && aMoi(v);
+  });
+
+  // Un dépôt venu du portail cliente n'a pas d'auteur : il n'est pas passé
+  // par le comptoir, il ne figure donc pas dans la remise de caisse.
+  var depots = [];
+  STATE.comptesClients.forEach(function (cc) {
+    (cc.mouvements || []).forEach(function (m) {
+      if (m.type === 'depot' && m.date === auj && aMoi(m)) {
+        depots.push({ client: cc.client, montant: m.montant || 0, note: m.note || '' });
+      }
+    });
+  });
+
+  var reprises = STATE.achatsClients.filter(function (a) {
+    return a.date === auj && aMoi(a);
+  });
+
+  return { ventes: ventes, depots: depots, reprises: reprises };
+}
+
+function renderMaJournee() {
+  var d = maJourneeDonnees();
+
+  var encaisseVentes = d.ventes.reduce(function (s, v) { return s + encaisseReel(v); }, 0);
+  var totalDepots    = d.depots.reduce(function (s, x) { return s + x.montant; }, 0);
+  var ca             = d.ventes.reduce(function (s, v) { return s + (v.montant || 0); }, 0);
+  var totalReprises  = d.reprises.reduce(function (s, a) { return s + (a.prixPropose || 0); }, 0);
+  var encaisse       = encaisseVentes + totalDepots;
+
+  document.getElementById('mj-sous-titre').textContent =
+    (STATE.currentUser?.nom || '') + ' · ' + fmtDateLong(today());
+
+  document.getElementById('mj-encaisse').textContent        = fmt(encaisse);
+  document.getElementById('mj-encaisse-detail').textContent =
+    fmt(encaisseVentes) + ' ventes + ' + fmt(totalDepots) + ' dépôts';
+  document.getElementById('mj-nb-ventes').textContent = d.ventes.length;
+  document.getElementById('mj-ca').textContent        = fmt(ca) + ' de ventes';
+  document.getElementById('mj-depots').textContent    = fmt(totalDepots);
+  document.getElementById('mj-nb-depots').textContent = d.depots.length + ' dépôt' + (d.depots.length > 1 ? 's' : '');
+  document.getElementById('mj-reprises').textContent  = fmt(totalReprises);
+  document.getElementById('mj-nb-reprises').textContent = d.reprises.length + ' reprise' + (d.reprises.length > 1 ? 's' : '');
+
+  // Répartition par moyen de paiement : c'est elle qui dit combien de billets
+  // doivent être dans le tiroir, et combien sont partis sur un compte mobile.
+  var parMoyen = {};
+  d.ventes.forEach(function (v) {
+    var reel = encaisseReel(v);
+    if (!reel) return;
+    // Une vente « compte+wave » n'a fait entrer que la part Wave : l'épargne
+    // était déjà dans le tiroir. C'est donc le complément qu'il faut compter,
+    // sinon la vendeuse chercherait des billets qui n'existent pas.
+    var m = v.paiement || 'especes';
+    if (m.indexOf('compte+') === 0) m = m.slice('compte+'.length);
+    parMoyen[m] = (parMoyen[m] || 0) + reel;
+  });
+
+  var lignes = Object.keys(parMoyen).map(function (m) {
+    return '<tr><td><span class="paiement-pill paiement-' + esc(m) + '">'
+         + esc(PAIEMENT_LABELS[m] || m) + '</span></td>'
+         + '<td style="text-align:right;font-weight:600">' + fmt(parMoyen[m]) + '</td></tr>';
+  });
+
+  // Les dépôts restent sur leur propre ligne : rien n'enregistre par quel
+  // moyen ils ont été versés, et les ranger d'office en espèces serait une
+  // affirmation que la base ne permet pas.
+  if (totalDepots) {
+    lignes.push('<tr><td><span class="metric-badge badge-success">Dépôts épargne</span></td>'
+              + '<td style="text-align:right;font-weight:600">' + fmt(totalDepots) + '</td></tr>');
+  }
+
+  document.getElementById('mj-paiements').innerHTML = lignes.length
+    ? lignes.join('')
+      + '<tr style="border-top:2px solid var(--text-primary)"><td style="font-weight:700">Total</td>'
+      + '<td style="text-align:right;font-weight:700">' + fmt(encaisse) + '</td></tr>'
+    : '<tr><td colspan="2" style="text-align:center;color:var(--text-tertiary);padding:16px">Rien encaissé pour le moment.</td></tr>';
+
+  document.getElementById('mj-ventes').innerHTML = d.ventes.length
+    ? d.ventes.map(function (v) {
+        return '<tr><td><span class="ref-code">' + esc(v.id) + '</span></td>'
+             + '<td>' + esc(v.client || '—') + '</td>'
+             + '<td style="font-size:12px;color:var(--text-secondary)">' + esc(v.description || '') + '</td>'
+             + '<td style="text-align:right">' + fmt(v.montant) + '</td>'
+             + '<td style="text-align:right;font-weight:600">' + fmt(encaisseReel(v)) + '</td>'
+             + '<td style="text-align:right">' + ((v.restant || 0) > 0
+                 ? '<span class="stock-badge stock-low">' + fmt(v.restant) + '</span>'
+                 : '<span class="stock-badge stock-ok">Soldé</span>') + '</td></tr>';
+      }).join('')
+    : '<tr><td colspan="6" style="text-align:center;color:var(--text-tertiary);padding:16px">Aucune vente saisie aujourd\'hui.</td></tr>';
+
+  var autres = d.depots.map(function (x) {
+      return '<tr><td><span class="metric-badge badge-success">Dépôt</span></td>'
+           + '<td>' + esc(x.client) + '</td>'
+           + '<td style="font-size:12px;color:var(--text-secondary)">' + esc(x.note) + '</td>'
+           + '<td style="text-align:right;font-weight:600">' + fmt(x.montant) + '</td></tr>';
+    }).concat(d.reprises.map(function (a) {
+      return '<tr><td><span class="metric-badge badge-warn">Reprise</span></td>'
+           + '<td>' + esc(a.client || '—') + '</td>'
+           + '<td style="font-size:12px;color:var(--text-secondary)">' + esc(a.description || '') + '</td>'
+           + '<td style="text-align:right">' + fmt(a.prixPropose) + '</td></tr>';
+    })).join('');
+
+  document.getElementById('mj-autres').innerHTML = autres
+    || '<tr><td colspan="4" style="text-align:center;color:var(--text-tertiary);padding:16px">Aucun dépôt ni reprise aujourd\'hui.</td></tr>';
+}
+
+function imprimerMaJournee() {
+  var section = document.getElementById('ma_journee');
+  if (!section) return;
+  var copie = section.cloneNode(true);
+  var entete = copie.querySelector('.page-header');
+  if (entete) entete.remove();
+
+  var b = boutiqueInfos();
+  var win = window.open('', '_blank', 'width=800,height=1000');
+  win.document.write('<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8">'
+    + '<title>Ma journée — ' + esc(STATE.currentUser?.nom || '') + '</title>'
+    + '<style>*{box-sizing:border-box;margin:0;padding:0}'
+    + 'body{font-family:Arial,sans-serif;font-size:12px;color:#111;padding:20px}'
+    + 'h1{font-size:17px;margin-bottom:2px}'
+    + '.metrics-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:14px 0}'
+    + '.metric-card{background:#f7f6f3;border-radius:6px;padding:10px}'
+    + '.metric-label{font-size:9px;text-transform:uppercase;color:#666;margin-bottom:3px}'
+    + '.metric-value{font-size:15px;font-weight:700}.metric-badge{font-size:10px;color:#555}'
+    + '.card{border:1px solid #e0e0e0;border-radius:6px;margin-bottom:12px;overflow:hidden}'
+    + '.card-header{padding:7px 11px;background:#f7f6f3;border-bottom:1px solid #e0e0e0;font-weight:600}'
+    + 'table{width:100%;border-collapse:collapse;font-size:11px}'
+    + 'th{text-align:left;padding:6px 8px;background:#1a1916;color:#fff;font-size:9px;text-transform:uppercase}'
+    + 'td{padding:6px 8px;border-bottom:1px solid #f0f0f0}'
+    + '.ref-code{font-family:monospace;font-size:10px;color:#666}'
+    + '.signature{margin-top:26px;display:flex;justify-content:space-between;font-size:11px}'
+    + '</style></head><body>'
+    + '<div style="text-align:center;margin-bottom:6px">' + _logoFacture(44) + '</div>'
+    + '<h1 style="text-align:center">Remise de caisse — ' + esc(b.nom) + '</h1>'
+    + '<div style="text-align:center;font-size:11px;color:#666;margin-bottom:6px">'
+    + esc(STATE.currentUser?.nom || '') + ' · ' + fmtDateLong(today()) + '</div>'
+    + copie.innerHTML
+    + '<div class="signature"><div>Remis par : ____________________</div>'
+    + '<div>Reçu par : ____________________</div></div>'
+    + '</body></html>');
+  win.document.close();
+  setTimeout(function () { win.focus(); win.print(); }, 500);
+}
 
 function estProprietaire() { return STATE.currentUser?.role === 'proprietaire'; }
 

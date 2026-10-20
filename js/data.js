@@ -26,8 +26,11 @@ const PERM_MAP = {
   // détail des décaissements, réservés aux administrateurs.
   // `achats_clients` ouvert au vendeur : le serveur l'autorisait déjà à
   // enregistrer une reprise, seul l'onglet le masquait.
-  gestionnaire: ['journal','stocks','achats_clients','clients','compte_client','bijou_arr'],
-  vendeur:      ['journal','achats_clients','clients','compte_client','bijou_arr'],
+  // `ma_journee` : le relevé de remise de caisse. Ce que la personne a
+  // saisi AUJOURD'HUI, et rien d'autre — ni le solde de la boutique, ni les
+  // décaissements, ni le travail de ses collègues.
+  gestionnaire: ['journal','stocks','achats_clients','clients','compte_client','bijou_arr','ma_journee'],
+  vendeur:      ['journal','achats_clients','clients','compte_client','bijou_arr','ma_journee'],
 };
 
 // ============================================
