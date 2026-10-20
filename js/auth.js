@@ -1,4 +1,4 @@
-console.log('KAYOR · auth.js', '2026-10-20d');
+console.log('KAYOR · auth.js', '2026-10-20g');
 /**
  * KAYOR — Authentification (Supabase Auth)
  * ---------------------------------------------------------------------------
@@ -138,60 +138,6 @@ console.log('KAYOR · auth.js', '2026-10-20d');
    *   - confirmation activée -> pas de session, l'utilisateur doit cliquer
    *     le lien reçu par mail.
    */
-  async function inscription(email, motDePasse) {
-    var r = await fetchTimeout(URL_BASE + '/auth/v1/signup', {
-      method:  'POST',
-      headers: enTetesAnon(),
-      body:    JSON.stringify({
-        email: String(email || '').trim().toLowerCase(),
-        password: motDePasse
-      })
-    });
-
-    var data = await r.json().catch(function () { return {}; });
-
-    if (!r.ok) {
-      var m = (data.msg || data.error_description || data.message || '').toLowerCase();
-      // Un 500 ici vient presque toujours de l'envoi de l'email de
-      // confirmation : quand il échoue, Supabase annule l'inscription et
-      // AUCUN compte n'est créé. Le dire clairement évite de croire que
-      // l'adresse saisie est en cause.
-      if (r.status >= 500) {
-        throw new Error(
-          "Le compte n'a pas pu être créé : l'envoi de l'email de confirmation a échoué. " +
-          "La configuration SMTP du projet doit être corrigée."
-        );
-      }
-      if (r.status === 429) {
-        throw new Error('Trop de tentatives. Patientez quelques minutes.');
-      }
-      if (m.indexOf('already') !== -1 || m.indexOf('registered') !== -1) {
-        throw new Error('Un compte existe déjà pour cette adresse. Utilisez « Mot de passe oublié ».');
-      }
-      if (m.indexOf('password') !== -1) {
-        throw new Error('Mot de passe refusé : il est trop court ou trop simple.');
-      }
-      throw new Error('Inscription impossible. Vérifiez l\'adresse saisie.');
-    }
-
-    // Confirmation d'email activée : Supabase ne renvoie pas de session.
-    if (!data.access_token) {
-      return { confirmationRequise: true };
-    }
-
-    ecrireSession({
-      access_token:  data.access_token,
-      refresh_token: data.refresh_token,
-      expires_at:    Date.now() + (data.expires_in || 3600) * 1000,
-      user:          data.user
-    });
-
-    // chargerProfil() lève si aucune invitation n'a rattaché ce compte.
-    await chargerProfil();
-    programmerRefresh();
-    return { confirmationRequise: false, profil: profil };
-  }
-
   // =========================================================================
   // MOT DE PASSE OUBLIÉ
   // =========================================================================
@@ -551,7 +497,6 @@ console.log('KAYOR · auth.js', '2026-10-20d');
   // par les policies RLS dans PostgreSQL.
   global.Auth = {
     connexion:               connexion,
-    inscription:             inscription,
     demanderReinitialisation: demanderReinitialisation,
     detecterRecuperation:    detecterRecuperation,
     definirMotDePasse:       definirMotDePasse,

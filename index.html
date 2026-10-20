@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>KAYOR — Brillez sans effort</title>
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml" />
-  <link rel="stylesheet" href="css/style.css?v=2026-10-20d" />
+  <link rel="stylesheet" href="css/style.css?v=2026-10-20g" />
 </head>
 <body>
 
@@ -29,94 +29,10 @@
       </div>
       <div class="login-error" id="login-error"></div>
       <button class="btn btn-primary" id="btn-login" style="width:100%;justify-content:center" onclick="doLogin()">Se connecter</button>
-      <div style="display:flex;justify-content:space-between;gap:12px;margin-top:14px">
+      <div style="text-align:center;margin-top:14px">
         <button class="lien-auth" onclick="afficherPanneau('panel-forgot')">Mot de passe oublié ?</button>
-        <button class="lien-auth" onclick="afficherPanneau('panel-signup')">J'ai une invitation</button>
       </div>
 
-      <!-- Voie principale pour l'équipe : pas de mot de passe, donc rien à
-           oublier ni à réinitialiser par email. Voir migration 009. -->
-      <div style="display:flex;align-items:center;gap:10px;margin:18px 0 14px">
-        <span style="flex:1;height:1px;background:var(--border-light)"></span>
-        <span style="font-size:11px;color:var(--text-tertiary)">ou</span>
-        <span style="flex:1;height:1px;background:var(--border-light)"></span>
-      </div>
-      <button class="btn" style="width:100%;justify-content:center"
-              onclick="ouvrirWhatsApp()">Continuer avec WhatsApp</button>
-    </div>
-
-    <!-- ---------- WHATSAPP — ÉTAPE 1 : LE NUMÉRO ---------- -->
-    <div id="panel-wa-num" style="display:none">
-      <div class="auth-titre">Connexion par WhatsApp</div>
-      <div class="auth-aide">
-        Nous envoyons un code à six chiffres sur votre WhatsApp.
-        Si votre numéro a été invité, votre compte est créé du même coup.
-      </div>
-      <div class="form-group" style="margin-top:16px">
-        <label class="form-label" for="wa-tel">Numéro WhatsApp</label>
-        <input class="form-input" type="tel" id="wa-tel" placeholder="77 123 45 67"
-               autocomplete="tel" inputmode="tel" />
-        <span class="form-hint">Numéro sénégalais : inutile d'écrire l'indicatif.
-          Pour l'étranger, commencez par + et l'indicatif du pays.</span>
-      </div>
-      <div class="login-error" id="wa-num-error" style="margin-top:12px"></div>
-      <button class="btn btn-primary" id="btn-wa-envoyer"
-              style="width:100%;justify-content:center;margin-top:12px"
-              onclick="doWhatsAppEnvoyer()">Recevoir le code</button>
-      <div style="text-align:center;margin-top:14px">
-        <button class="lien-auth" onclick="afficherPanneau('panel-login')">← Retour à la connexion</button>
-      </div>
-    </div>
-
-    <!-- ---------- WHATSAPP — ÉTAPE 2 : LE CODE ---------- -->
-    <div id="panel-wa-code" style="display:none">
-      <div class="auth-titre">Entrez le code reçu</div>
-      <div class="auth-aide">
-        Code envoyé sur WhatsApp au <strong id="wa-rappel-num"></strong>.
-        Il expire au bout d'une heure.
-      </div>
-      <div class="form-group" style="margin-top:16px">
-        <label class="form-label" for="wa-code">Code à six chiffres</label>
-        <input class="form-input" type="text" id="wa-code" placeholder="123456"
-               inputmode="numeric" autocomplete="one-time-code" maxlength="6"
-               style="letter-spacing:6px;text-align:center;font-size:20px" />
-      </div>
-      <div class="login-error" id="wa-code-error" style="margin-top:12px"></div>
-      <div class="login-ok" id="wa-code-ok"></div>
-      <button class="btn btn-primary" id="btn-wa-verifier"
-              style="width:100%;justify-content:center;margin-top:12px"
-              onclick="doWhatsAppVerifier()">Valider</button>
-      <div style="display:flex;justify-content:space-between;gap:12px;margin-top:14px">
-        <button class="lien-auth" onclick="afficherPanneau('panel-wa-num')">← Changer de numéro</button>
-        <button class="lien-auth" id="lien-wa-renvoyer" onclick="doWhatsAppEnvoyer(true)">Renvoyer le code</button>
-      </div>
-    </div>
-
-    <!-- ---------- INSCRIPTION (sur invitation) ---------- -->
-    <div id="panel-signup" style="display:none">
-      <div class="auth-titre">Créer mon compte</div>
-      <div class="auth-aide">
-        Utilisez l'adresse email à laquelle l'invitation a été envoyée.
-        Sans invitation valide, le compte ne sera rattaché à aucune boutique.
-      </div>
-      <div class="form-group">
-        <label class="form-label">Adresse email</label>
-        <input class="form-input" type="email" id="signup-email" placeholder="vous@boutique.sn" autocomplete="email" />
-      </div>
-      <div class="form-group" style="margin-top:12px">
-        <label class="form-label">Mot de passe</label>
-        <input class="form-input" type="password" id="signup-pass" placeholder="12 caractères minimum" autocomplete="new-password" />
-      </div>
-      <div class="form-group" style="margin:12px 0 16px">
-        <label class="form-label">Confirmer le mot de passe</label>
-        <input class="form-input" type="password" id="signup-pass2" placeholder="••••••••" autocomplete="new-password" />
-      </div>
-      <div class="login-error" id="signup-error"></div>
-      <div class="login-ok" id="signup-ok"></div>
-      <button class="btn btn-primary" id="btn-signup" style="width:100%;justify-content:center" onclick="doSignup()">Créer mon compte</button>
-      <div style="text-align:center;margin-top:14px">
-        <button class="lien-auth" onclick="afficherPanneau('panel-login')">← Retour à la connexion</button>
-      </div>
     </div>
 
     <!-- ---------- MOT DE PASSE OUBLIÉ ---------- -->
@@ -519,7 +435,6 @@
       <div class="page-header">
         <div><h1 class="page-title">Membres de la boutique</h1><p class="page-sub" id="gc-count-label"></p></div>
         <button class="btn btn-primary" id="btn-creer-compte" onclick="ouvrirCreerCompte()">+ Créer un compte</button>
-        <button class="btn" onclick="ouvrirInvitation()">Inviter par numéro</button>
       </div>
       <div class="card"><div class="table-wrap">
         <table>
@@ -1263,34 +1178,32 @@
 
 <div class="modal-backdrop" id="modal-add-user">
   <div class="modal">
-    <div class="modal-header"><div class="modal-title" id="modal-user-title">Inviter un membre</div><button class="modal-close" onclick="closeModal('modal-add-user')">✕</button></div>
+    <div class="modal-header"><div class="modal-title" id="modal-user-title">Modifier un membre</div><button class="modal-close" onclick="closeModal('modal-add-user')">✕</button></div>
     <div class="role-banner role-admin" style="margin-bottom:12px"><span>🔒</span> Réservé à l'administrateur</div>
     <input type="hidden" id="u-edit-id" />
     <div class="form-row">
       <div class="form-group"><label class="form-label">Nom complet *</label><input class="form-input" placeholder="ex: Fatou Ndiaye" id="u-nom" /></div>
-      <div class="form-group"><label class="form-label">Numéro WhatsApp *</label><input class="form-input" type="tel" placeholder="77 123 45 67" id="u-tel" autocomplete="off" inputmode="tel" /></div>
+      <div class="form-group"><label class="form-label">Identifiant</label><input class="form-input" id="u-tel" autocomplete="off" disabled /></div>
     </div>
     <div class="form-group" style="margin-bottom:12px">
-      <label class="form-label">Adresse email (facultatif)</label>
-      <input class="form-input" type="email" placeholder="fatou@boutique.sn" id="u-email" autocomplete="off" />
-      <span class="form-hint">Utile seulement si la personne préfère se connecter par mot de passe.</span>
+      <label class="form-label">Adresse ou identifiant</label>
+      <input class="form-input" id="u-email" autocomplete="off" disabled />
+      <span class="form-hint">Non modifiable : c'est la clé du compte.</span>
     </div>
     <div class="form-group" style="margin-bottom:12px"><label class="form-label">Rôle *</label>
       <select class="form-input" id="u-role">
         <option value="vendeur">Vendeur</option>
         <option value="gestionnaire">Gestionnaire Stock</option>
         <option value="admin">Administrateur</option>
-        <option value="proprietaire">Propriétaire</option>
       </select>
     </div>
     <div style="background:var(--info-bg,#eef4fb);border-radius:6px;padding:10px 12px;margin-bottom:12px;font-size:11px;color:var(--text-secondary);line-height:1.5">
-      Aucun mot de passe n'est saisi ici. La personne invitée ouvre l'application, choisit
-      « Continuer avec WhatsApp », saisit ce numéro et le code reçu — son compte est créé et
-      rattaché à la boutique automatiquement.
+      Seuls le nom et le rôle sont modifiables ici. Pour remplacer le mot de passe,
+      utilisez la clé 🔑 dans la liste des membres.
     </div>
     <div class="modal-actions">
       <button class="btn btn-secondary" onclick="closeModal('modal-add-user')">Annuler</button>
-      <button class="btn btn-primary" id="btn-save-user" onclick="sauvegarderMembre()">Envoyer l'invitation</button>
+      <button class="btn btn-primary" id="btn-save-user" onclick="sauvegarderMembre()">Sauvegarder</button>
     </div>
   </div>
 </div>
@@ -1512,11 +1425,11 @@
 
 <div class="toast" id="toast"></div>
   <!-- Supabase SDK -->
-  <script src="js/security.js?v=2026-10-20d"></script>
-  <script src="js/auth.js?v=2026-10-20d"></script>
-  <script src="js/data.js?v=2026-10-20d"></script>
-  <script src="js/supabase.js?v=2026-10-20d"></script>
-  <script src="js/app.js?v=2026-10-20d"></script>
+  <script src="js/security.js?v=2026-10-20g"></script>
+  <script src="js/auth.js?v=2026-10-20g"></script>
+  <script src="js/data.js?v=2026-10-20g"></script>
+  <script src="js/supabase.js?v=2026-10-20g"></script>
+  <script src="js/app.js?v=2026-10-20g"></script>
 
 <!-- MODAL AJUSTER STOCK -->
 <div class="modal-backdrop" id="modal-ajust-stock">

@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Console opérateur — Gestion Bijouterie</title>
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml" />
-  <link rel="stylesheet" href="css/style.css?v=2026-10-20d" />
+  <link rel="stylesheet" href="css/style.css?v=2026-10-20g" />
   <style>
     /* La console vit hors de l'application boutique : pas de sidebar. */
     .op-wrap { max-width: 1100px; margin: 0 auto; padding: 18px 16px 40px; }
@@ -96,17 +96,25 @@
             <input class="form-input" id="c-nom-proprio" placeholder="Awa Diop" />
           </div>
           <div class="form-group">
-            <label class="form-label" for="c-tel">Numéro WhatsApp de la propriétaire</label>
-            <input class="form-input" type="tel" id="c-tel" placeholder="77 123 45 67" inputmode="tel" />
-            <span class="form-hint">L'invitation est posée sur ce numéro : elle ouvre l'application,
-              choisit « Continuer avec WhatsApp » et devient propriétaire.</span>
+            <label class="form-label" for="c-identifiant">Identifiant de la propriétaire</label>
+            <input class="form-input" id="c-identifiant" placeholder="awa" autocomplete="off"
+                   oninput="majApercuProprio()" />
+            <span class="form-hint" id="c-apercu">Elle se connectera avec cet identifiant.</span>
           </div>
         </div>
         <div class="two-col">
           <div class="form-group">
-            <label class="form-label" for="c-email">Email de la propriétaire (facultatif)</label>
-            <input class="form-input" type="email" id="c-email" placeholder="awa@exemple.sn" />
-            <span class="form-hint">Utile seulement si elle préfère se connecter par mot de passe.</span>
+            <label class="form-label" for="c-mdp">Mot de passe</label>
+            <div style="display:flex;gap:6px">
+              <input class="form-input" type="password" id="c-mdp" autocomplete="new-password"
+                     placeholder="8 caractères minimum" style="flex:1" />
+              <button type="button" class="btn small" onclick="basculerVisibiliteOp('c-mdp', this)" title="Afficher">👁</button>
+            </div>
+            <span class="form-hint">Vous le lui communiquez de vive voix. Personne ne pourra le relire.</span>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="c-tel">Téléphone (facultatif)</label>
+            <input class="form-input" type="tel" id="c-tel" placeholder="77 123 45 67" inputmode="tel" />
           </div>
         </div>
         <div class="two-col">
@@ -150,7 +158,7 @@
   </div>
 </div>
 
-<script src="js/supabase.js?v=2026-10-20d"></script>
-<script src="js/operateur.js?v=2026-10-20d"></script>
+<script src="js/supabase.js?v=2026-10-20g"></script>
+<script src="js/operateur.js?v=2026-10-20g"></script>
 </body>
 </html>

@@ -223,10 +223,28 @@
     if (!ouvert) $('c-nom').focus();
   }
 
+  /** Montre l'identifiant complet que la propriétaire devra taper. */
+  function majApercuProprio() {
+    var id   = ($('c-identifiant').value || '').trim().toLowerCase();
+    var slug = ($('c-slug').value || '').trim().toLowerCase();
+    $('c-apercu').textContent = (id && slug)
+      ? 'Elle se connectera avec « ' + id + '@' + slug + ' »'
+      : 'Elle se connectera avec cet identifiant.';
+  }
+
+  /** Masqué par défaut : un mot de passe n'a pas à rester lisible à l'écran. */
+  function basculerVisibiliteOp(idChamp, bouton) {
+    var el = $(idChamp); if (!el) return;
+    var cache = el.type === 'password';
+    el.type = cache ? 'text' : 'password';
+    bouton.textContent = cache ? '🙈' : '👁';
+  }
+
   async function creer() {
     var nom   = $('c-nom').value.trim();
     var slug  = $('c-slug').value.trim().toUpperCase();
-    var email = $('c-email').value.trim().toLowerCase();
+    var ident = $('c-identifiant').value.trim().toLowerCase();
+    var mdp   = $('c-mdp').value;
     var tel   = normaliserTel($('c-tel').value);
     var nomP  = $('c-nom-proprio').value.trim();
     var plan  = $('c-plan').value;
@@ -236,31 +254,43 @@
     if (!nom || !slug || !nomP) {
       message('Le nom de la boutique, son code et le nom de la propriétaire sont obligatoires.', true); return;
     }
-    if (!tel && !email) {
-      message('Indiquez au moins un numéro WhatsApp pour la propriétaire.', true); return;
-    }
     if (!/^[A-Z0-9]{2,6}$/.test(slug)) {
       message('Le code boutique doit faire 2 à 6 lettres majuscules ou chiffres.', true); return;
+    }
+    if (!/^[a-z0-9._-]{2,30}$/.test(ident)) {
+      message('Identifiant : 2 à 30 caractères, lettres, chiffres, point ou tiret.', true); return;
+    }
+    if (mdp.length < 8) {
+      message('Le mot de passe doit faire au moins 8 caractères.', true); return;
     }
 
     var btn = $('op-btn-creer');
     btn.disabled = true; btn.textContent = 'Création…';
     try {
-      var d = await rpc('creer_boutique', {
-        p_nom: nom, p_slug: slug,
-        p_email_proprietaire: email || null, p_tel_proprietaire: tel || null,
-        p_nom_proprietaire: nomP, p_plan: plan, p_jours_essai: jours
+      // Plus d'invitation : la boutique ET le compte de sa propriétaire sont
+      // créés d'un bloc par la fonction serveur, qui seule détient la clé de
+      // service. Si le compte échoue, la boutique est défaite derrière elle.
+      var r = await fetch(SUPABASE_URL + '/functions/v1/membres-admin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json',
+                   'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + jeton },
+        body: JSON.stringify({ action: 'creer_boutique',
+          nom: nom, slug: slug, identifiant: ident, motdepasse: mdp,
+          nom_proprietaire: nomP, telephone: tel || '',
+          plan: plan, jours_essai: String(jours) })
+      }).catch(function () {
+        throw new Error('Serveur injoignable. Vérifiez votre connexion.');
       });
-      ['c-nom', 'c-slug', 'c-tel', 'c-email', 'c-nom-proprio'].forEach(function (id) { $(id).value = ''; });
+      var d = await r.json().catch(function () { return {}; });
+      if (!r.ok || d.ok === false) throw new Error(d.erreur || 'Création refusée.');
+      ['c-nom', 'c-slug', 'c-identifiant', 'c-mdp', 'c-tel', 'c-nom-proprio']
+        .forEach(function (id) { $(id).value = ''; });
+      majApercuProprio();
       basculerFormulaire();
       await rafraichir();   // efface le bandeau : le message vient donc après
-      // Rien n'est envoyé automatiquement : c'est la propriétaire qui ouvre
-      // l'application, et l'invitation l'attend sur son numéro.
-      message('✓ « ' + nom + ' » créée (code ' + d.slug + '). Invitation posée pour '
-            + (d.invitation_telephone ? '+' + d.invitation_telephone : d.invitation_email)
-            + (d.invitation_telephone
-                ? ' — elle ouvre l\'application et choisit « Continuer avec WhatsApp ».'
-                : ' — elle s\'inscrit avec cette adresse via « J\'ai une invitation ».'));
+      // Rien n'est envoyé : la propriétaire reçoit ses accès de vive voix.
+      message('✓ « ' + nom + ' » créée (code ' + d.slug + '). ' + d.nom_proprietaire
+            + ' se connecte avec « ' + d.login + ' » et le mot de passe que vous venez de poser.');
     } catch (e) {
       message(e.message, true);
     } finally {
@@ -284,6 +314,9 @@
       try { sessionStorage.removeItem(CLE_SESSION); } catch (x) {}
     }
   }
+
+  window.majApercuProprio = majApercuProprio;
+  window.basculerVisibiliteOp = basculerVisibiliteOp;
 
   document.addEventListener('DOMContentLoaded', function () {
     $('op-btn-login').onclick     = connexion;

@@ -17,7 +17,7 @@ const KAYOR_LOGO_B64 = 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAgAAZABkAAD/7AARR
  * qui « peut tout faire » alors que les droits sont restreints, c'est presque
  * toujours ça.
  */
-const APP_VERSION = '2026-10-20-periodes';
+const APP_VERSION = '2026-10-20-sans-inscription';
 
 function loadLS(k, fb) { try { const s=localStorage.getItem(k); return s?JSON.parse(s):fb; } catch { return fb; } }
 
@@ -477,7 +477,7 @@ function totalAvancesAConvertir() {
 document.getElementById('login-pass').addEventListener('keydown', e => { if(e.key==='Enter') doLogin(); });
 document.getElementById('login-user').addEventListener('keydown', e => { if(e.key==='Enter') document.getElementById('login-pass').focus(); });
 // Entrée valide aussi les panneaux d'inscription et de réinitialisation.
-[['signup-pass2',()=>doSignup()],['forgot-email',()=>doForgot()],['reset-pass2',()=>doReset()]]
+[['forgot-email',()=>doForgot()],['reset-pass2',()=>doReset()]]
   .forEach(([id,fn]) => document.getElementById(id)?.addEventListener('keydown', e => { if(e.key==='Enter') fn(); }));
 
 function resetAppData() {
@@ -600,75 +600,17 @@ async function doLogout() {
 // ============================================
 // INSCRIPTION / MOT DE PASSE OUBLIÉ
 // ============================================
-const PANNEAUX_AUTH = ['panel-login','panel-signup','panel-forgot','panel-reset',
-                       'panel-wa-num','panel-wa-code'];
+const PANNEAUX_AUTH = ['panel-login','panel-forgot','panel-reset'];
 
 function afficherPanneau(id) {
   PANNEAUX_AUTH.forEach(p => {
     const el = document.getElementById(p);
     if (el) el.style.display = (p === id) ? 'block' : 'none';
   });
-  ['login-error','signup-error','signup-ok','forgot-error','forgot-ok','reset-error','reset-ok',
-   'wa-num-error','wa-code-error','wa-code-ok']
+  ['login-error','forgot-error','forgot-ok','reset-error','reset-ok']
     .forEach(i => { const el = document.getElementById(i); if (el) el.style.display = 'none'; });
 }
 
-// ============================================
-// CONNEXION PAR WHATSAPP (code à six chiffres)
-// ============================================
-// Un seul parcours pour l'inscription et la connexion : au premier code
-// validé, Supabase crée le compte et le serveur le rattache à la boutique si
-// une invitation porte ce numéro (migration 009). Ensuite, le même écran
-// ouvre simplement la session.
-
-/** Numéro saisi à l'étape 1, conservé pour l'étape 2 et pour le renvoi. */
-let WA_NUMERO = '';
-
-function ouvrirWhatsApp() {
-  afficherPanneau('panel-wa-num');
-  const champ = document.getElementById('wa-tel');
-  if (champ) champ.focus();
-}
-
-async function doWhatsAppEnvoyer(renvoi) {
-  // Au renvoi, on repart du numéro déjà validé : le champ n'est plus à l'écran.
-  const saisi = renvoi ? WA_NUMERO : (document.getElementById('wa-tel').value || '').trim();
-  const cibleErreur = renvoi ? 'wa-code-error' : 'wa-num-error';
-
-  if (!saisi) { messageAuth('wa-num-error', 'Indiquez votre numéro WhatsApp.'); return; }
-
-  const btn = document.getElementById(renvoi ? 'lien-wa-renvoyer' : 'btn-wa-envoyer');
-  const libelle = btn.textContent;
-  btn.disabled = true; btn.textContent = 'Envoi…';
-  try {
-    WA_NUMERO = await Auth.envoyerCodeWhatsApp(saisi);
-    afficherPanneau('panel-wa-code');
-    document.getElementById('wa-rappel-num').textContent = '+' + WA_NUMERO;
-    if (renvoi) messageAuth('wa-code-ok', '✓ Nouveau code envoyé.');
-    document.getElementById('wa-code').value = '';
-    document.getElementById('wa-code').focus();
-  } catch (e) {
-    messageAuth(cibleErreur, e.message);
-  } finally {
-    btn.disabled = false; btn.textContent = libelle;
-  }
-}
-
-async function doWhatsAppVerifier() {
-  const code = (document.getElementById('wa-code').value || '').trim();
-  const btn  = document.getElementById('btn-wa-verifier');
-  btn.disabled = true; btn.textContent = 'Vérification…';
-  try {
-    const profil = await Auth.verifierCodeWhatsApp(WA_NUMERO, code);
-    ouvrirSession(profil);
-  } catch (e) {
-    // Le cas « code bon, mais aucune boutique » vient de chargerProfil() :
-    // le compte existe, il n'est simplement rattaché à rien.
-    messageAuth('wa-code-error', e.message);
-  } finally {
-    btn.disabled = false; btn.textContent = 'Valider';
-  }
-}
 
 function messageAuth(id, texte) {
   const el = document.getElementById(id);
@@ -677,42 +619,6 @@ function messageAuth(id, texte) {
   el.style.display = texte ? 'block' : 'none';
 }
 
-/** Création de compte par une personne invitée. */
-async function doSignup() {
-  const email = document.getElementById('signup-email').value.trim();
-  const p1    = document.getElementById('signup-pass').value;
-  const p2    = document.getElementById('signup-pass2').value;
-  const btn   = document.getElementById('btn-signup');
-
-  messageAuth('signup-error',''); messageAuth('signup-ok','');
-
-  if (!email || !p1)      { messageAuth('signup-error','Renseignez votre email et un mot de passe.'); return; }
-  if (p1 !== p2)          { messageAuth('signup-error','Les deux mots de passe ne correspondent pas.'); return; }
-  if (p1.length < 12)     { messageAuth('signup-error','Le mot de passe doit faire au moins 12 caractères.'); return; }
-
-  btn.disabled = true; btn.textContent = 'Création…';
-  try {
-    const r = await Auth.inscription(email, p1);
-    if (r.confirmationRequise) {
-      // Formulation volontairement neutre : quand l'adresse possède déjà un
-      // compte, Supabase répond 200 avec un utilisateur factice plutôt que de
-      // le dire, pour qu'on ne puisse pas découvrir qui est inscrit. Annoncer
-      // « compte créé » serait donc faux une fois sur deux.
-      messageAuth('signup-ok',
-        'Vérifiez votre boîte mail. Si cette adresse peut ouvrir un compte, un lien de confirmation vient d\'être envoyé — ouvrez-le puis connectez-vous.');
-      document.getElementById('signup-pass').value = '';
-      document.getElementById('signup-pass2').value = '';
-    } else {
-      ouvrirSession(r.profil);
-    }
-  } catch (e) {
-    messageAuth('signup-error', e.message);
-  } finally {
-    btn.disabled = false; btn.textContent = 'Créer mon compte';
-  }
-}
-
-/** Demande du lien de réinitialisation. */
 async function doForgot() {
   const email = document.getElementById('forgot-email').value.trim();
   const btn   = document.getElementById('btn-forgot');
@@ -3553,41 +3459,29 @@ async function ouvrirEditMembre(userId) {
   openModal('modal-add-user');
 }
 
-/** Crée une invitation, ou met à jour un membre existant. */
+/**
+ * Met à jour le nom et le rôle d'un membre.
+ *
+ * L'invitation d'équipe a été retirée le 2026-10-20 : un compte se crée
+ * désormais par « + Créer un compte », où la propriétaire pose elle-même
+ * l'identifiant et le mot de passe. Plus rien à envoyer, plus rien à attendre.
+ */
 async function sauvegarderMembre() {
   if(!isAdmin()){showToast('⛔ Admin uniquement.');return;}
   const userId = document.getElementById('u-edit-id').value;
   const nom    = document.getElementById('u-nom').value.trim();
-  const email  = document.getElementById('u-email').value.trim().toLowerCase();
-  const tel    = Auth.normaliserTel(document.getElementById('u-tel').value);
   const role   = document.getElementById('u-role').value;
 
-  if (!nom) { showToast('⚠ Le nom est obligatoire.'); return; }
+  if (!userId) { showToast('⚠ Utilisez « + Créer un compte » pour ajouter un membre.'); return; }
+  if (!nom)    { showToast('⚠ Le nom est obligatoire.'); return; }
 
   try {
-    if (userId) {
+    {
       const r = await fetch(SUPABASE_URL + '/rest/v1/membres?user_id=eq.' + encodeURIComponent(userId), {
         method: 'PATCH', headers: H(), body: JSON.stringify({ nom, role })
       });
       if (!r.ok) throw new Error(await r.text());
-      showToast(`✓ ${nom} — rôle mis à jour.`);
-    } else {
-      // Le numéro est le canal principal ; l'email reste accepté pour qui
-      // préfère le mot de passe. Il en faut au moins un — le serveur le
-      // vérifie aussi (contrainte `invitations_contact_present`).
-      if (!tel && !email) { showToast('⚠ Indiquez un numéro WhatsApp, ou à défaut une adresse email.'); return; }
-      if (tel && tel.length < 8) { showToast('⚠ Numéro incomplet.'); return; }
-      if (email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { showToast('⚠ Adresse email invalide.'); return; }
-
-      const r = await fetch(SUPABASE_URL + '/rest/v1/invitations', {
-        method: 'POST', headers: H(),
-        body: JSON.stringify({ email: email || null, telephone: tel || null, nom, role,
-                               organisation_id: Auth.orgId(), invite_par: STATE.currentUser.id })
-      });
-      if (!r.ok) throw new Error(await r.text());
-      showToast(tel
-        ? `✓ ${nom} est invitée. Elle ouvre l'application, choisit « Continuer avec WhatsApp » et saisit le +${tel}.`
-        : `✓ Invitation créée pour ${email}. La personne s'inscrit avec cette adresse.`);
+      showToast(`✓ ${nom} — mis à jour.`);
     }
     closeModal('modal-add-user');
     renderGestionComptes();

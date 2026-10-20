@@ -243,8 +243,21 @@ presque toujours un cache navigateur ou un déploiement en retard, pas un bug.
   une réponse — c'est la faille d'origine de ce projet (`admin/admin123` en
   clair dans `js/data.js` et dans la table `utilisateurs`).
 
-  L'écran WhatsApp reste en place mais ne sert plus à l'équipe ; l'invitation
-  par numéro continue de servir aux propriétaires de nouvelles boutiques.
+  **La connexion WhatsApp et l'invitation d'équipe ont été retirées le
+  2026-10-20.** Un compte d'équipe se crée uniquement par « + Créer un compte ».
+  La fenêtre « Modifier un membre » ne change plus que le nom et le rôle.
+
+  **Plus aucune arrivée ne dépend de l'email** depuis le 2026-10-20. La
+  console opérateur crée la boutique ET le compte de sa propriétaire d'un
+  bloc, par l'action `creer_boutique` de `membres-admin` : identifiant et mot
+  de passe posés sur place, rien n'est envoyé.
+
+  Si la création du compte échoue, la boutique est défaite derrière elle —
+  jamais de boutique sans propriétaire.
+
+  La table `invitations` et la fonction SQL `creer_boutique()` subsistent mais
+  **ne sont plus appelées**. Ne pas les réutiliser sans décider d'abord
+  comment la personne invitée recevra son invitation.
 
 ---
 
