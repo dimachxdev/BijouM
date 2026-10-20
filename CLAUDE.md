@@ -185,6 +185,32 @@ parce que seules deux des trois fonctions avaient été mises à jour. Le bouton
 (`js/security.js`). Une cliente nommée `<img src=x onerror=…>` s'exécuterait
 dans la session de l'administratrice qui ouvre la liste.
 
+### Trois plans, jamais deux surfaces identiques côte à côte
+
+`--bg-app` (ivoire) est le fond de page, `--bg-primary` (blanc) ce qui porte
+le contenu, `--bg-muted` les bandes internes d'une carte. **Ne jamais remettre
+`.main` en blanc** : `.main` et `.card` étaient tous deux en blanc pur, une
+carte ne se détachait que par un filet de 0,5 px — c'est ce qui donnait à
+l'application son aspect plat.
+
+Le relief vient du contraste entre ces plans et d'une ombre teintée brun doré,
+jamais d'un trait plus épais ni d'une ombre grise (qui tire au gris sale sur
+l'ivoire).
+
+Les couleurs portent un sens, elles ne décorent pas : vert = argent qui entre,
+rouge = argent qui sort, ambre = en attente d'un geste, or = état de caisse,
+bleu = information. C'est vrai pour la tranche gauche d'une tuile
+(`.metric-card.ton-*`) comme d'une carte de liste (`ton` passé à
+`carteListe()`).
+
+**Lettres noires sur l'or, jamais blanches.** Le blanc sur
+`--kayor-gradient` tombe à 1,17:1 : invisible sur un téléphone en plein jour,
+et c'est le bouton le plus cliqué de l'application. `--kayor-noir` tient
+5,5:1 au point le plus sombre du dégradé.
+
+Toute nouvelle couleur de texte se vérifie à 4,5:1 sur son fond réel (3:1
+au-delà de 18 px ou en gras ≥ 14 px).
+
 ### Toute liste a deux vues, jamais deux vérités
 
 Un tableau de dix colonnes sur un téléphone, c'est un défilement horizontal à

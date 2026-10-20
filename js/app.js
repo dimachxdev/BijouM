@@ -17,7 +17,7 @@ const KAYOR_LOGO_B64 = 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAgAAZABkAAD/7AARR
  * qui « peut tout faire » alors que les droits sont restreints, c'est presque
  * toujours ça.
  */
-const APP_VERSION = '2026-10-21-cartes';
+const APP_VERSION = '2026-10-21-couleurs';
 
 function loadLS(k, fb) { try { const s=localStorage.getItem(k); return s?JSON.parse(s):fb; } catch { return fb; } }
 
@@ -1554,7 +1554,10 @@ function carteListe(o) {
       + ' onclick="' + esc(a.onclick) + '">' + esc(a.texte) + '</button>';
   }).join('');
 
-  return '<div class="carte-liste' + (o.estompee ? ' estompee' : '') + '">'
+  // `ton` colore la tranche gauche : ok (vert), attente (ambre), sortie
+  // (rouge), info (bleu). C'est ce qui rend une liste lisible sans la lire.
+  return '<div class="carte-liste' + (o.ton ? ' ton-' + esc(o.ton) : '')
+       + (o.estompee ? ' estompee' : '') + '">'
     + '<div class="cl-haut">'
       + '<div class="cl-titre">' + pastille
         + '<span class="cl-nom">' + esc(o.titre || '—') + '</span>'
@@ -1602,6 +1605,7 @@ function rendreJournalCartes(ventes, admin) {
     }
     return {
       estompee: v.annulee,
+      ton: v.annulee ? null : ((v.restant || 0) > 0 ? 'attente' : 'ok'),
       pastille: { texte: ini(v.client || '?') },
       titre: v.client || '—',
       valeur: fmt(v.montant),
@@ -1721,6 +1725,7 @@ function rendreStockCartes(data){
     const st = statutStock(item);
     const typeL = {local:'Local',importe:'Importé',mixte:'Mixte',argent:'Argent',autre:'Autre'}[item.type]||item.type||'—';
     return {
+      ton: { 'stock-ok':'ok', 'stock-low':'attente', 'stock-out':'sortie' }[st.cls],
       titre: item.nom,
       valeur: (item.poidsTotalG||0).toFixed(2)+' g',
       meta: [
@@ -1892,6 +1897,7 @@ function renderSorties(){
 function rendreSortiesCartes(triees){
   rendreCartes('sorties-cartes', triees, function(s){
     return {
+      ton: 'sortie',
       titre: s.typeBijou || s.ref || '—',
       valeur: (s.poids || s.qty || '—') + 'g',
       desc: s.motif + (s.commentaire ? ' — ' + s.commentaire : ''),
@@ -1988,6 +1994,7 @@ function renderDecaissements(){
 function rendreDecaissCartes(tries){
   rendreCartes('decaiss-cartes', tries, function(d){
     return {
+      ton: 'sortie',
       titre: d.description,
       valeur: '− ' + fmt(d.montant),
       meta: [{ texte:d.id, classe:'ref-code' }, fmtDate(d.date), d.saisiPar],
@@ -2048,6 +2055,7 @@ function rendreClientsCartes(data, stats){
     const vue = s.derniere===today() ? "Aujourd'hui" : (s.derniere ? fmtDate(s.derniere) : 'jamais');
     const aUnPin = (c.a_un_pin===true || c.aUnPin===true);
     return {
+      ton: s.restant > 0 ? 'attente' : 'ok',
       pastille: { texte:ini(c.nom) },
       titre: c.nom,
       valeur: fmt(s.total),
@@ -2131,7 +2139,7 @@ function renderComptesClients(filtre=''){
   document.getElementById('cc-count-label').textContent=`${STATE.comptesClients.length} compte${STATE.comptesClients.length>1?'s':''} — épargne bijoux`;
   const qn3=normalizeStr(q);const ccFiltres = STATE.comptesClients.filter(cc => { if(!q) return true; const clCC=STATE.clients.find(c=>c.nom===cc.client); return cc.client.toLowerCase().includes(q)||normalizeStr(clCC?.tel||'').includes(qn3); });
   document.getElementById('cc-list').innerHTML = ccFiltres.length===0
-    ? '<div style="padding:24px;text-align:center;color:var(--text-tertiary);font-size:13px">Aucun compte ouvert</div>'
+    ? '<div style="padding:24px;text-align:center;color:var(--text-secondary);font-size:13px">Aucun compte ouvert</div>'
     : ccFiltres.map(cc=>{
     const mvts = cc.mouvements || [];
     return`<div style="padding:16px 20px;border-bottom:0.5px solid var(--border-light)">
@@ -2355,7 +2363,7 @@ function renderBijouxArr(){
   document.getElementById('ba-count-label').textContent=nbEnCours+' commande'+(nbEnCours>1?'s':'')+' avec restant dû · '+data.length+' affichée'+(data.length>1?'s':'');
 
   if(!data.length){
-    document.getElementById('ba-list').innerHTML='<div style="padding:32px;text-align:center;color:var(--text-tertiary);font-size:13px">Aucune commande avec acompte dans ce filtre</div>';
+    document.getElementById('ba-list').innerHTML='<div style="padding:32px;text-align:center;color:var(--text-secondary);font-size:13px">Aucune commande avec acompte dans ce filtre</div>';
     return;
   }
 
@@ -2577,6 +2585,7 @@ function rendreReprisesCartes(triees){
       ? { texte:'✕', classe:'btn-danger', onclick:"supprimerAchatClient('"+escJs(a.id)+"')" }
       : { texte:'🔒 Admin', inerte:true });
     return {
+      ton: e.masque ? 'sortie' : (e.dec ? 'ok' : 'attente'),
       pastille: { texte:ini(a.client) },
       titre: a.client,
       valeur: fmt(a.prixPropose),
@@ -2866,6 +2875,7 @@ function renderHistorique() {
     const role = ROLES[c.role] || { label: c.role, color: '#888', bg: '#eee' };
     const isConn = c.action === 'connexion';
     return {
+      ton: isConn ? 'ok' : 'info',
       pastille: { texte: ini(c.nom), fond: role.bg, couleur: role.color },
       titre: c.nom,
       valeur: c.heure,
@@ -3606,6 +3616,7 @@ async function renderGestionComptes() {
     if (x.invit) {
       return {
         estompee: true,
+        ton: 'attente',
         pastille: { texte: '✉', fond: 'var(--warning-bg)', couleur: 'var(--warning-text)' },
         titre: m.nom,
         desc: m.telephone ? '+' + m.telephone : (m.email || '—'),
@@ -3642,6 +3653,7 @@ async function renderGestionComptes() {
 
     return {
       estompee: !m.actif,
+      ton: m.actif ? 'ok' : null,
       pastille: { texte: ini(m.nom), fond: role.bg, couleur: role.color },
       titre: m.nom + (estMoi ? ' (vous)' : ''),
       desc: loginCourt(m) || (m.telephone ? '+' + m.telephone : '—'),
@@ -3810,6 +3822,7 @@ function renderMaJournee() {
   // c'est là que ce relevé est lu, au moment de rendre la caisse.
   rendreCartes('mj-ventes-cartes', d.ventes, function (v) {
     return {
+      ton: (v.restant || 0) > 0 ? 'attente' : 'ok',
       titre: v.client || '—',
       valeur: fmt(encaisseReel(v)),
       desc: v.description || '',
@@ -3830,6 +3843,7 @@ function renderMaJournee() {
 
   rendreCartes('mj-autres-cartes', autresLignes, function (x) {
     return {
+      ton: x.type === 'Dépôt' ? 'ok' : 'sortie',
       titre: x.client,
       valeur: fmt(x.montant),
       desc: x.detail,

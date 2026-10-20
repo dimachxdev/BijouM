@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>KAYOR — Brillez sans effort</title>
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml" />
-  <link rel="stylesheet" href="css/style.css?v=2026-10-21e" />
+  <link rel="stylesheet" href="css/style.css?v=2026-10-21f" />
 </head>
 <body>
 
@@ -201,10 +201,10 @@
         <button class="btn btn-secondary" id="btn-export-rapport" onclick="exporterRapport()">⬇ Rapport</button>
       </div>
       <div class="metrics-grid">
-        <div class="metric-card"><div class="metric-label">CA du mois</div><div class="metric-value" id="metric-ca">—</div><span class="metric-badge badge-info" id="metric-ca-nb">—</span></div>
-        <div class="metric-card"><div class="metric-label">Restants dus</div><div class="metric-value" id="metric-restants">—</div><span class="metric-badge badge-warn" id="metric-nb-restants">—</span></div>
+        <div class="metric-card ton-recette"><div class="metric-label">CA du mois</div><div class="metric-value" id="metric-ca">—</div><span class="metric-badge badge-info" id="metric-ca-nb">—</span></div>
+        <div class="metric-card ton-attente"><div class="metric-label">Restants dus</div><div class="metric-value" id="metric-restants">—</div><span class="metric-badge badge-warn" id="metric-nb-restants">—</span></div>
         <div class="metric-card" id="carte-solde-caisse"><div class="metric-label">💰 Solde net caisse</div><div class="metric-value" id="metric-decaiss">—</div><span class="metric-badge badge-info" id="metric-nb-decaiss">—</span></div>
-        <div class="metric-card"><div class="metric-label">Arrhes &amp; Commandes</div><div class="metric-value" id="metric-arrhes">—</div><span class="metric-badge badge-warn" id="metric-nb-arrhes">—</span></div>
+        <div class="metric-card ton-info"><div class="metric-label">Arrhes &amp; Commandes</div><div class="metric-value" id="metric-arrhes">—</div><span class="metric-badge badge-warn" id="metric-nb-arrhes">—</span></div>
       </div>
       <div class="two-col">
         <div class="card">
@@ -316,9 +316,9 @@
         <button class="btn btn-primary" onclick="openModal('modal-add-achat-client')">+ Nouvelle reprise</button>
       </div>
       <div class="metrics-grid" style="grid-template-columns:repeat(3,1fr)">
-        <div class="metric-card"><div class="metric-label">Total reprises (mois)</div><div class="metric-value" id="metric-ac-mois">—</div></div>
-        <div class="metric-card"><div class="metric-label">Total reprises (tout)</div><div class="metric-value" id="metric-ac-total">—</div></div>
-        <div class="metric-card"><div class="metric-label">Poids total repris</div><div class="metric-value" id="metric-ac-poids">—</div></div>
+        <div class="metric-card ton-depense"><div class="metric-label">Total reprises (mois)</div><div class="metric-value" id="metric-ac-mois">—</div></div>
+        <div class="metric-card ton-depense"><div class="metric-label">Total reprises (tout)</div><div class="metric-value" id="metric-ac-total">—</div></div>
+        <div class="metric-card ton-info"><div class="metric-label">Poids total repris</div><div class="metric-value" id="metric-ac-poids">—</div></div>
       </div>
       <div id="ac-alerte-caisse" style="display:none;align-items:center;gap:8px;padding:10px 14px;margin-bottom:12px;background:var(--warning-bg,#faeeda);color:var(--warning-text);border-radius:var(--radius-md);font-size:12.5px;line-height:1.45"></div>
       <div class="card avec-cartes"><div class="table-wrap">
@@ -357,9 +357,9 @@
         <button class="btn btn-primary" onclick="openModal('modal-add-decaiss')">+ Nouveau décaissement</button>
       </div>
       <div class="metrics-grid" style="grid-template-columns:repeat(3,1fr)">
-        <div class="metric-card"><div class="metric-label">Total décaissé (mois)</div><div class="metric-value" id="metric-decaiss-mois">—</div></div>
-        <div class="metric-card"><div class="metric-label">Total décaissé (tout)</div><div class="metric-value" id="metric-decaiss-all">—</div></div>
-        <div class="metric-card"><div class="metric-label">💰 Solde net caisse</div><div class="metric-value" id="metric-solde-net">—</div><span class="metric-badge badge-info" id="metric-solde-net-sub">—</span></div>
+        <div class="metric-card ton-depense"><div class="metric-label">Total décaissé (mois)</div><div class="metric-value" id="metric-decaiss-mois">—</div></div>
+        <div class="metric-card ton-depense"><div class="metric-label">Total décaissé (tout)</div><div class="metric-value" id="metric-decaiss-all">—</div></div>
+        <div class="metric-card ton-caisse"><div class="metric-label">💰 Solde net caisse</div><div class="metric-value" id="metric-solde-net">—</div><span class="metric-badge badge-info" id="metric-solde-net-sub">—</span></div>
       </div>
       <div class="card avec-cartes"><div class="table-wrap">
         <table>
@@ -510,16 +510,16 @@
       </div>
 
       <div class="metrics-grid">
-        <div class="metric-card"><div class="metric-label">Encaissé aujourd'hui</div>
+        <div class="metric-card ton-recette"><div class="metric-label">Encaissé aujourd'hui</div>
           <div class="metric-value" id="mj-encaisse">—</div>
           <span class="metric-badge badge-success" id="mj-encaisse-detail">—</span></div>
-        <div class="metric-card"><div class="metric-label">Ventes saisies</div>
+        <div class="metric-card ton-info"><div class="metric-label">Ventes saisies</div>
           <div class="metric-value" id="mj-nb-ventes">—</div>
           <span class="metric-badge badge-info" id="mj-ca">—</span></div>
-        <div class="metric-card"><div class="metric-label">Dépôts épargne</div>
+        <div class="metric-card ton-recette"><div class="metric-label">Dépôts épargne</div>
           <div class="metric-value" id="mj-depots">—</div>
           <span class="metric-badge badge-info" id="mj-nb-depots">—</span></div>
-        <div class="metric-card"><div class="metric-label">Reprises enregistrées</div>
+        <div class="metric-card ton-depense"><div class="metric-label">Reprises enregistrées</div>
           <div class="metric-value" id="mj-reprises">—</div>
           <span class="metric-badge badge-warn" id="mj-nb-reprises">—</span></div>
       </div>
@@ -573,10 +573,10 @@
         </div>
       </div>
       <div class="metrics-grid">
-        <div class="metric-card"><div class="metric-label">Ventes du jour</div><div class="metric-value" id="rj-ventes">—</div><span class="metric-badge badge-success" id="rj-ventes-nb">—</span></div>
-        <div class="metric-card"><div class="metric-label">Encaissé du jour</div><div class="metric-value" id="rj-encaisse">—</div><span class="metric-badge badge-info">en caisse</span></div>
-        <div class="metric-card"><div class="metric-label">Décaissements</div><div class="metric-value" id="rj-decaiss">—</div><span class="metric-badge badge-danger" id="rj-decaiss-nb">—</span></div>
-        <div class="metric-card"><div class="metric-label">Solde net du jour</div><div class="metric-value" id="rj-solde">—</div><span class="metric-badge" id="rj-solde-badge">—</span></div>
+        <div class="metric-card ton-recette"><div class="metric-label">Ventes du jour</div><div class="metric-value" id="rj-ventes">—</div><span class="metric-badge badge-success" id="rj-ventes-nb">—</span></div>
+        <div class="metric-card ton-recette"><div class="metric-label">Encaissé du jour</div><div class="metric-value" id="rj-encaisse">—</div><span class="metric-badge badge-info">en caisse</span></div>
+        <div class="metric-card ton-depense"><div class="metric-label">Décaissements</div><div class="metric-value" id="rj-decaiss">—</div><span class="metric-badge badge-danger" id="rj-decaiss-nb">—</span></div>
+        <div class="metric-card ton-caisse"><div class="metric-label">Solde net du jour</div><div class="metric-value" id="rj-solde">—</div><span class="metric-badge" id="rj-solde-badge">—</span></div>
       </div>
       <div class="two-col">
         <div class="card">
@@ -615,8 +615,8 @@
         <select class="form-input filter-select" id="filtre-hist-action"><option value="">Toutes actions</option><option value="connexion">Connexions</option><option value="déconnexion">Déconnexions</option></select>
       </div>
       <div class="metrics-grid" style="grid-template-columns:repeat(3,1fr)">
-        <div class="metric-card"><div class="metric-label">Connexions aujourd'hui</div><div class="metric-value" id="hist-conn-jour">—</div></div>
-        <div class="metric-card"><div class="metric-label">Utilisateurs actifs (7j)</div><div class="metric-value" id="hist-users-actifs">—</div></div>
+        <div class="metric-card ton-info"><div class="metric-label">Connexions aujourd'hui</div><div class="metric-value" id="hist-conn-jour">—</div></div>
+        <div class="metric-card ton-info"><div class="metric-label">Utilisateurs actifs (7j)</div><div class="metric-value" id="hist-users-actifs">—</div></div>
         <div class="metric-card"><div class="metric-label">Dernière connexion</div><div class="metric-value" id="hist-last-conn" style="font-size:14px">—</div></div>
       </div>
       <div class="card avec-cartes"><div class="table-wrap">
@@ -1487,11 +1487,11 @@
 
 <div class="toast" id="toast"></div>
   <!-- Supabase SDK -->
-  <script src="js/security.js?v=2026-10-21e"></script>
-  <script src="js/auth.js?v=2026-10-21e"></script>
-  <script src="js/data.js?v=2026-10-21e"></script>
-  <script src="js/supabase.js?v=2026-10-21e"></script>
-  <script src="js/app.js?v=2026-10-21e"></script>
+  <script src="js/security.js?v=2026-10-21f"></script>
+  <script src="js/auth.js?v=2026-10-21f"></script>
+  <script src="js/data.js?v=2026-10-21f"></script>
+  <script src="js/supabase.js?v=2026-10-21f"></script>
+  <script src="js/app.js?v=2026-10-21f"></script>
 
 <!-- MODAL AJUSTER STOCK -->
 <div class="modal-backdrop" id="modal-ajust-stock">
