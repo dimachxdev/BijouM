@@ -248,6 +248,54 @@ html, body {
 .two-col { display: grid; grid-template-columns: 1fr; gap: 14px; margin-bottom: 14px; }
 
 /* ============================================================
+   PAGINATION
+   ------------------------------------------------------------
+   Le journal affichait toutes les ventes d'un coup. À sept lignes c'est
+   invisible ; à cinq cents, le téléphone d'une vendeuse rame.
+   ============================================================ */
+.pagination {
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+  padding: 12px 10px; border-top: 0.5px solid var(--border-light);
+  font-size: 12.5px; color: var(--text-secondary);
+}
+.pagination:empty { display: none; }
+.pagination button {
+  min-width: 38px; min-height: 36px; padding: 0 12px;
+  background: var(--bg-secondary); border: 0.5px solid var(--border-light);
+  border-radius: var(--radius-md); cursor: pointer;
+  font-family: inherit; font-size: 15px; color: var(--text-primary);
+}
+.pagination button:hover:not(:disabled) { background: var(--border-light); }
+.pagination button:disabled { opacity: .35; cursor: default; }
+.pagination .page-courante { font-weight: 600; color: var(--text-primary); }
+
+/* ============================================================
+   ONGLETS DE FILTRE
+   ------------------------------------------------------------
+   Une ligne au lieu d'une liste déroulante : le statut est le filtre
+   qu'on change dix fois par jour, il doit être à un seul geste.
+   ============================================================ */
+.onglets-filtre {
+  display: flex; gap: 4px; overflow-x: auto; padding: 0 10px 10px;
+  -webkit-overflow-scrolling: touch; scrollbar-width: none;
+}
+.onglets-filtre::-webkit-scrollbar { display: none; }
+.onglet-filtre {
+  flex: 1 0 auto; white-space: nowrap;
+  padding: 7px 14px; min-height: 36px;
+  background: var(--bg-secondary); border: 0.5px solid transparent;
+  border-radius: var(--radius-md); cursor: pointer;
+  font-family: inherit; font-size: 12.5px; font-weight: 500;
+  color: var(--text-secondary); transition: background .15s, color .15s;
+}
+.onglet-filtre:hover  { background: var(--border-light); }
+.onglet-filtre.actif  { background: var(--text-primary); color: var(--bg-primary); }
+.filtres-avances {
+  display: flex; gap: 8px; flex-wrap: wrap; padding: 0 10px 10px;
+}
+.filtres-avances .filter-select { flex: 1; min-width: 140px; }
+
+/* ============================================================
    LISTES EN CARTES — sur téléphone, à la place des tableaux
    ------------------------------------------------------------
    Le journal faisait 894 px de large sur un écran de 375 : deux écrans
@@ -768,3 +816,46 @@ tr:hover td { background: var(--bg-secondary); }
 /* Facture header KAYOR */
 .facture-shop-name { color: var(--kayor-noir); }
 .facture-num { color: var(--kayor-or); }
+
+/* ============================================================
+   BOUTON FLOTTANT — l'action de création à portée de pouce
+   ============================================================
+   Sur un téléphone, le « + Nouvelle vente » de l'en-tête sort de l'écran
+   au premier défilement. Une vendeuse qui enchaîne les ventes remontait
+   la liste à chaque fois.
+
+   z-index 400 : au-dessus du contenu, sous les modales (1000). Même si le
+   script oubliait de le masquer, il passerait derrière le fond de modale.
+*/
+.fab {
+  display: none;
+  position: fixed;
+  right: 16px;
+  bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+  z-index: 400;
+  align-items: center;
+  height: 50px;
+  padding: 0 22px;
+  border: none;
+  border-radius: 25px;
+  background: var(--kayor-gradient);
+  color: #fff;
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  white-space: nowrap;
+  box-shadow: 0 6px 20px rgba(26,25,22,0.28);
+  cursor: pointer;
+  transition: transform var(--transition), opacity var(--transition);
+}
+.fab:active { transform: scale(0.95); }
+
+@media (max-width: 767px) {
+  .fab.visible { display: inline-flex; }
+  /* Sans cette marge, le bouton recouvre la dernière vente de la liste.
+     La classe est posée sur <body> par majFab() : un sélecteur de voisinage
+     dépendrait de la place exacte du bouton dans le document. */
+  body.fab-actif .section.active { padding-bottom: 82px; }
+}
+
+@media print { .fab { display: none !important; } }

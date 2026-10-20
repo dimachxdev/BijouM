@@ -17,7 +17,7 @@ const KAYOR_LOGO_B64 = 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAgAAZABkAAD/7AARR
  * qui « peut tout faire » alors que les droits sont restreints, c'est presque
  * toujours ça.
  */
-const APP_VERSION = '2026-10-21-journal-cartes';
+const APP_VERSION = '2026-10-21-pagination';
 
 function loadLS(k, fb) { try { const s=localStorage.getItem(k); return s?JSON.parse(s):fb; } catch { return fb; } }
 
@@ -1118,7 +1118,7 @@ function renderJournal(){
   // affichés ne retombe pas sur le cumul, et le chiffre paraît faux.
   const nbAnnulees = STATE.ventes.filter(v=>v.annulee).length;
   document.getElementById('journal-count-label').textContent =
-    `${STATE.ventes.length} ventes · ${ventes.length} affichées`
+    `${STATE.ventes.length} ventes · ${ventes.length} retenue${ventes.length>1?'s':''} par le filtre`
     + (nbAnnulees ? ` · ${nbAnnulees} annulée${nbAnnulees>1?'s':''} (hors total)` : '');
   document.getElementById('montant-cumul').textContent   = fmt(tCumul);
   document.getElementById('montant-encaisse').textContent= fmt(tSoldeNet); // encaissé − décaissé
@@ -1138,7 +1138,23 @@ function renderJournal(){
 
   const admin = isAdmin();
 
-  document.getElementById('journal-body').innerHTML=ventes.map(v=>{
+  // ---- Pagination ----------------------------------------------------
+  // On change de page quand on tourne la page, pas quand on filtre : si le
+  // filtre change, on revient à la première, sinon on resterait sur une page
+  // 5 devenue vide. La signature détecte ce changement sans avoir à toucher
+  // chaque appelant de renderJournal().
+  const signature = [q, fc, ft, fr].join('|');
+  if (signature !== JOURNAL_SIGNATURE) { JOURNAL_SIGNATURE = signature; JOURNAL_PAGE = 1; }
+
+  const total   = ventes.length;
+  const nbPages = Math.max(1, Math.ceil(total / JOURNAL_PAR_PAGE));
+  if (JOURNAL_PAGE > nbPages) JOURNAL_PAGE = nbPages;
+  const debut   = (JOURNAL_PAGE - 1) * JOURNAL_PAR_PAGE;
+  const page    = ventes.slice(debut, debut + JOURNAL_PAR_PAGE);
+
+  rendreJournalPagination(total, nbPages, debut, page.length);
+
+  document.getElementById('journal-body').innerHTML=page.map(v=>{
     const c=getCarat(v.carat);
     const dot=c?`<span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${c.couleur};margin-right:4px;vertical-align:middle"></span>`:'';
     const rb = v.annulee
@@ -1185,10 +1201,18 @@ function renderJournal(){
     </tr>`;
   }).join('');
 
+  const btnF = document.getElementById('btn-filtres-avances');
+  if (btnF) {
+    const actifs = (fc ? 1 : 0) + (ft ? 1 : 0);
+    btnF.textContent = actifs ? '⚙ Filtres (' + actifs + ')' : '⚙ Filtres';
+    btnF.style.borderColor = actifs ? 'var(--warning-text)' : '';
+    btnF.style.color       = actifs ? 'var(--warning-text)' : '';
+  }
+
   // La même liste, en cartes — c'est elle qu'on voit sur téléphone.
   // Le tableau de onze colonnes y imposait deux écrans et demi de
   // défilement horizontal ; une carte tient dans la largeur.
-  rendreJournalCartes(ventes, admin);
+  rendreJournalCartes(page, admin);
 }
 ['journal-search','filtre-type','filtre-restant'].forEach(id=>{document.getElementById(id)?.addEventListener('input',renderJournal);});
 document.getElementById('filtre-carat')?.addEventListener('change',renderJournal);
@@ -1471,6 +1495,55 @@ function rendreJournalCartes(ventes, admin) {
       + '<div class="cv-actions">' + actions + '</div>'
     + '</div>';
   }).join('');
+}
+
+// ============================================
+// PAGINATION DU JOURNAL
+// ============================================
+// Vingt-cinq lignes par page. Le total, les cumuls et le CSV portent
+// toujours sur la sélection ENTIÈRE : seule la liste est découpée.
+
+const JOURNAL_PAR_PAGE = 25;
+let JOURNAL_PAGE = 1;
+let JOURNAL_SIGNATURE = null;
+
+function allerPageJournal(n) {
+  JOURNAL_PAGE = Math.max(1, n);
+  renderJournal();
+  // Remonter : sinon on arrive au milieu de la nouvelle page.
+  const haut = document.getElementById('journal');
+  if (haut) haut.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function rendreJournalPagination(total, nbPages, debut, combien) {
+  const z = document.getElementById('journal-pagination');
+  if (!z) return;
+
+  // Une seule page : la barre n'apprend rien, on ne l'affiche pas.
+  if (nbPages <= 1) { z.innerHTML = ''; return; }
+
+  z.innerHTML =
+      '<button onclick="allerPageJournal(' + (JOURNAL_PAGE - 1) + ')"'
+    + (JOURNAL_PAGE <= 1 ? ' disabled' : '') + ' title="Page précédente">‹</button>'
+    + '<span><span class="page-courante">' + (debut + 1) + '–' + (debut + combien) + '</span>'
+    + ' sur ' + total + '</span>'
+    + '<button onclick="allerPageJournal(' + (JOURNAL_PAGE + 1) + ')"'
+    + (JOURNAL_PAGE >= nbPages ? ' disabled' : '') + ' title="Page suivante">›</button>';
+}
+
+/** Plie ou déplie les filtres carat et provenance. */
+function basculerFiltresAvances() {
+  const z = document.getElementById('filtres-avances');
+  if (!z) return;
+  z.style.display = z.style.display === 'none' ? 'flex' : 'none';
+}
+
+/** Un onglet de statut devient actif, et la liste se refait. */
+function choisirStatutJournal(valeur, bouton) {
+  document.getElementById('filtre-restant').value = valeur;
+  document.querySelectorAll('#onglets-statut .onglet-filtre')
+    .forEach(function (b) { b.classList.toggle('actif', b === bouton); });
+  renderJournal();
 }
 
 function exporterJournalCSV(){
@@ -4021,4 +4094,14 @@ ${content}</body></html>`);
   calculerCumuls();
   const rdEl=document.getElementById('rapport-date');
   if(rdEl) rdEl.value=today();
+
+  // Onglets de statut du journal. Un seul écouteur sur le conteneur : les
+  // boutons sont fixes, et poser un écouteur à chaque rendu les empilerait.
+  const onglets = document.getElementById('onglets-statut');
+  if (onglets) {
+    onglets.addEventListener('click', function (e) {
+      const b = e.target.closest('.onglet-filtre');
+      if (b) choisirStatutJournal(b.dataset.statut || '', b);
+    });
+  }
 })();

@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>KAYOR — Brillez sans effort</title>
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml" />
-  <link rel="stylesheet" href="css/style.css?v=2026-10-21b" />
+  <link rel="stylesheet" href="css/style.css?v=2026-10-21d" />
 </head>
 <body>
 
@@ -239,12 +239,24 @@
       </div>
       <div class="filters-bar">
         <input class="form-input" style="flex:1;min-width:160px" type="text" placeholder="Client, description..." id="journal-search" />
+        <button class="btn" id="btn-filtres-avances" onclick="basculerFiltresAvances()">⚙ Filtres</button>
+      </div>
+
+      <!-- Le statut en onglets : trois listes déroulantes empilées mangeaient
+           la moitié de l'écran avant qu'on voie une seule vente. -->
+      <div class="onglets-filtre" id="onglets-statut">
+        <button class="onglet-filtre actif" data-statut="">Tout</button>
+        <button class="onglet-filtre" data-statut="en-cours">Restant dû</button>
+        <button class="onglet-filtre" data-statut="solde">Soldé</button>
+        <button class="onglet-filtre" data-statut="annulee">Annulée</button>
+      </div>
+      <input type="hidden" id="filtre-restant" value="" />
+
+      <!-- Carat et provenance : utiles, mais pas à chaque vente. -->
+      <div class="filtres-avances" id="filtres-avances" style="display:none">
         <select class="form-input filter-select" id="filtre-carat" onchange="renderJournal()"><option value="">Tous les carats</option></select>
-        <select class="form-input filter-select" id="filtre-type">
+        <select class="form-input filter-select" id="filtre-type" onchange="renderJournal()">
           <option value="">Tout type</option><option value="local">Local</option><option value="importe">Importé</option>
-        </select>
-        <select class="form-input filter-select" id="filtre-restant">
-          <option value="">Tous statuts</option><option value="solde">Soldé</option><option value="en-cours">Restant dû</option><option value="annulee">Annulée</option>
         </select>
       </div>
       <div class="cumul-bar">
@@ -271,6 +283,7 @@
         </table>
       </div>
       <div id="journal-cartes" class="liste-cartes"></div>
+      <div class="pagination" id="journal-pagination"></div>
       </div>
     </section>
 
@@ -1452,13 +1465,17 @@
   </div>
 </div>
 
+<!-- Bouton flottant : il ne porte aucune action à lui. majFab() recopie le
+     bouton de création de la section ouverte et lui relaie le clic. -->
+<button class="fab" id="fab" type="button"></button>
+
 <div class="toast" id="toast"></div>
   <!-- Supabase SDK -->
-  <script src="js/security.js?v=2026-10-21b"></script>
-  <script src="js/auth.js?v=2026-10-21b"></script>
-  <script src="js/data.js?v=2026-10-21b"></script>
-  <script src="js/supabase.js?v=2026-10-21b"></script>
-  <script src="js/app.js?v=2026-10-21b"></script>
+  <script src="js/security.js?v=2026-10-21d"></script>
+  <script src="js/auth.js?v=2026-10-21d"></script>
+  <script src="js/data.js?v=2026-10-21d"></script>
+  <script src="js/supabase.js?v=2026-10-21d"></script>
+  <script src="js/app.js?v=2026-10-21d"></script>
 
 <!-- MODAL AJUSTER STOCK -->
 <div class="modal-backdrop" id="modal-ajust-stock">
