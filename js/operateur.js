@@ -170,9 +170,11 @@
           + '<td>' + (b.nb_membres || 0) + '</td>'
           + '<td>' + (b.nb_ventes || 0) + '</td>'
           + '<td>' + fmtDate(b.derniere_vente) + '</td>'
-          + '<td><button class="btn small ' + (b.actif ? 'btn-danger' : '') + '" '
+          + '<td><div style="display:flex;gap:4px">'
+          + '<button class="btn small" data-edit="' + esc(b.id) + '" title="Modifier">✎</button>'
+          + '<button class="btn small ' + (b.actif ? 'btn-danger' : '') + '" '
           + 'data-org="' + esc(b.id) + '" data-actif="' + (b.actif ? '0' : '1') + '">'
-          + (b.actif ? 'Suspendre' : 'Réactiver') + '</button></td>'
+          + (b.actif ? 'Suspendre' : 'Réactiver') + '</button></div></td>'
           + '</tr>';
       }).join('');
     }
@@ -184,6 +186,9 @@
     Array.prototype.forEach.call(corps.querySelectorAll('button[data-org]'), function (btn) {
       btn.onclick = function () { basculer(btn.dataset.org, btn.dataset.actif === '1'); };
     });
+    Array.prototype.forEach.call(corps.querySelectorAll('button[data-edit]'), function (btn) {
+      btn.onclick = function () { ouvrirEdition(btn.dataset.edit); };
+    });
   }
 
   async function rafraichir() {
@@ -194,6 +199,64 @@
       message('');
     } catch (e) { message(e.message, true); }
   }
+
+  // ------------------------------------------------------------- édition
+  /**
+   * Corriger une boutique déjà enregistrée : nom, plan, échéance.
+   *
+   * Le code boutique reste figé — il forme le suffixe des identifiants de
+   * toute l'équipe (`amina@kay`). Le changer les déconnecterait d'un coup,
+   * sans retour possible. Le champ est affiché, désactivé, pour qu'on voie
+   * pourquoi il ne bouge pas.
+   */
+  function ouvrirEdition(id) {
+    var b = boutiques.filter(function (x) { return x.id === id; })[0];
+    if (!b) return;
+    $('e-id').value     = b.id;
+    $('e-nom').value    = b.nom || '';
+    $('e-plan').value   = b.plan || 'essai';
+    $('e-expire').value = b.expire_le ? String(b.expire_le).slice(0, 10) : '';
+    $('e-slug').value   = b.slug || '';
+    $('e-titre').textContent = '« ' + (b.nom || '') + ' »';
+    $('e-code').textContent  = 'Code ' + (b.slug || '');
+    $('op-form-edition').style.display = 'block';
+    $('op-form-creation').style.display = 'none';
+    $('op-btn-nouvelle').textContent = '+ Nouvelle boutique';
+    $('e-nom').focus();
+  }
+
+  function fermerEdition() {
+    $('op-form-edition').style.display = 'none';
+    message('');
+  }
+
+  async function enregistrerEdition() {
+    var id     = $('e-id').value;
+    var nom    = $('e-nom').value.trim();
+    var plan   = $('e-plan').value;
+    var expire = $('e-expire').value;
+
+    if (!nom) { message('Le nom ne peut pas être vide.', true); return; }
+
+    var btn = $('op-btn-enregistrer');
+    btn.disabled = true; btn.textContent = 'Enregistrement…';
+    try {
+      // 'sans' retire l'échéance ; une chaîne vide la laisserait inchangée.
+      var d = await rpc('modifier_boutique', {
+        p_org_id: id, p_nom: nom, p_plan: plan,
+        p_expire_le: expire || 'sans'
+      });
+      fermerEdition();
+      await rafraichir();
+      message('✓ « ' + d.nom + ' » mise à jour.');
+    } catch (e) {
+      message(e.message, true);
+    } finally {
+      btn.disabled = false; btn.textContent = '✓ Enregistrer';
+    }
+  }
+
+  window.fermerEdition = fermerEdition;
 
   // ------------------------------------------------------------- bascule
   /**
@@ -216,6 +279,7 @@
 
   // --------------------------------------------------- nouvelle boutique
   function basculerFormulaire() {
+    $('op-form-edition').style.display = 'none';
     var f = $('op-form-creation');
     var ouvert = f.style.display !== 'none';
     f.style.display = ouvert ? 'none' : 'block';
@@ -324,6 +388,7 @@
     $('op-btn-refresh').onclick   = rafraichir;
     $('op-btn-nouvelle').onclick  = basculerFormulaire;
     $('op-btn-creer').onclick     = creer;
+    $('op-btn-enregistrer').onclick = enregistrerEdition;
     $('op-pass').addEventListener('keydown', function (e) {
       if (e.key === 'Enter') connexion();
     });

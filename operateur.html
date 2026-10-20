@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Console opérateur — Gestion Bijouterie</title>
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml" />
-  <link rel="stylesheet" href="css/style.css?v=2026-10-20g" />
+  <link rel="stylesheet" href="css/style.css?v=2026-10-20h" />
   <style>
     /* La console vit hors de l'application boutique : pas de sidebar. */
     .op-wrap { max-width: 1100px; margin: 0 auto; padding: 18px 16px 40px; }
@@ -135,6 +135,48 @@
       </div>
     </div>
 
+    <!-- ---------- MODIFIER UNE BOUTIQUE ---------- -->
+    <div class="card" id="op-form-edition" style="display:none">
+      <div class="card-header">
+        <div class="card-title">Modifier <span id="e-titre"></span></div>
+        <span class="page-sub" id="e-code"></span>
+      </div>
+      <div class="card-body">
+        <input type="hidden" id="e-id" />
+        <div class="two-col">
+          <div class="form-group">
+            <label class="form-label" for="e-nom">Nom commercial</label>
+            <input class="form-input" id="e-nom" />
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="e-plan">Plan</label>
+            <select class="form-input" id="e-plan">
+              <option value="essai">Essai</option>
+              <option value="standard">Standard</option>
+              <option value="pro">Pro</option>
+              <option value="entreprise">Entreprise</option>
+            </select>
+          </div>
+        </div>
+        <div class="two-col">
+          <div class="form-group">
+            <label class="form-label" for="e-expire">Échéance</label>
+            <input class="form-input" type="date" id="e-expire" />
+            <span class="form-hint">Laissez vide pour un abonnement sans date de fin.</span>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Code boutique</label>
+            <input class="form-input" id="e-slug" disabled />
+            <span class="form-hint">Non modifiable : il forme les identifiants de toute l'équipe.</span>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-primary" id="op-btn-enregistrer">✓ Enregistrer</button>
+          <button class="btn btn-secondary" onclick="fermerEdition()">Annuler</button>
+        </div>
+      </div>
+    </div>
+
     <!-- ---------- LISTE ---------- -->
     <div class="card">
       <div class="card-header">
@@ -158,7 +200,7 @@
   </div>
 </div>
 
-<script src="js/supabase.js?v=2026-10-20g"></script>
-<script src="js/operateur.js?v=2026-10-20g"></script>
+<script src="js/supabase.js?v=2026-10-20h"></script>
+<script src="js/operateur.js?v=2026-10-20h"></script>
 </body>
 </html>
