@@ -17,7 +17,7 @@ const KAYOR_LOGO_B64 = 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAgAAZABkAAD/7AARR
  * qui « peut tout faire » alors que les droits sont restreints, c'est presque
  * toujours ça.
  */
-const APP_VERSION = '2026-10-20-ma-journee';
+const APP_VERSION = '2026-10-20-periodes';
 
 function loadLS(k, fb) { try { const s=localStorage.getItem(k); return s?JSON.parse(s):fb; } catch { return fb; } }
 
@@ -205,6 +205,9 @@ function peutAcceder(section) {
   // l'entreprise. `all` ne doit pas l'ouvrir aux administrateurs, qui sont
   // des employés : seul le propriétaire y touche.
   if (section === 'profil_boutique') return role === 'proprietaire';
+  // « Ma journée » est le relevé de remise de caisse de celle qui encaisse.
+  // Les administrateurs ont le rapport journalier, bien plus complet.
+  if (section === 'ma_journee') return role === 'vendeur' || role === 'gestionnaire';
   const perms = PERM_MAP[role] || [];
   return perms.includes('all') || perms.includes(section);
 }
@@ -3770,25 +3773,77 @@ function imprimerFacture() {
 // RAPPORT JOURNALIER
 // ============================================
 function renderRapportJour(){ renderRapportJournalier(); }
+
+/**
+ * Bornes de la période choisie, au format AAAA-MM-JJ.
+ *
+ * Le rapport ne couvrait qu'une journée. Une bijoutière veut aussi voir sa
+ * semaine, son mois, son semestre — et l'addition doit rester la même quelle
+ * que soit la largeur de la fenêtre.
+ */
+function periodeRapport() {
+  var sel   = document.getElementById('rapport-periode');
+  var choix = sel ? sel.value : 'jour';
+  var fin   = today();
+  var debut = fin;
+
+  function decaler(jours) {
+    var d = new Date(fin + 'T12:00:00');
+    d.setDate(d.getDate() - jours);
+    return d.toISOString().slice(0, 10);
+  }
+
+  if (choix === 'hier')          { debut = fin = decaler(1); }
+  else if (choix === 'semaine')  { debut = decaler(6); }
+  else if (choix === 'mois')     { debut = fin.slice(0, 8) + '01'; }
+  else if (choix === 'mois3')    { debut = decaler(89); }
+  else if (choix === 'mois6')    { debut = decaler(181); }
+  else if (choix === 'perso') {
+    debut = document.getElementById('rapport-date-picker')?.value || fin;
+    fin   = document.getElementById('rapport-date-fin')?.value    || debut;
+    if (fin < debut) { var t = debut; debut = fin; fin = t; }
+  }
+
+  var libelle = (debut === fin)
+    ? fmtDateLong(debut)
+    : 'Du ' + fmtDate(debut) + ' au ' + fmtDate(fin);
+
+  return { debut: debut, fin: fin, libelle: libelle, unJour: debut === fin };
+}
+
+/** Affiche ou masque les deux champs de dates selon le choix. */
+function majPeriodeRapport() {
+  var choix = document.getElementById('rapport-periode').value;
+  var perso = choix === 'perso';
+  var d1 = document.getElementById('rapport-date-picker');
+  var d2 = document.getElementById('rapport-date-fin');
+  d1.style.display = perso ? '' : 'none';
+  d2.style.display = perso ? '' : 'none';
+  if (perso && !d2.value) { d1.value = d1.value || today(); d2.value = today(); }
+  renderRapportJournalier();
+}
 function renderRapportJournalier() {
   // Ce rapport expose le solde de caisse et le détail des décaissements.
   if(!isAdmin()){ showToast('⛔ Rapport réservé à l\'administrateur.'); return; }
-  const date = document.getElementById('rapport-date-picker')?.value || today();
-  const dLabel = fmtDateLong(date);
-  document.getElementById('rapport-date-label').textContent = dLabel;
+  const per   = periodeRapport();
+  const date  = per.debut;                       // conservé pour l'impression
+  const dansPeriode = function(d){ return d >= per.debut && d <= per.fin; };
+  document.getElementById('rapport-date-label').textContent = per.libelle;
 
-  const ventesJ   = STATE.ventes.filter(v=>v.date===date);
-  const achatsJ   = STATE.achatsClients.filter(a=>a.date===date);
-  const decaissJ  = STATE.decaissements.filter(d=>d.date===date);
-  const sortiesJ  = STATE.sorties.filter(s=>s.date===date);
-  const connJ     = STATE.connexions.filter(c=>c.date===date);
+  const ventesJ   = STATE.ventes.filter(v=>dansPeriode(v.date));
+  const achatsJ   = STATE.achatsClients.filter(a=>dansPeriode(a.date));
+  const decaissJ  = STATE.decaissements.filter(d=>dansPeriode(d.date));
+  const sortiesJ  = STATE.sorties.filter(s=>dansPeriode(s.date));
+  const connJ     = STATE.connexions.filter(c=>dansPeriode(c.date));
 
   // Mêmes règles que le solde global, appliquées à la seule journée : on
   // retire la part réglée sur compte épargne et on ajoute les dépôts du jour,
   // sinon le rapport d'une journée ne correspond pas au contenu du tiroir.
+  // Seuls les dépôts font entrer de l'argent : une écriture d'annulation de
+  // retrait n'apporte rien au tiroir (même règle que totalDepotsEpargne).
   const depotsJ = STATE.comptesClients.reduce(function(s, cc){
     return s + (cc.mouvements||[]).reduce(function(t, m){
-      return (m.type !== 'retrait' && m.date === date) ? t + (m.montant||0) : t;
+      return (m.type === 'depot' && dansPeriode(m.date)) ? t + (m.montant||0) : t;
     }, 0);
   }, 0);
 
@@ -3865,11 +3920,15 @@ function genererRapportJournalier() {
   document.querySelector('.nav-item[data-section="rapport_journalier"]')?.classList.add('active');
   document.getElementById('rapport_journalier')?.classList.add('active');
   const rdp=document.getElementById('rapport-date-picker'); if(rdp)rdp.value=today();
+  const rdf=document.getElementById('rapport-date-fin');    if(rdf)rdf.value=today();
+  const rpe=document.getElementById('rapport-periode');     if(rpe)rpe.value='jour';
+  majPeriodeRapport();
   renderRapportJournalier();
 }
 
 function imprimerRapportJournalier() {
-  const date=document.getElementById('rapport-date-picker')?.value||today();
+  const per  = periodeRapport();
+  const date = per.libelle;          // titre du document : la période entière
   const _b=boutiqueInfos(), _contact=boutiqueLigneContact();
 
   // On recopie la section telle qu'elle est affichée, en retirant l'en-tête
@@ -3887,7 +3946,7 @@ function imprimerRapportJournalier() {
   }
   if (!content.trim()) { showToast('⚠ Rien à imprimer — ouvrez d\'abord le rapport.'); return; }
   const win=window.open('','_blank','width=900,height=1100');
-  win.document.write(`<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><title>Rapport journalier ${fmtDate(date)}</title>
+  win.document.write(`<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><title>Rapport ${date}</title>
 <style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:'Segoe UI',Arial,sans-serif;font-size:12px;color:#111;background:#fff;padding:20px}
 h1{font-size:18px;margin-bottom:4px}.rpt-head{margin-bottom:18px;padding-bottom:10px;border-bottom:2px solid #1a1916}
 .metrics-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px}
@@ -3906,7 +3965,7 @@ td{padding:7px 8px;border-bottom:1px solid #f0f0f0}
 .two-col{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 .two-col>.card{margin-bottom:0}
 @media print{body{padding:8px}.card{break-inside:avoid}}</style></head><body>
-<div class="rpt-head"><div style="text-align:center;margin-bottom:8px">${_logoFacture(55)}</div><h1>Rapport journalier — ${esc(_b.nom)}</h1><div style="font-size:12px;color:#666">${_contact?esc(_contact)+' · ':''}${fmtDateLong(date)} · Imprimé le ${new Date().toLocaleString('fr-FR')}</div></div>
+<div class="rpt-head"><div style="text-align:center;margin-bottom:8px">${_logoFacture(55)}</div><h1>Rapport journalier — ${esc(_b.nom)}</h1><div style="font-size:12px;color:#666">${_contact?esc(_contact)+' · ':''}${date} · Imprimé le ${new Date().toLocaleString('fr-FR')}</div></div>
 ${content}</body></html>`);
   win.document.close();
   setTimeout(()=>{win.focus();win.print();win.close();},500);

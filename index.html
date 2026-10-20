@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>KAYOR — Brillez sans effort</title>
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml" />
-  <link rel="stylesheet" href="css/style.css?v=2026-10-20c" />
+  <link rel="stylesheet" href="css/style.css?v=2026-10-20d" />
 </head>
 <body>
 
@@ -19,8 +19,9 @@
     <!-- ---------- CONNEXION ---------- -->
     <div id="panel-login">
       <div class="form-group" style="margin-top:24px">
-        <label class="form-label">Adresse email</label>
-        <input class="form-input" type="email" id="login-user" placeholder="vous@boutique.sn" autocomplete="email" />
+        <label class="form-label" for="login-user">Identifiant</label>
+        <input class="form-input" type="text" id="login-user" placeholder="amina@kay" autocomplete="username" />
+        <span class="form-hint">L'identifiant que votre responsable vous a donné, ou votre adresse email.</span>
       </div>
       <div class="form-group" style="margin:12px 0 20px">
         <label class="form-label">Mot de passe</label>
@@ -585,8 +586,18 @@
     <section class="section" id="rapport_jour">
       <div class="page-header">
         <div><h1 class="page-title">Rapport journalier</h1><p class="page-sub" id="rapport-date-label"></p></div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap">
-          <input type="date" class="form-input" id="rapport-date-picker" style="width:auto" onchange="renderRapportJour()" />
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">
+          <select class="form-input" id="rapport-periode" style="width:auto" onchange="majPeriodeRapport()">
+            <option value="jour">Aujourd'hui</option>
+            <option value="hier">Hier</option>
+            <option value="semaine">7 derniers jours</option>
+            <option value="mois">Mois en cours</option>
+            <option value="mois3">3 derniers mois</option>
+            <option value="mois6">6 derniers mois</option>
+            <option value="perso">Période précise…</option>
+          </select>
+          <input type="date" class="form-input" id="rapport-date-picker" style="width:auto" onchange="renderRapportJour()" title="Du" />
+          <input type="date" class="form-input" id="rapport-date-fin" style="width:auto;display:none" onchange="renderRapportJour()" title="Au" />
           <button class="btn btn-primary" onclick="imprimerRapportJournalier()">🖨 Exporter PDF</button>
         </div>
       </div>
@@ -1501,11 +1512,11 @@
 
 <div class="toast" id="toast"></div>
   <!-- Supabase SDK -->
-  <script src="js/security.js?v=2026-10-20c"></script>
-  <script src="js/auth.js?v=2026-10-20c"></script>
-  <script src="js/data.js?v=2026-10-20c"></script>
-  <script src="js/supabase.js?v=2026-10-20c"></script>
-  <script src="js/app.js?v=2026-10-20c"></script>
+  <script src="js/security.js?v=2026-10-20d"></script>
+  <script src="js/auth.js?v=2026-10-20d"></script>
+  <script src="js/data.js?v=2026-10-20d"></script>
+  <script src="js/supabase.js?v=2026-10-20d"></script>
+  <script src="js/app.js?v=2026-10-20d"></script>
 
 <!-- MODAL AJUSTER STOCK -->
 <div class="modal-backdrop" id="modal-ajust-stock">

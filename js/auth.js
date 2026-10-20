@@ -1,4 +1,4 @@
-console.log('KAYOR · auth.js', '2026-10-20c');
+console.log('KAYOR · auth.js', '2026-10-20d');
 /**
  * KAYOR — Authentification (Supabase Auth)
  * ---------------------------------------------------------------------------
