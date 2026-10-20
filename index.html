@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>KAYOR — Brillez sans effort</title>
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml" />
-  <link rel="stylesheet" href="css/style.css?v=2026-10-20j" />
+  <link rel="stylesheet" href="css/style.css?v=2026-10-21a" />
 </head>
 <body>
 
@@ -33,6 +33,33 @@
         <button class="lien-auth" onclick="afficherPanneau('panel-forgot')">Mot de passe oublié ?</button>
       </div>
 
+    </div>
+
+    <!-- ---------- PREMIER MOT DE PASSE ---------- -->
+    <div id="panel-premier-mdp" style="display:none">
+      <div class="auth-titre">Choisissez votre mot de passe</div>
+      <div class="auth-aide">
+        Celui qu'on vous a communiqué est connu d'une autre personne. Il ne
+        servira plus une fois celui-ci enregistré.
+      </div>
+      <div class="form-group" style="margin-top:16px">
+        <label class="form-label" for="pm-1">Nouveau mot de passe</label>
+        <div style="display:flex;gap:6px">
+          <input class="form-input" type="password" id="pm-1" autocomplete="new-password"
+                 placeholder="8 caractères minimum" style="flex:1" />
+          <button type="button" class="btn small" onclick="basculerVisibilite('pm-1', this)" title="Afficher">👁</button>
+        </div>
+      </div>
+      <div class="form-group" style="margin:12px 0 16px">
+        <label class="form-label" for="pm-2">Confirmer</label>
+        <input class="form-input" type="password" id="pm-2" autocomplete="new-password" placeholder="••••••••" />
+      </div>
+      <div class="login-error" id="pm-error"></div>
+      <button class="btn btn-primary" id="btn-premier-mdp" style="width:100%;justify-content:center"
+              onclick="doPremierMotDePasse()">Enregistrer et continuer</button>
+      <div style="text-align:center;margin-top:14px">
+        <button class="lien-auth" onclick="doLogout()">Me déconnecter</button>
+      </div>
     </div>
 
     <!-- ---------- MOT DE PASSE OUBLIÉ ---------- -->
@@ -1425,11 +1452,11 @@
 
 <div class="toast" id="toast"></div>
   <!-- Supabase SDK -->
-  <script src="js/security.js?v=2026-10-20j"></script>
-  <script src="js/auth.js?v=2026-10-20j"></script>
-  <script src="js/data.js?v=2026-10-20j"></script>
-  <script src="js/supabase.js?v=2026-10-20j"></script>
-  <script src="js/app.js?v=2026-10-20j"></script>
+  <script src="js/security.js?v=2026-10-21a"></script>
+  <script src="js/auth.js?v=2026-10-21a"></script>
+  <script src="js/data.js?v=2026-10-21a"></script>
+  <script src="js/supabase.js?v=2026-10-21a"></script>
+  <script src="js/app.js?v=2026-10-21a"></script>
 
 <!-- MODAL AJUSTER STOCK -->
 <div class="modal-backdrop" id="modal-ajust-stock">

@@ -1,4 +1,4 @@
-console.log('KAYOR · auth.js', '2026-10-20g');
+console.log('KAYOR · auth.js', '2026-10-21a');
 /**
  * KAYOR — Authentification (Supabase Auth)
  * ---------------------------------------------------------------------------
@@ -273,7 +273,7 @@ console.log('KAYOR · auth.js', '2026-10-20g');
     // renvoyait le premier membre venu — en pratique le propriétaire — et
     // chacun se retrouvait affiché avec son nom et ses droits.
     var url = URL_BASE + '/rest/v1/membres'
-            + '?select=user_id,organisation_id,nom,role,actif,'
+            + '?select=user_id,organisation_id,nom,role,actif,doit_changer_mdp,'
             + 'organisations(slug,nom,plan,actif,expire_le,devise,'
             + 'slogan,adresse,telephone,ninea,rccm,pied_facture,logo)'
             + '&user_id=eq.' + encodeURIComponent(uid)
@@ -308,6 +308,9 @@ console.log('KAYOR · auth.js', '2026-10-20g');
       org_slug:        org.slug,
       org_nom:         org.nom,
       org_plan:        org.plan,
+      // Vrai tant que la personne n'a pas remplacé le mot de passe qu'on lui
+      // a remis. L'application refuse de s'ouvrir avant (migration 018).
+      doitChangerMdp:  m.doit_changer_mdp === true,
       // Identité commerciale, imprimée sur les factures et les reçus.
       boutique:        org
     };
@@ -486,6 +489,17 @@ console.log('KAYOR · auth.js', '2026-10-20g');
       body:    JSON.stringify({ password: nouveau })
     });
     if (!r.ok) throw new Error('Changement refusé (' + r.status + ').');
+
+    // Le drapeau tombe côté serveur : une fonction dédiée, qui ne sait baisser
+    // que le sien. Un UPDATE direct laisserait une propriétaire modifier
+    // celui de n'importe quel membre de sa boutique.
+    try {
+      await fetchTimeout(URL_BASE + '/rest/v1/rpc/mot_de_passe_change', {
+        method: 'POST', headers: enTetes(), body: '{}'
+      });
+      if (profil) profil.doitChangerMdp = false;
+    } catch (e) { /* le mot de passe est changé ; l'écran redemandera sinon */ }
+
     return true;
   }
 

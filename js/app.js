@@ -17,7 +17,7 @@ const KAYOR_LOGO_B64 = 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAgAAZABkAAD/7AARR
  * qui « peut tout faire » alors que les droits sont restreints, c'est presque
  * toujours ça.
  */
-const APP_VERSION = '2026-10-20-sans-inscription';
+const APP_VERSION = '2026-10-21-premier-mdp';
 
 function loadLS(k, fb) { try { const s=localStorage.getItem(k); return s?JSON.parse(s):fb; } catch { return fb; } }
 
@@ -552,6 +552,20 @@ function ouvrirSession(profil) {
     organisationId: profil.organisation_id
   };
 
+  // Le mot de passe posé par l'opérateur a transité par une conversation :
+  // on ne laisse pas entrer avant qu'il soit remplacé (migration 018).
+  if (profil.doitChangerMdp) {
+    afficherPanneau('panel-premier-mdp');
+    document.getElementById('pm-1').value = '';
+    document.getElementById('pm-2').value = '';
+    setTimeout(function () { document.getElementById('pm-1').focus(); }, 50);
+    return;
+  }
+
+  // Remettre l'écran de connexion sur son panneau d'accueil : sans cela, une
+  // déconnexion après un changement de mot de passe rouvrirait sur celui-ci.
+  afficherPanneau('panel-login');
+
   document.getElementById('login-screen').style.display = 'none';
   document.getElementById('main-app').style.display     = 'block';
   appliquerIdentiteBoutique();
@@ -600,17 +614,45 @@ async function doLogout() {
 // ============================================
 // INSCRIPTION / MOT DE PASSE OUBLIÉ
 // ============================================
-const PANNEAUX_AUTH = ['panel-login','panel-forgot','panel-reset'];
+const PANNEAUX_AUTH = ['panel-login','panel-forgot','panel-reset','panel-premier-mdp'];
 
 function afficherPanneau(id) {
   PANNEAUX_AUTH.forEach(p => {
     const el = document.getElementById(p);
     if (el) el.style.display = (p === id) ? 'block' : 'none';
   });
-  ['login-error','forgot-error','forgot-ok','reset-error','reset-ok']
+  ['login-error','forgot-error','forgot-ok','reset-error','reset-ok','pm-error']
     .forEach(i => { const el = document.getElementById(i); if (el) el.style.display = 'none'; });
 }
 
+
+/**
+ * Premier mot de passe choisi par la personne elle-même.
+ *
+ * Le mot de passe qu'on lui a remis cesse de valoir dès l'enregistrement, et
+ * le drapeau tombe côté serveur. Tant que ça n'est pas fait, l'application
+ * reste fermée — c'est le seul écran accessible après la connexion.
+ */
+async function doPremierMotDePasse() {
+  const p1 = document.getElementById('pm-1').value;
+  const p2 = document.getElementById('pm-2').value;
+  messageAuth('pm-error', '');
+
+  if (p1.length < 8)  { messageAuth('pm-error', 'Le mot de passe doit faire au moins 8 caractères.'); return; }
+  if (p1 !== p2)      { messageAuth('pm-error', 'Les deux saisies ne correspondent pas.'); return; }
+
+  const btn = document.getElementById('btn-premier-mdp');
+  btn.disabled = true; btn.textContent = 'Enregistrement…';
+  try {
+    await Auth.changerMotDePasse(p1);
+    // Le profil porte désormais doitChangerMdp = false : on peut entrer.
+    ouvrirSession(Auth.profil());
+  } catch (e) {
+    messageAuth('pm-error', e.message);
+  } finally {
+    btn.disabled = false; btn.textContent = 'Enregistrer et continuer';
+  }
+}
 
 function messageAuth(id, texte) {
   const el = document.getElementById(id);

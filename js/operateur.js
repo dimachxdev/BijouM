@@ -294,8 +294,13 @@
       var d = await r.json().catch(function () { return {}; });
       if (!r.ok || d.ok === false) throw new Error(d.erreur || 'Opération refusée.');
 
+      // Ce mot de passe est passé par vous : elle devra le remplacer à sa
+      // prochaine connexion.
+      try { await rpc('exiger_changement_mdp', { p_org_id: id }); } catch (e) { /* non bloquant */ }
+
       $('e-mdp').value = '';
-      message('✓ Mot de passe remplacé pour ' + d.nom + '. Elle se connecte avec « ' + d.login + ' ».');
+      message('✓ Mot de passe remplacé pour ' + d.nom + '. Elle se connecte avec « ' + d.login
+            + ' » et devra en choisir un autre à sa prochaine connexion.');
     } catch (e) {
       message(e.message, true);
     } finally {
