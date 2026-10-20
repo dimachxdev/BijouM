@@ -17,7 +17,7 @@ const KAYOR_LOGO_B64 = 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAgAAZABkAAD/7AARR
  * qui « peut tout faire » alors que les droits sont restreints, c'est presque
  * toujours ça.
  */
-const APP_VERSION = '2026-10-21-premier-mdp';
+const APP_VERSION = '2026-10-21-journal-cartes';
 
 function loadLS(k, fb) { try { const s=localStorage.getItem(k); return s?JSON.parse(s):fb; } catch { return fb; } }
 
@@ -1184,6 +1184,11 @@ function renderJournal(){
       <td><button class="btn small" onclick="afficherFacture('${v.id}')" title="Imprimer la facture" style="font-size:14px">🖨</button></td>
     </tr>`;
   }).join('');
+
+  // La même liste, en cartes — c'est elle qu'on voit sur téléphone.
+  // Le tableau de onze colonnes y imposait deux écrans et demi de
+  // défilement horizontal ; une carte tient dans la largeur.
+  rendreJournalCartes(ventes, admin);
 }
 ['journal-search','filtre-type','filtre-restant'].forEach(id=>{document.getElementById(id)?.addEventListener('input',renderJournal);});
 document.getElementById('filtre-carat')?.addEventListener('change',renderJournal);
@@ -1403,6 +1408,69 @@ function supprimerVente(id){
     .then(function(){return reloadVentes();})
     .then(function(){showToast('Vente supprimee.');})
     .catch(function(e){showToast('Erreur: '+e.message);});
+}
+
+/**
+ * Le journal en cartes, pour les écrans étroits.
+ *
+ * On ne garde que ce qui sert au comptoir : la cliente, ce qu'elle a pris,
+ * combien, et où en est le paiement. Le poids, le carat et le détail
+ * local/importé restent sur le tableau de l'ordinateur — personne ne les
+ * consulte en servant une cliente.
+ */
+function rendreJournalCartes(ventes, admin) {
+  const zone = document.getElementById('journal-cartes');
+  if (!zone) return;
+
+  if (!ventes.length) {
+    zone.innerHTML = '<div style="text-align:center;color:var(--text-tertiary);'
+                   + 'font-size:13px;padding:28px 10px">Aucune vente à afficher.</div>';
+    return;
+  }
+
+  zone.innerHTML = ventes.map(function (v) {
+    const initiales = (v.client || '?').split(' ').slice(0, 2)
+      .map(function (m) { return m[0] || ''; }).join('').toUpperCase();
+
+    const statut = v.annulee
+      ? '<span class="stock-badge" style="background:var(--danger-bg);color:var(--danger-text)">Annulée</span>'
+      : (v.restant || 0) > 0
+        ? '<span class="stock-badge stock-low">Reste ' + fmt(v.restant) + '</span>'
+        : '<span class="stock-badge stock-ok">Soldé</span>';
+
+    // Mêmes règles que le tableau : encaisser est ouvert à tous, modifier
+    // et supprimer sont réservés aux administrateurs.
+    var actions = '<button class="btn small" onclick="afficherFacture(\'' + escJs(v.id) + '\')">🖨 Facture</button>';
+    if ((v.restant || 0) > 0 && !v.annulee) {
+      actions = '<button class="btn small" style="background:var(--warning-bg);color:var(--warning-text);border-color:transparent"'
+              + ' onclick="ouvrirFinalisation(\'' + escJs(v.id) + '\')">+ Paiement</button>' + actions;
+    }
+    if (admin) {
+      actions += '<button class="btn small" onclick="ouvrirEditVente(\'' + escJs(v.id) + '\')">✎</button>'
+               + '<button class="btn small btn-danger" onclick="supprimerVente(\'' + escJs(v.id) + '\')">✕</button>';
+    }
+
+    return '<div class="carte-vente' + (v.annulee ? ' annulee' : '') + '">'
+      + '<div class="cv-haut">'
+        + '<div class="cv-client">'
+          + '<div style="width:30px;height:30px;border-radius:50%;background:var(--info-bg);'
+          + 'color:var(--info-text);display:flex;align-items:center;justify-content:center;'
+          + 'font-size:11px;font-weight:700;flex-shrink:0">' + esc(initiales) + '</div>'
+          + '<span class="cv-nom">' + esc(v.client || '—') + '</span>'
+        + '</div>'
+        + '<span class="cv-montant">' + fmt(v.montant) + '</span>'
+      + '</div>'
+      + '<div class="cv-desc">' + esc(v.description || '') + '</div>'
+      + '<div class="cv-meta">'
+        + '<span class="ref-code">' + esc(v.id) + '</span><span>·</span>'
+        + '<span>' + fmtDate(v.date) + '</span>'
+        + '<span class="paiement-pill paiement-' + esc(v.paiement || 'especes') + '">'
+        + esc(PAIEMENT_LABELS[v.paiement || 'especes'] || '') + '</span>'
+        + statut
+      + '</div>'
+      + '<div class="cv-actions">' + actions + '</div>'
+    + '</div>';
+  }).join('');
 }
 
 function exporterJournalCSV(){

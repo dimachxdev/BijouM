@@ -1,4 +1,4 @@
-console.log('KAYOR · supabase.js', '2026-10-21a');
+console.log('KAYOR · supabase.js', '2026-10-21b');
 /**
  * KAYOR — Couche Supabase
  * Architecture : App → Supabase → Realtime → App
