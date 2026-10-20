@@ -157,13 +157,16 @@
   function rendre() {
     var corps = $('op-tbody');
     if (!boutiques.length) {
-      corps.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--text-secondary);padding:24px">'
+      corps.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--text-secondary);padding:24px">'
                       + 'Aucune boutique.</td></tr>';
     } else {
       corps.innerHTML = boutiques.map(function (b) {
         var s = statut(b);
         return '<tr>'
           + '<td><strong>' + esc(b.nom) + '</strong></td>'
+          + '<td>' + (b.proprietaire_login
+              ? esc(b.proprietaire_nom || '') + '<br><span class="ref-code">' + esc(b.proprietaire_login) + '</span>'
+              : '<span class="metric-badge badge-danger">Sans propriétaire</span>') + '</td>'
           + '<td><span class="ref-code">' + esc(b.slug) + '</span></td>'
           + '<td>' + esc(b.plan || '—') + '</td>'
           + '<td><span class="metric-badge ' + s.classe + '">' + esc(s.texte) + '</span></td>'
@@ -218,9 +221,12 @@
     $('e-expire').value = b.expire_le ? String(b.expire_le).slice(0, 10) : '';
     $('e-slug').value   = b.slug || '';
     $('e-mdp').value = '';
-    $('e-proprio-login').textContent = b.nb_membres
-      ? 'Elle se connecte avec son identifiant habituel.'
-      : 'Aucun membre dans cette boutique.';
+    // Sans propriétaire, le remplacement de mot de passe n'a pas de cible.
+    $('e-mdp').disabled = !b.proprietaire_login;
+    $('op-btn-mdp-proprio').disabled = !b.proprietaire_login;
+    $('e-proprio-login').innerHTML = b.proprietaire_login
+      ? esc(b.proprietaire_nom || '') + ' — identifiant <strong>' + esc(b.proprietaire_login) + '</strong>'
+      : '<span style="color:var(--danger-text)">Cette boutique n\'a aucune propriétaire : personne ne peut y entrer.</span>';
     $('e-titre').textContent = '« ' + (b.nom || '') + ' »';
     $('e-code').textContent  = 'Code ' + (b.slug || '');
     $('op-form-edition').style.display = 'block';
