@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Console opérateur — Gestion Bijouterie</title>
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml" />
-  <link rel="stylesheet" href="css/style.css?v=2026-10-20h" />
+  <link rel="stylesheet" href="css/style.css?v=2026-10-20i" />
   <style>
     /* La console vit hors de l'application boutique : pas de sidebar. */
     .op-wrap { max-width: 1100px; margin: 0 auto; padding: 18px 16px 40px; }
@@ -174,6 +174,26 @@
           <button class="btn btn-primary" id="op-btn-enregistrer">✓ Enregistrer</button>
           <button class="btn btn-secondary" onclick="fermerEdition()">Annuler</button>
         </div>
+
+        <!-- Rendre son accès à une propriétaire qui l'a perdu. Geste à part :
+             il ne se confond pas avec une correction de nom ou de plan. -->
+        <div style="border-top:1px solid var(--border-light);margin-top:18px;padding-top:14px">
+          <div class="card-title" style="margin-bottom:4px">Accès de la propriétaire</div>
+          <div class="page-sub" style="margin-bottom:10px" id="e-proprio-login">—</div>
+          <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap">
+            <div class="form-group" style="flex:1;min-width:220px">
+              <label class="form-label" for="e-mdp">Nouveau mot de passe</label>
+              <div style="display:flex;gap:6px">
+                <input class="form-input" type="password" id="e-mdp" autocomplete="new-password"
+                       placeholder="8 caractères minimum" style="flex:1" />
+                <button type="button" class="btn small" onclick="basculerVisibiliteOp('e-mdp', this)" title="Afficher">👁</button>
+              </div>
+            </div>
+            <button class="btn" id="op-btn-mdp-proprio"
+                    style="color:var(--warning-text);border-color:var(--warning-text)">🔑 Remplacer</button>
+          </div>
+          <span class="form-hint">L'ancien est remplacé immédiatement. Communiquez-le-lui de vive voix.</span>
+        </div>
       </div>
     </div>
 
@@ -200,7 +220,7 @@
   </div>
 </div>
 
-<script src="js/supabase.js?v=2026-10-20h"></script>
-<script src="js/operateur.js?v=2026-10-20h"></script>
+<script src="js/supabase.js?v=2026-10-20i"></script>
+<script src="js/operateur.js?v=2026-10-20i"></script>
 </body>
 </html>

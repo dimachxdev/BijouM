@@ -217,6 +217,10 @@
     $('e-plan').value   = b.plan || 'essai';
     $('e-expire').value = b.expire_le ? String(b.expire_le).slice(0, 10) : '';
     $('e-slug').value   = b.slug || '';
+    $('e-mdp').value = '';
+    $('e-proprio-login').textContent = b.nb_membres
+      ? 'Elle se connecte avec son identifiant habituel.'
+      : 'Aucun membre dans cette boutique.';
     $('e-titre').textContent = '« ' + (b.nom || '') + ' »';
     $('e-code').textContent  = 'Code ' + (b.slug || '');
     $('op-form-edition').style.display = 'block';
@@ -253,6 +257,43 @@
       message(e.message, true);
     } finally {
       btn.disabled = false; btn.textContent = '✓ Enregistrer';
+    }
+  }
+
+  /**
+   * Rendre son accès à une propriétaire qui l'a perdu.
+   *
+   * Volontairement limité à la propriétaire : son équipe relève d'elle, pas
+   * de l'opérateur. Personne ne saute un échelon dans la chaîne.
+   */
+  async function remplacerMotDePasseProprio() {
+    var id  = $('e-id').value;
+    var mdp = $('e-mdp').value;
+    if (mdp.length < 8) { message('Le mot de passe doit faire au moins 8 caractères.', true); return; }
+
+    var b = boutiques.filter(function (x) { return x.id === id; })[0] || {};
+    if (!confirm('Remplacer le mot de passe de la propriétaire de « ' + b.nom + ' » ?\n\n'
+               + 'Son accès actuel cessera de fonctionner immédiatement.')) return;
+
+    var btn = $('op-btn-mdp-proprio');
+    btn.disabled = true; btn.textContent = 'Enregistrement…';
+    try {
+      var r = await fetch(SUPABASE_URL + '/functions/v1/membres-admin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json',
+                   'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + jeton },
+        body: JSON.stringify({ action: 'motdepasse_proprietaire',
+                               organisation_id: id, motdepasse: mdp })
+      }).catch(function () { throw new Error('Serveur injoignable. Vérifiez votre connexion.'); });
+      var d = await r.json().catch(function () { return {}; });
+      if (!r.ok || d.ok === false) throw new Error(d.erreur || 'Opération refusée.');
+
+      $('e-mdp').value = '';
+      message('✓ Mot de passe remplacé pour ' + d.nom + '. Elle se connecte avec « ' + d.login + ' ».');
+    } catch (e) {
+      message(e.message, true);
+    } finally {
+      btn.disabled = false; btn.textContent = '🔑 Remplacer';
     }
   }
 
@@ -389,6 +430,7 @@
     $('op-btn-nouvelle').onclick  = basculerFormulaire;
     $('op-btn-creer').onclick     = creer;
     $('op-btn-enregistrer').onclick = enregistrerEdition;
+    $('op-btn-mdp-proprio').onclick = remplacerMotDePasseProprio;
     $('op-pass').addEventListener('keydown', function (e) {
       if (e.key === 'Enter') connexion();
     });
