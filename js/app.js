@@ -17,7 +17,7 @@ const KAYOR_LOGO_B64 = 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAgAAZABkAAD/7AARR
  * qui « peut tout faire » alors que les droits sont restreints, c'est presque
  * toujours ça.
  */
-const APP_VERSION = '2026-10-21-pagination';
+const APP_VERSION = '2026-10-21-cartes';
 
 function loadLS(k, fb) { try { const s=localStorage.getItem(k); return s?JSON.parse(s):fb; } catch { return fb; } }
 
@@ -755,6 +755,9 @@ function buildNav() {
   // Sorties : visible pour tous mais bouton ajout admin seulement
   document.getElementById('btn-add-sortie').style.display = isAdmin() ? '' : 'none';
   document.getElementById('sorties-perm-warning').style.display = isAdmin() ? 'none' : 'flex';
+  // Le bouton flottant recopie ces boutons : il doit être recalculé après
+  // tout changement de rôle, sinon il garde celui du rôle précédent.
+  majFab();
 }
 
 // ============================================
@@ -786,7 +789,72 @@ function renderSection(id) {
   if(id==='compte_client') renderComptesClients();
   if(id==='bijou_arr')     renderBijouxArr();
   if(id==='historique')    renderHistorique();
+  majFab();
 }
+
+// ============================================
+// BOUTON FLOTTANT (mobile)
+// ============================================
+// Sur un téléphone, le « + Nouvelle vente » de l'en-tête sort de l'écran au
+// premier défilement : une vendeuse qui enchaîne les ventes devait remonter
+// la liste à chaque fois.
+//
+// Ce bouton ne connaît aucune action. Il recopie le bouton de création de la
+// section ouverte et lui relaie le clic. Donc aucun libellé à tenir à jour,
+// et surtout : les règles de rôle restent à un seul endroit — `btn-add-sortie`
+// masqué pour un vendeur masque aussi le flottant, sans une ligne de plus ici.
+
+var FAB_CIBLE = null;
+
+/** Le bouton de création de la section ouverte, s'il y en a un de visible. */
+function boutonCreationSection() {
+  var section = document.querySelector('.section.active');
+  if (!section) return null;
+  var boutons = section.querySelectorAll('.page-header .btn-primary');
+  for (var i = 0; i < boutons.length; i++) {
+    var b = boutons[i];
+    // Seules les actions de création. « 🖨 Imprimer » ou « ✓ Enregistrer »
+    // n'ont rien à faire sous le pouce.
+    if (b.textContent.trim().charAt(0) !== '+') continue;
+    // offsetParent nul = masqué, donc rôle insuffisant (cf. buildNav()).
+    if (!b.offsetParent) continue;
+    return b;
+  }
+  return null;
+}
+
+function majFab() {
+  var fab = document.getElementById('fab');
+  if (!fab) return;
+  var cible = boutonCreationSection();
+  var modaleOuverte = !!document.querySelector('.modal-backdrop.show');
+  if (!cible || modaleOuverte) {
+    FAB_CIBLE = null;
+    fab.classList.remove('visible');
+    document.body.classList.remove('fab-actif');
+    return;
+  }
+  FAB_CIBLE = cible;
+  fab.textContent = cible.textContent.trim();
+  fab.setAttribute('aria-label', fab.textContent);
+  fab.classList.add('visible');
+  document.body.classList.add('fab-actif');
+}
+
+document.getElementById('fab')?.addEventListener('click', function () {
+  if (FAB_CIBLE) FAB_CIBLE.click();
+});
+
+// Toutes les fermetures de modale ne passent pas par closeModal() : le clic
+// sur le fond et la touche Échap retirent la classe directement. On observe
+// donc la classe, au lieu de recenser à la main les endroits qui la changent
+// — c'est l'erreur des « trois fonctions d'écriture » transposée à l'écran.
+(function surveillerModales() {
+  var obs = new MutationObserver(function () { majFab(); });
+  document.querySelectorAll('.modal-backdrop').forEach(function (m) {
+    obs.observe(m, { attributes: true, attributeFilter: ['class'] });
+  });
+})();
 
 // ============================================
 // MODALS
@@ -1442,59 +1510,114 @@ function supprimerVente(id){
  * local/importé restent sur le tableau de l'ordinateur — personne ne les
  * consulte en servant une cliente.
  */
-function rendreJournalCartes(ventes, admin) {
-  const zone = document.getElementById('journal-cartes');
-  if (!zone) return;
+// ============================================
+// CARTES DE LISTE — la vue mobile de toutes les listes
+// ============================================
+// Un tableau de dix colonnes sur un écran de 375 px, c'est un défilement
+// horizontal à l'aveugle. Chaque liste a donc une seconde vue en cartes, que
+// le CSS substitue au tableau sous 768 px (classe `.avec-cartes`).
+//
+// Un seul gabarit pour toutes : l'allure des cartes se change ici, pas dans
+// huit fonctions de rendu. Chaque écran se contente de décrire sa ligne —
+// titre, valeur, description, pastilles, actions.
+//
+// Échappement : titre, valeur, desc et les textes des pastilles et boutons
+// passent par esc() ici, donc jamais à l'appel. Seul `onclick` est du code
+// écrit par l'appelant : à lui de passer ses arguments par escJs(), comme
+// partout ailleurs — esc() referme ensuite proprement l'attribut.
+//
+// `pastille.fond` et `pastille.couleur` entrent dans un attribut style : ce
+// sont des constantes du code (ROLES, CARATS_LIST), jamais une donnée saisie.
 
-  if (!ventes.length) {
-    zone.innerHTML = '<div style="text-align:center;color:var(--text-tertiary);'
-                   + 'font-size:13px;padding:28px 10px">Aucune vente à afficher.</div>';
+function carteListe(o) {
+  var p = o.pastille;
+  var pastille = p
+    ? '<div class="cl-pastille" style="background:' + esc(p.fond || 'var(--info-bg)')
+      + ';color:' + esc(p.couleur || 'var(--info-text)') + '">' + esc(p.texte || '') + '</div>'
+    : '';
+
+  var badges = (o.badges || []).filter(Boolean).map(function (b) {
+    return '<span class="' + esc(b.classe || 'stock-badge') + '"'
+      + (b.style ? ' style="' + esc(b.style) + '"' : '')
+      + '>' + esc(b.texte) + '</span>';
+  }).join('');
+
+  var metas = (o.meta || []).filter(Boolean).map(function (m) {
+    if (typeof m === 'string') return '<span>' + esc(m) + '</span>';
+    return '<span class="' + esc(m.classe || '') + '">' + esc(m.texte) + '</span>';
+  }).join('<span>·</span>');
+
+  var actions = (o.actions || []).filter(Boolean).map(function (a) {
+    if (a.inerte) return '<span class="cl-inerte">' + esc(a.texte) + '</span>';
+    return '<button class="btn small ' + esc(a.classe || '') + '"'
+      + (a.style ? ' style="' + esc(a.style) + '"' : '')
+      + ' onclick="' + esc(a.onclick) + '">' + esc(a.texte) + '</button>';
+  }).join('');
+
+  return '<div class="carte-liste' + (o.estompee ? ' estompee' : '') + '">'
+    + '<div class="cl-haut">'
+      + '<div class="cl-titre">' + pastille
+        + '<span class="cl-nom">' + esc(o.titre || '—') + '</span>'
+      + '</div>'
+      + (o.valeur ? '<span class="cl-valeur">' + esc(o.valeur) + '</span>' : '')
+    + '</div>'
+    + (o.desc ? '<div class="cl-desc">' + esc(o.desc) + '</div>' : '')
+    + (metas || badges ? '<div class="cl-meta">' + metas + badges + '</div>' : '')
+    + (actions ? '<div class="cl-actions">' + actions + '</div>' : '')
+  + '</div>';
+}
+
+/**
+ * Remplit la vue en cartes d'une liste.
+ *
+ * `lignes` doit être le tableau déjà filtré et trié qui a servi au <tbody> :
+ * les deux vues montrent alors forcément la même chose. Les recalculer de
+ * leur côté serait la garantie qu'elles divergent un jour.
+ */
+function rendreCartes(zoneId, lignes, versCarte, messageVide) {
+  var zone = document.getElementById(zoneId);
+  if (!zone) return;
+  if (!lignes.length) {
+    zone.innerHTML = '<div class="cl-vide">' + esc(messageVide || 'Rien à afficher.') + '</div>';
     return;
   }
+  zone.innerHTML = lignes.map(function (x) { return carteListe(versCarte(x)); }).join('');
+}
 
-  zone.innerHTML = ventes.map(function (v) {
-    const initiales = (v.client || '?').split(' ').slice(0, 2)
-      .map(function (m) { return m[0] || ''; }).join('').toUpperCase();
-
-    const statut = v.annulee
-      ? '<span class="stock-badge" style="background:var(--danger-bg);color:var(--danger-text)">Annulée</span>'
-      : (v.restant || 0) > 0
-        ? '<span class="stock-badge stock-low">Reste ' + fmt(v.restant) + '</span>'
-        : '<span class="stock-badge stock-ok">Soldé</span>';
-
-    // Mêmes règles que le tableau : encaisser est ouvert à tous, modifier
-    // et supprimer sont réservés aux administrateurs.
-    var actions = '<button class="btn small" onclick="afficherFacture(\'' + escJs(v.id) + '\')">🖨 Facture</button>';
-    if ((v.restant || 0) > 0 && !v.annulee) {
-      actions = '<button class="btn small" style="background:var(--warning-bg);color:var(--warning-text);border-color:transparent"'
-              + ' onclick="ouvrirFinalisation(\'' + escJs(v.id) + '\')">+ Paiement</button>' + actions;
-    }
+function rendreJournalCartes(ventes, admin) {
+  rendreCartes('journal-cartes', ventes, function (v) {
+    var paiement = v.paiement || 'especes';
+    // Mêmes règles que le tableau : encaisser est ouvert à tous, modifier et
+    // supprimer sont réservés aux administrateurs.
+    var actions = [];
+    if ((v.restant || 0) > 0 && !v.annulee) actions.push({
+      texte: '+ Paiement',
+      style: 'background:var(--warning-bg);color:var(--warning-text);border-color:transparent',
+      onclick: "ouvrirFinalisation('" + escJs(v.id) + "')"
+    });
+    actions.push({ texte: '🖨 Facture', onclick: "afficherFacture('" + escJs(v.id) + "')" });
     if (admin) {
-      actions += '<button class="btn small" onclick="ouvrirEditVente(\'' + escJs(v.id) + '\')">✎</button>'
-               + '<button class="btn small btn-danger" onclick="supprimerVente(\'' + escJs(v.id) + '\')">✕</button>';
+      actions.push({ texte: '✎', onclick: "ouvrirEditVente('" + escJs(v.id) + "')" });
+      actions.push({ texte: '✕', classe: 'btn-danger', onclick: "supprimerVente('" + escJs(v.id) + "')" });
     }
-
-    return '<div class="carte-vente' + (v.annulee ? ' annulee' : '') + '">'
-      + '<div class="cv-haut">'
-        + '<div class="cv-client">'
-          + '<div style="width:30px;height:30px;border-radius:50%;background:var(--info-bg);'
-          + 'color:var(--info-text);display:flex;align-items:center;justify-content:center;'
-          + 'font-size:11px;font-weight:700;flex-shrink:0">' + esc(initiales) + '</div>'
-          + '<span class="cv-nom">' + esc(v.client || '—') + '</span>'
-        + '</div>'
-        + '<span class="cv-montant">' + fmt(v.montant) + '</span>'
-      + '</div>'
-      + '<div class="cv-desc">' + esc(v.description || '') + '</div>'
-      + '<div class="cv-meta">'
-        + '<span class="ref-code">' + esc(v.id) + '</span><span>·</span>'
-        + '<span>' + fmtDate(v.date) + '</span>'
-        + '<span class="paiement-pill paiement-' + esc(v.paiement || 'especes') + '">'
-        + esc(PAIEMENT_LABELS[v.paiement || 'especes'] || '') + '</span>'
-        + statut
-      + '</div>'
-      + '<div class="cv-actions">' + actions + '</div>'
-    + '</div>';
-  }).join('');
+    return {
+      estompee: v.annulee,
+      pastille: { texte: ini(v.client || '?') },
+      titre: v.client || '—',
+      valeur: fmt(v.montant),
+      desc: v.description || '',
+      meta: [{ texte: v.id, classe: 'ref-code' }, fmtDate(v.date)],
+      badges: [
+        { texte: PAIEMENT_LABELS[paiement] || '', classe: 'paiement-pill paiement-' + paiement },
+        v.annulee
+          ? { texte: 'Annulée', style: 'background:var(--danger-bg);color:var(--danger-text)' }
+          : (v.restant || 0) > 0
+            ? { texte: 'Reste ' + fmt(v.restant), classe: 'stock-badge stock-low' }
+            : { texte: 'Soldé', classe: 'stock-badge stock-ok' }
+      ],
+      actions: actions
+    };
+  }, 'Aucune vente à afficher.');
 }
 
 // ============================================
@@ -1585,8 +1708,37 @@ function renderStocks(f=''){
   document.getElementById('stock-body').innerHTML=data.map(item=>{
     const st=statutStock(item);const c=getCarat(item.carat);const dot=c?`<span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${c.couleur};margin-right:4px;vertical-align:middle"></span>`:'';
     const typeL={local:'Local',importe:'Importé',mixte:'Mixte',argent:'Argent',autre:'Autre'}[item.type]||item.type||'—';
-    return`<tr><td><span class="ref-code">${item.ref}</span></td><td>${item.nom}</td><td><span class="carat-pill">${dot}${(item.carat||'—').toUpperCase()}</span></td><td><span style="font-size:12px;color:var(--text-secondary)">${typeL}</span></td><td style="text-align:center;font-weight:600;color:var(--success-text)">${(item.poidsTotalG||0).toFixed(2)}g</td><td style="text-align:center"><strong>${item.qty||0}</strong></td><td>${fmt(item.prix)}</td><td>${fmt((item.qty||0)*item.prix)}</td><td><span class="stock-badge ${st.cls}">${st.label}</span></td><td><div style="display:flex;gap:4px"><button class="btn small" onclick="ajusterStock('${item.ref}')">Ajuster</button><button class="btn small btn-danger" onclick="supprimerArticle('${item.ref}')">✕</button></div></td></tr>`;
+    return`<tr><td><span class="ref-code">${esc(item.ref)}</span></td><td>${esc(item.nom)}</td><td><span class="carat-pill">${dot}${esc((item.carat||'—').toUpperCase())}</span></td><td><span style="font-size:12px;color:var(--text-secondary)">${esc(typeL)}</span></td><td style="text-align:center;font-weight:600;color:var(--success-text)">${(item.poidsTotalG||0).toFixed(2)}g</td><td style="text-align:center"><strong>${item.qty||0}</strong></td><td>${fmt(item.prix)}</td><td>${fmt((item.qty||0)*item.prix)}</td><td><span class="stock-badge ${st.cls}">${st.label}</span></td><td><div style="display:flex;gap:4px"><button class="btn small" onclick="ajusterStock('${escJs(item.ref)}')">Ajuster</button><button class="btn small btn-danger" onclick="supprimerArticle('${escJs(item.ref)}')">✕</button></div></td></tr>`;
   }).join('');
+  rendreStockCartes(data);
+}
+
+// La vue mobile de la même liste — mêmes données, mêmes actions.
+// Le stock se pilote au poids : c'est lui qu'on met en valeur, pas le prix,
+// qui reste à zéro tant qu'aucune vente n'a été chiffrée.
+function rendreStockCartes(data){
+  rendreCartes('stock-cartes', data, function(item){
+    const st = statutStock(item);
+    const typeL = {local:'Local',importe:'Importé',mixte:'Mixte',argent:'Argent',autre:'Autre'}[item.type]||item.type||'—';
+    return {
+      titre: item.nom,
+      valeur: (item.poidsTotalG||0).toFixed(2)+' g',
+      meta: [
+        { texte:item.ref, classe:'ref-code' },
+        (item.qty||0)+' article'+((item.qty||0)>1?'s':''),
+        typeL
+      ],
+      badges: [
+        { texte:(item.carat||'—').toUpperCase(), classe:'carat-pill' },
+        { texte:st.label, classe:'stock-badge '+st.cls },
+        item.prix>0 ? { texte:fmt(item.prix)+' / u', classe:'stock-badge' } : null
+      ],
+      actions: [
+        { texte:'Ajuster', onclick:"ajusterStock('"+escJs(item.ref)+"')" },
+        { texte:'✕', classe:'btn-danger', onclick:"supprimerArticle('"+escJs(item.ref)+"')" }
+      ]
+    };
+  }, 'Aucun article en stock.');
 }
 document.getElementById('stock-search')?.addEventListener('input',function(){renderStocks(this.value);});
 
@@ -1731,7 +1883,26 @@ function renderSorties(){
   document.getElementById('sorties-count-label').textContent=`${STATE.sorties.length} sortie${STATE.sorties.length>1?'s':''} enregistrée${STATE.sorties.length>1?'s':''}`;
   document.getElementById('btn-add-sortie').style.display=isAdmin()?'':'none';
   document.getElementById('sorties-perm-warning').style.display=isAdmin()?'none':'flex';
-  document.getElementById('sorties-body').innerHTML=[...STATE.sorties].sort((a,b)=>b.date.localeCompare(a.date)).map(s=>`<tr><td style="white-space:nowrap;font-size:12px;color:var(--text-secondary)">${fmtDate(s.date)}</td><td>${s.typeBijou||s.ref||'—'}</td><td><span class="ref-code">${s.carat||'—'}</span></td><td style="text-align:center"><strong>${s.poids||s.qty||'—'}g</strong>${s.nbArticles?' <span style="font-size:10px;color:var(--text-tertiary)">'+s.nbArticles+' art.</span>':''}</td><td>${s.motif}${s.commentaire?` — <span style="color:var(--text-secondary)">${s.commentaire}</span>`:''}</td><td><span class="role-pill role-${s.validePar}">${s.validePar}</span></td></tr>`).join('');
+  // Une seule liste triée, partagée par le tableau et les cartes.
+  const triees=[...STATE.sorties].sort((a,b)=>b.date.localeCompare(a.date));
+  document.getElementById('sorties-body').innerHTML=triees.map(s=>`<tr><td style="white-space:nowrap;font-size:12px;color:var(--text-secondary)">${fmtDate(s.date)}</td><td>${esc(s.typeBijou||s.ref||'—')}</td><td><span class="ref-code">${esc(s.carat||'—')}</span></td><td style="text-align:center"><strong>${s.poids||s.qty||'—'}g</strong>${s.nbArticles?' <span style="font-size:10px;color:var(--text-tertiary)">'+s.nbArticles+' art.</span>':''}</td><td>${esc(s.motif)}${s.commentaire?` — <span style="color:var(--text-secondary)">${esc(s.commentaire)}</span>`:''}</td><td><span class="role-pill role-${esc(s.validePar)}">${esc(s.validePar)}</span></td></tr>`).join('');
+  rendreSortiesCartes(triees);
+}
+
+function rendreSortiesCartes(triees){
+  rendreCartes('sorties-cartes', triees, function(s){
+    return {
+      titre: s.typeBijou || s.ref || '—',
+      valeur: (s.poids || s.qty || '—') + 'g',
+      desc: s.motif + (s.commentaire ? ' — ' + s.commentaire : ''),
+      meta: [
+        fmtDate(s.date),
+        { texte:(s.carat||'—'), classe:'ref-code' },
+        s.nbArticles ? s.nbArticles + ' art.' : null
+      ],
+      badges: [{ texte:s.validePar, classe:'role-pill role-'+s.validePar }]
+    };
+  }, 'Aucune sortie enregistrée.');
 }
 async function enregistrerSortie(){
   if(!isAdmin()){showToast('Seul l\'administrateur peut effectuer des sorties.');return;}
@@ -1809,7 +1980,21 @@ function renderDecaissements(){
     soldeSubEl.textContent=fmt(encaisseTotal)+' ventes + '+fmt(depotsTotal)+' dépôts − '+fmt(totalAll)+' décaissé'
       +(avances>0?' · dont '+fmt(avances)+' d\'avances à convertir en bijoux':'');
   }
-  document.getElementById('decaiss-body').innerHTML=[...STATE.decaissements].sort((a,b)=>b.date.localeCompare(a.date)).map(d=>`<tr><td style="white-space:nowrap;font-size:12px;color:var(--text-secondary)">${fmtDate(d.date)}</td><td><span class="cat-badge">${d.categorie}</span></td><td>${d.description}</td><td style="font-weight:500;color:var(--danger-text)">${fmt(d.montant)}</td><td><span class="role-pill role-${d.saisiPar}">${d.saisiPar}</span></td><td><button class="btn small btn-danger" onclick="supprimerDecaiss('${d.id}')">✕</button></td></tr>`).join('');
+  const triesDec=[...STATE.decaissements].sort((a,b)=>b.date.localeCompare(a.date));
+  document.getElementById('decaiss-body').innerHTML=triesDec.map(d=>`<tr><td style="white-space:nowrap;font-size:12px;color:var(--text-secondary)">${fmtDate(d.date)}</td><td><span class="cat-badge">${esc(d.categorie)}</span></td><td>${esc(d.description)}</td><td style="font-weight:500;color:var(--danger-text)">${fmt(d.montant)}</td><td><span class="role-pill role-${esc(d.saisiPar)}">${esc(d.saisiPar)}</span></td><td><button class="btn small btn-danger" onclick="supprimerDecaiss('${escJs(d.id)}')">✕</button></td></tr>`).join('');
+  rendreDecaissCartes(triesDec);
+}
+
+function rendreDecaissCartes(tries){
+  rendreCartes('decaiss-cartes', tries, function(d){
+    return {
+      titre: d.description,
+      valeur: '− ' + fmt(d.montant),
+      meta: [{ texte:d.id, classe:'ref-code' }, fmtDate(d.date), d.saisiPar],
+      badges: [{ texte:d.categorie, classe:'cat-badge' }],
+      actions: [{ texte:'✕ Supprimer', classe:'btn-danger', onclick:"supprimerDecaiss('"+escJs(d.id)+"')" }]
+    };
+  }, 'Aucun décaissement.');
 }
 function enregistrerDecaissement(){
   const date=document.getElementById('d-date').value,cat=document.getElementById('d-categorie').value,desc=document.getElementById('d-description').value.trim(),montant=parseInt(document.getElementById('d-montant').value)||0;
@@ -1853,6 +2038,37 @@ function renderClients(f=''){
   // elle-même n'est lisible par personne, et l'ancien miroir localStorage
   // `marjan_clients_pin` conservait les codes en clair sur le poste.
   document.getElementById('clients-body').innerHTML=data.map(c=>{const s=stats[c.nom]||{total:0,restant:0,nb:0,derniere:''};const t=tier(s.total);const d=s.derniere===today()?"Aujourd'hui":s.derniere?fmtDate(s.derniere):'—';const hasPin=(c.a_un_pin===true||c.aUnPin===true);const pinCell=isAdmin()?`<td>${hasPin?`<span style="font-size:11px;color:var(--success-text);cursor:pointer" onclick="modifierPinClient('${c.id}')">🔑 Actif</span>`:`<button onclick="modifierPinClient('${c.id}')" style="font-size:11px;padding:3px 8px;border-radius:4px;background:transparent;border:1px solid var(--border-light);color:var(--text-secondary);cursor:pointer">+ PIN</button>`}</td>`:'<td>—</td>';return`<tr><td><div style="display:flex;align-items:center;gap:10px"><div style="width:32px;height:32px;border-radius:50%;background:var(--info-bg);color:var(--info-text);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:600;flex-shrink:0">${ini(c.nom)}</div><div><div style="font-size:13px;font-weight:500">${c.nom}</div><div style="font-size:11px;color:var(--text-tertiary)">${c.tel}</div></div></div></td><td>${c.tel}</td><td><strong>${fmt(s.total)}</strong></td><td>${s.restant>0?`<span class="stock-badge stock-low">${fmt(s.restant)}</span>`:'<span style="color:var(--success-text);font-size:12px">Soldé</span>'}</td><td>${s.nb}</td><td><span class="tier-badge ${t.cls}">${t.label}</span></td><td style="font-size:12px;color:var(--text-secondary)">${d}</td>${pinCell}</tr>`;}).join('');
+  rendreClientsCartes(data, stats);
+}
+
+function rendreClientsCartes(data, stats){
+  rendreCartes('clients-cartes', data, function(c){
+    const s = stats[c.nom] || {total:0,restant:0,nb:0,derniere:''};
+    const t = tier(s.total);
+    const vue = s.derniere===today() ? "Aujourd'hui" : (s.derniere ? fmtDate(s.derniere) : 'jamais');
+    const aUnPin = (c.a_un_pin===true || c.aUnPin===true);
+    return {
+      pastille: { texte:ini(c.nom) },
+      titre: c.nom,
+      valeur: fmt(s.total),
+      desc: c.tel,
+      meta: [
+        s.nb + ' vente' + (s.nb>1?'s':''),
+        'Vue : ' + vue
+      ],
+      badges: [
+        { texte:t.label, classe:'tier-badge '+t.cls },
+        s.restant>0 ? { texte:'Doit '+fmt(s.restant), classe:'stock-badge stock-low' }
+                    : { texte:'Soldé', classe:'stock-badge stock-ok' }
+      ],
+      // Le code du portail ne se pose que depuis un compte administrateur,
+      // exactement comme dans le tableau.
+      actions: isAdmin()
+        ? [{ texte: aUnPin ? '🔑 Code actif' : '+ Code portail',
+             onclick: "modifierPinClient('"+escJs(c.id)+"')" }]
+        : []
+    };
+  }, 'Aucune cliente.');
 }
 document.getElementById('client-search')?.addEventListener('input',function(){renderClients(this.value);});
 document.getElementById('cc-search')?.addEventListener('input',function(){renderComptesClients(this.value);});
@@ -2303,7 +2519,8 @@ function renderAchatsClients(){
   document.getElementById('metric-ac-total').textContent=fmt(totalAll);
   document.getElementById('metric-ac-poids').textContent=poidsAll.toFixed(2)+' g';
 
-  document.getElementById('achats-clients-body').innerHTML=[...STATE.achatsClients].sort((a,b)=>b.date.localeCompare(a.date)).map(a=>{
+  const triees=[...STATE.achatsClients].sort((a,b)=>b.date.localeCompare(a.date));
+  document.getElementById('achats-clients-body').innerHTML=triees.map(a=>{
     const c=getCarat(a.carat);
     const dot=c?`<span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${c.couleur};margin-right:4px;vertical-align:middle"></span>`:'';
     const btnSuppr=isAdmin()?`<button class="btn small btn-danger" onclick="supprimerAchatClient('${a.id}')">✕</button>`:'<span class="perm-lock" title="Admin uniquement">🔒</span>';
@@ -2327,6 +2544,7 @@ function renderAchatsClients(){
       <td>${btnSuppr}</td>
     </tr>`;
   }).join('');
+  rendreReprisesCartes(triees);
 
   // Bandeau récapitulatif : une reprise sans décaissement est de l'argent sorti
   // du tiroir que la caisse ignore encore.
@@ -2343,6 +2561,38 @@ function renderAchatsClients(){
   }
 }
 
+function rendreReprisesCartes(triees){
+  rendreCartes('ac-cartes', triees, function(a){
+    const e = etatSortieCaisse(a);
+    var actions = [];
+    if (a.photo) actions.push({ texte:'🖼 Photo', onclick:"agrandirPhotoReprise('"+escJs(a.id)+"')" });
+    // Même règle que le tableau : seul un rôle qui voit la caisse peut
+    // rattacher le décaissement, et seul l'administrateur peut supprimer.
+    if (!e.masque && !e.dec) actions.push({
+      texte:'+ Sortie caisse',
+      style:'color:var(--warning-text);border-color:var(--warning-text)',
+      onclick:"creerDecaissementReprise('"+escJs(a.id)+"')"
+    });
+    actions.push(isAdmin()
+      ? { texte:'✕', classe:'btn-danger', onclick:"supprimerAchatClient('"+escJs(a.id)+"')" }
+      : { texte:'🔒 Admin', inerte:true });
+    return {
+      pastille: { texte:ini(a.client) },
+      titre: a.client,
+      valeur: fmt(a.prixPropose),
+      desc: a.description,
+      meta: [fmtDate(a.date), a.poids + 'g', a.saisiPar],
+      badges: [
+        { texte:(a.carat||'—').toUpperCase(), classe:'carat-pill' },
+        e.masque ? null
+          : e.dec ? { texte:'✓ Sortie '+fmt(e.dec.montant), classe:'stock-badge stock-ok' }
+                  : { texte:'Pas de sortie caisse', classe:'stock-badge stock-low' }
+      ],
+      actions: actions
+    };
+  }, 'Aucune reprise enregistrée.');
+}
+
 /** Décaissement rattaché à une pièce (reprise, achat, vente), s'il existe. */
 function decaissementDeLaPiece(type, id){
   return STATE.decaissements.find(function(d){
@@ -2350,13 +2600,26 @@ function decaissementDeLaPiece(type, id){
   }) || null;
 }
 
+/**
+ * L'état « sortie de caisse » d'une reprise, sans HTML.
+ *
+ * Le tableau et la vue en cartes doivent dire exactement la même chose. En
+ * décidant ici, il n'y a qu'un endroit à relire — et un seul à corriger.
+ *
+ * `masque` : un rôle sans accès à la caisse ne lit aucun décaissement, donc
+ * il ne faut rien conclure de leur absence. Lui montrer « + Enregistrer »
+ * lui ferait croire que la reprise n'a pas été payée.
+ */
+function etatSortieCaisse(a){
+  if(!peutVoirCaisse()) return { masque:true, dec:null };
+  return { masque:false, dec:decaissementDeLaPiece('reprise', a.id) };
+}
+
 function celluleSortieCaisse(a){
-  // Un rôle sans accès à la caisse ne lit aucun décaissement : afficher
-  // « + Enregistrer » lui ferait croire que rien n'a été payé.
-  if(!peutVoirCaisse()) return '<span style="color:var(--text-tertiary);font-size:12px">—</span>';
-  const dec = decaissementDeLaPiece('reprise', a.id);
-  if(dec){
-    return `<span class="stock-badge stock-ok" title="Décaissement ${esc(dec.id)} du ${fmtDate(dec.date)}">✓ ${fmt(dec.montant)}</span>`;
+  const e = etatSortieCaisse(a);
+  if(e.masque) return '<span style="color:var(--text-tertiary);font-size:12px">—</span>';
+  if(e.dec){
+    return `<span class="stock-badge stock-ok" title="Décaissement ${esc(e.dec.id)} du ${fmtDate(e.dec.date)}">✓ ${fmt(e.dec.montant)}</span>`;
   }
   return `<button class="btn small" style="color:var(--warning-text);border-color:var(--warning-text)"
             onclick="creerDecaissementReprise('${escJs(a.id)}')"
@@ -2598,6 +2861,22 @@ function renderHistorique() {
       </td>
     </tr>`;
   }).join('') || `<tr><td colspan="5" style="text-align:center;color:var(--text-tertiary);padding:24px;font-size:13px">Aucune entrée trouvée</td></tr>`;
+
+  rendreCartes('hist-cartes', filtered, function (c) {
+    const role = ROLES[c.role] || { label: c.role, color: '#888', bg: '#eee' };
+    const isConn = c.action === 'connexion';
+    return {
+      pastille: { texte: ini(c.nom), fond: role.bg, couleur: role.color },
+      titre: c.nom,
+      valeur: c.heure,
+      meta: [fmtDate(c.date)],
+      badges: [
+        { texte: role.label, classe: 'role-pill role-' + c.role },
+        { texte: c.action.charAt(0).toUpperCase() + c.action.slice(1),
+          classe: 'stock-badge ' + (isConn ? 'stock-ok' : 'stock-low') }
+      ]
+    };
+  }, 'Aucune entrée trouvée.');
 }
 
 function exporterHistorique() {
@@ -3247,14 +3526,19 @@ window.addEventListener('resize', () => {
 async function renderGestionComptes() {
   if(!isAdmin()){showToast('⛔ Admin uniquement.');return;}
 
-  const corps = document.getElementById('users-body');
+  const corps  = document.getElementById('users-body');
+  const cartes = document.getElementById('users-cartes');
   corps.innerHTML = '<tr><td colspan="6" style="padding:20px;text-align:center;color:var(--text-tertiary);font-size:13px">Chargement…</td></tr>';
+  // La vue mobile aussi, sinon elle garde la liste précédente pendant le
+  // chargement — et la garderait indéfiniment si la requête échoue.
+  if (cartes) cartes.innerHTML = '<div class="cl-vide">Chargement…</div>';
 
   let membres = [], invitations = [];
   try {
     [membres, invitations] = await Promise.all([ chargerMembres(), chargerInvitations() ]);
   } catch (e) {
     corps.innerHTML = `<tr><td colspan="6" style="padding:20px;text-align:center;color:var(--danger-text);font-size:13px">${esc(e.message)}</td></tr>`;
+    if (cartes) cartes.innerHTML = `<div class="cl-vide" style="color:var(--danger-text)">${esc(e.message)}</div>`;
     return;
   }
 
@@ -3308,6 +3592,67 @@ async function renderGestionComptes() {
 
   corps.innerHTML = lignesMembres + lignesInvits ||
     '<tr><td colspan="6" style="padding:20px;text-align:center;color:var(--text-tertiary);font-size:13px">Aucun membre</td></tr>';
+
+  // Vue mobile : membres puis invitations, dans le même ordre que le tableau.
+  // Le drapeau `invit` distingue les deux, les deux listes partageant la
+  // même carte — c'est la seule différence entre elles.
+  const tous = membres.map(m => ({ m: m, invit: false }))
+          .concat(invitations.map(i => ({ m: i, invit: true })));
+
+  rendreCartes('users-cartes', tous, function (x) {
+    const m = x.m;
+    const role = ROLES[m.role] || { label: m.role, color: '#888', bg: '#eee' };
+
+    if (x.invit) {
+      return {
+        estompee: true,
+        pastille: { texte: '✉', fond: 'var(--warning-bg)', couleur: 'var(--warning-text)' },
+        titre: m.nom,
+        desc: m.telephone ? '+' + m.telephone : (m.email || '—'),
+        meta: ['Invitation en attente'],
+        badges: [
+          { texte: role.label, classe: 'role-pill role-' + m.role },
+          { texte: 'Expire le ' + (m.expire_le || '').slice(0, 10), classe: 'stock-badge stock-low' }
+        ],
+        actions: [{ texte: '✕ Annuler', classe: 'btn-danger',
+                    onclick: "annulerInvitation('" + escJs(m.id) + "')" }]
+      };
+    }
+
+    const estMoi = m.user_id === moi;
+    var actions = [];
+    if (estMoi) {
+      actions.push({ texte: 'Votre compte', inerte: true });
+    } else {
+      actions.push({ texte: '✎ Rôle', onclick: "ouvrirEditMembre('" + escJs(m.user_id) + "')" });
+      // Seule la propriétaire remplace un mot de passe — même règle que le
+      // tableau, et de toute façon revérifiée par l'Edge Function.
+      if (estProprietaire()) actions.push({
+        texte: '🔑 Mot de passe',
+        onclick: "ouvrirMotDePasseMembre('" + escJs(m.user_id) + "','" + escJs(m.nom) + "','" + escJs(loginCourt(m)) + "')"
+      });
+      actions.push({
+        texte: m.actif ? 'Suspendre' : 'Réactiver',
+        style: m.actif ? 'color:var(--warning-text)' : 'color:var(--success-text)',
+        onclick: "basculerMembreActif('" + escJs(m.user_id) + "')"
+      });
+      actions.push({ texte: '✕', classe: 'btn-danger',
+                     onclick: "retirerMembre('" + escJs(m.user_id) + "','" + escJs(m.nom) + "')" });
+    }
+
+    return {
+      estompee: !m.actif,
+      pastille: { texte: ini(m.nom), fond: role.bg, couleur: role.color },
+      titre: m.nom + (estMoi ? ' (vous)' : ''),
+      desc: loginCourt(m) || (m.telephone ? '+' + m.telephone : '—'),
+      meta: ['Ajouté le ' + ((m.created_at || '').slice(0, 10) || '—')],
+      badges: [
+        { texte: role.label, classe: 'role-pill role-' + m.role },
+        { texte: m.actif ? 'Actif' : 'Suspendu', classe: 'stock-badge ' + (m.actif ? 'stock-ok' : 'stock-out') }
+      ],
+      actions: actions
+    };
+  }, 'Aucun membre.');
 }
 
 async function chargerMembres() {
@@ -3460,6 +3805,37 @@ function renderMaJournee() {
 
   document.getElementById('mj-autres').innerHTML = autres
     || '<tr><td colspan="4" style="text-align:center;color:var(--text-tertiary);padding:16px">Aucun dépôt ni reprise aujourd\'hui.</td></tr>';
+
+  // Les mêmes deux listes en cartes, pour le téléphone de la vendeuse —
+  // c'est là que ce relevé est lu, au moment de rendre la caisse.
+  rendreCartes('mj-ventes-cartes', d.ventes, function (v) {
+    return {
+      titre: v.client || '—',
+      valeur: fmt(encaisseReel(v)),
+      desc: v.description || '',
+      meta: [{ texte: v.id, classe: 'ref-code' }, 'Vente ' + fmt(v.montant)],
+      badges: [(v.restant || 0) > 0
+        ? { texte: 'Reste ' + fmt(v.restant), classe: 'stock-badge stock-low' }
+        : { texte: 'Soldé', classe: 'stock-badge stock-ok' }]
+    };
+  }, "Aucune vente saisie aujourd'hui.");
+
+  var autresLignes = d.depots.map(function (x) {
+      return { type: 'Dépôt', classe: 'metric-badge badge-success', client: x.client,
+               detail: x.note, montant: x.montant };
+    }).concat(d.reprises.map(function (a) {
+      return { type: 'Reprise', classe: 'metric-badge badge-warn', client: a.client || '—',
+               detail: a.description || '', montant: a.prixPropose };
+    }));
+
+  rendreCartes('mj-autres-cartes', autresLignes, function (x) {
+    return {
+      titre: x.client,
+      valeur: fmt(x.montant),
+      desc: x.detail,
+      badges: [{ texte: x.type, classe: x.classe }]
+    };
+  }, "Aucun dépôt ni reprise aujourd'hui.");
 }
 
 function imprimerMaJournee() {
@@ -3468,6 +3844,10 @@ function imprimerMaJournee() {
   var copie = section.cloneNode(true);
   var entete = copie.querySelector('.page-header');
   if (entete) entete.remove();
+  // La vue en cartes double chaque tableau. À l'écran le CSS n'en montre
+  // qu'une ; la fenêtre d'impression a sa propre feuille, elle imprimerait
+  // les deux.
+  copie.querySelectorAll('.liste-cartes').forEach(function (z) { z.remove(); });
 
   var b = boutiqueInfos();
   var win = window.open('', '_blank', 'width=800,height=1000');
@@ -4019,6 +4399,7 @@ function imprimerRapportJournalier() {
     const copie = section.cloneNode(true);
     const entete = copie.querySelector('.page-header');
     if (entete) entete.remove();
+    copie.querySelectorAll('.liste-cartes').forEach(function (z) { z.remove(); });
     content = copie.innerHTML;
   }
   if (!content.trim()) { showToast('⚠ Rien à imprimer — ouvrez d\'abord le rapport.'); return; }

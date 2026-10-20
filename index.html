@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>KAYOR — Brillez sans effort</title>
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml" />
-  <link rel="stylesheet" href="css/style.css?v=2026-10-21d" />
+  <link rel="stylesheet" href="css/style.css?v=2026-10-21e" />
 </head>
 <body>
 
@@ -270,7 +270,7 @@
         <span class="cumul-label">Local :</span><span class="cumul-value" id="poids-local-total">—</span>
         <span class="cumul-label" style="margin-left:8px">Importé :</span><span class="cumul-value" id="poids-importe-total">—</span>
       </div>
-      <div class="card"><div class="table-wrap">
+      <div class="card avec-cartes"><div class="table-wrap">
         <table class="journal-table">
           <thead>
             <tr>
@@ -298,12 +298,14 @@
         <div class="card"><div class="card-header"><span class="card-title">Poids par carat</span></div><div class="card-body" id="stock-recap-carats"></div></div>
         <div class="card"><div class="card-header"><span class="card-title">Poids par type</span></div><div class="card-body" id="stock-recap-types"></div></div>
       </div>
-      <div class="card"><div class="table-wrap">
+      <div class="card avec-cartes"><div class="table-wrap">
         <table>
           <thead><tr><th>Réf</th><th>Désignation</th><th>Carat</th><th>Type</th><th>Poids total (g)</th><th>Nb articles</th><th>Prix unit.</th><th>Valeur stock</th><th>Statut</th><th>Actions</th></tr></thead>
           <tbody id="stock-body"></tbody>
         </table>
-      </div></div>
+      </div>
+      <div id="stock-cartes" class="liste-cartes"></div>
+      </div>
     </section>
 
 
@@ -319,12 +321,14 @@
         <div class="metric-card"><div class="metric-label">Poids total repris</div><div class="metric-value" id="metric-ac-poids">—</div></div>
       </div>
       <div id="ac-alerte-caisse" style="display:none;align-items:center;gap:8px;padding:10px 14px;margin-bottom:12px;background:var(--warning-bg,#faeeda);color:var(--warning-text);border-radius:var(--radius-md);font-size:12.5px;line-height:1.45"></div>
-      <div class="card"><div class="table-wrap">
+      <div class="card avec-cartes"><div class="table-wrap">
         <table>
           <thead><tr><th>Date</th><th>Client</th><th>Description</th><th>Photo</th><th>Carat</th><th>Poids (g)</th><th>Prix reprise</th><th>Sortie caisse</th><th>Saisi par</th><th>Actions</th></tr></thead>
           <tbody id="achats-clients-body"></tbody>
         </table>
-      </div></div>
+      </div>
+      <div id="ac-cartes" class="liste-cartes"></div>
+      </div>
     </section>
 
     <!-- SORTIES DE STOCK -->
@@ -336,12 +340,14 @@
       <div class="alert-box" id="sorties-perm-warning" style="display:none">
         <span>🔒</span> Seul l'administrateur peut enregistrer des sorties de stock.
       </div>
-      <div class="card"><div class="table-wrap">
+      <div class="card avec-cartes"><div class="table-wrap">
         <table>
           <thead><tr><th>Date</th><th>Type de bijou</th><th>Carat</th><th>Poids sorti (g)</th><th>Motif</th><th>Valide par</th></tr></thead>
           <tbody id="sorties-body"></tbody>
         </table>
-      </div></div>
+      </div>
+      <div id="sorties-cartes" class="liste-cartes"></div>
+      </div>
     </section>
 
     <!-- DÉCAISSEMENTS -->
@@ -355,12 +361,14 @@
         <div class="metric-card"><div class="metric-label">Total décaissé (tout)</div><div class="metric-value" id="metric-decaiss-all">—</div></div>
         <div class="metric-card"><div class="metric-label">💰 Solde net caisse</div><div class="metric-value" id="metric-solde-net">—</div><span class="metric-badge badge-info" id="metric-solde-net-sub">—</span></div>
       </div>
-      <div class="card"><div class="table-wrap">
+      <div class="card avec-cartes"><div class="table-wrap">
         <table>
           <thead><tr><th>Date</th><th>Catégorie</th><th>Description</th><th>Montant</th><th>Saisi par</th><th>Actions</th></tr></thead>
           <tbody id="decaiss-body"></tbody>
         </table>
-      </div></div>
+      </div>
+      <div id="decaiss-cartes" class="liste-cartes"></div>
+      </div>
     </section>
 
     <!-- CLIENTS -->
@@ -370,12 +378,14 @@
         <button class="btn btn-primary" onclick="openModal('modal-add-client')">+ Nouveau client</button>
       </div>
       <input class="search-bar" type="text" placeholder="Rechercher un client..." id="client-search" />
-      <div class="card"><div class="table-wrap">
+      <div class="card avec-cartes"><div class="table-wrap">
         <table>
           <thead><tr><th>Client</th><th>Téléphone</th><th>Total achats</th><th>Restant dû</th><th>Nb ventes</th><th>Niveau</th><th>Dernière visite</th><th>Portail</th></tr></thead>
           <tbody id="clients-body"></tbody>
         </table>
-      </div></div>
+      </div>
+      <div id="clients-cartes" class="liste-cartes"></div>
+      </div>
     </section>
 
     <!-- COMPTES CLIENTS -->
@@ -478,12 +488,14 @@
         <div><h1 class="page-title">Membres de la boutique</h1><p class="page-sub" id="gc-count-label"></p></div>
         <button class="btn btn-primary" id="btn-creer-compte" onclick="ouvrirCreerCompte()">+ Créer un compte</button>
       </div>
-      <div class="card"><div class="table-wrap">
+      <div class="card avec-cartes"><div class="table-wrap">
         <table>
           <thead><tr><th>Membre</th><th>Email</th><th>Rôle</th><th>Statut</th><th>Ajouté le</th><th>Actions</th></tr></thead>
           <tbody id="users-body"></tbody>
         </table>
-      </div></div>
+      </div>
+      <div id="users-cartes" class="liste-cartes"></div>
+      </div>
     </section>
 
     <!-- RAPPORT JOURNALIER -->
@@ -514,23 +526,25 @@
 
       <div class="card">
         <div class="card-header"><div class="card-title">Encaissé par moyen de paiement</div></div>
-        <div class="table-wrap"><table><thead><tr><th>Moyen</th><th style="text-align:right">Montant</th></tr></thead>
+        <div class="table-wrap"><table class="table-etroite"><thead><tr><th>Moyen</th><th style="text-align:right">Montant</th></tr></thead>
           <tbody id="mj-paiements"></tbody></table></div>
       </div>
 
-      <div class="card">
+      <div class="card avec-cartes">
         <div class="card-header"><div class="card-title">Mes ventes du jour</div></div>
         <div class="table-wrap"><table><thead><tr>
           <th>Réf.</th><th>Cliente</th><th>Description</th><th style="text-align:right">Montant</th>
           <th style="text-align:right">Encaissé</th><th style="text-align:right">Restant</th></tr></thead>
           <tbody id="mj-ventes"></tbody></table></div>
+        <div id="mj-ventes-cartes" class="liste-cartes"></div>
       </div>
 
-      <div class="card">
+      <div class="card avec-cartes">
         <div class="card-header"><div class="card-title">Mes dépôts et reprises du jour</div></div>
         <div class="table-wrap"><table><thead><tr>
           <th>Type</th><th>Cliente</th><th>Détail</th><th style="text-align:right">Montant</th></tr></thead>
           <tbody id="mj-autres"></tbody></table></div>
+        <div id="mj-autres-cartes" class="liste-cartes"></div>
       </div>
 
       <div style="font-size:12px;color:var(--text-secondary);padding:10px 14px;background:var(--bg-secondary);border-radius:var(--radius-md)">
@@ -605,12 +619,14 @@
         <div class="metric-card"><div class="metric-label">Utilisateurs actifs (7j)</div><div class="metric-value" id="hist-users-actifs">—</div></div>
         <div class="metric-card"><div class="metric-label">Dernière connexion</div><div class="metric-value" id="hist-last-conn" style="font-size:14px">—</div></div>
       </div>
-      <div class="card"><div class="table-wrap">
+      <div class="card avec-cartes"><div class="table-wrap">
         <table>
           <thead><tr><th>Date</th><th>Heure</th><th>Utilisateur</th><th>Rôle</th><th>Action</th></tr></thead>
           <tbody id="hist-body"></tbody>
         </table>
-      </div></div>
+      </div>
+      <div id="hist-cartes" class="liste-cartes"></div>
+      </div>
     </section>
   </main>
 </div>
@@ -1471,11 +1487,11 @@
 
 <div class="toast" id="toast"></div>
   <!-- Supabase SDK -->
-  <script src="js/security.js?v=2026-10-21d"></script>
-  <script src="js/auth.js?v=2026-10-21d"></script>
-  <script src="js/data.js?v=2026-10-21d"></script>
-  <script src="js/supabase.js?v=2026-10-21d"></script>
-  <script src="js/app.js?v=2026-10-21d"></script>
+  <script src="js/security.js?v=2026-10-21e"></script>
+  <script src="js/auth.js?v=2026-10-21e"></script>
+  <script src="js/data.js?v=2026-10-21e"></script>
+  <script src="js/supabase.js?v=2026-10-21e"></script>
+  <script src="js/app.js?v=2026-10-21e"></script>
 
 <!-- MODAL AJUSTER STOCK -->
 <div class="modal-backdrop" id="modal-ajust-stock">

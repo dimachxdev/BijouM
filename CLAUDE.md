@@ -185,6 +185,34 @@ parce que seules deux des trois fonctions avaient été mises à jour. Le bouton
 (`js/security.js`). Une cliente nommée `<img src=x onerror=…>` s'exécuterait
 dans la session de l'administratrice qui ouvre la liste.
 
+### Toute liste a deux vues, jamais deux vérités
+
+Un tableau de dix colonnes sur un téléphone, c'est un défilement horizontal à
+l'aveugle — or c'est là que la vendeuse travaille. Chaque liste a donc une
+vue en cartes, que le CSS substitue au tableau sous 768 px : la carte `.card`
+porte `avec-cartes`, et contient un `<div class="liste-cartes">` à côté du
+`.table-wrap`.
+
+Les deux vues se construisent **à partir du même tableau déjà filtré et
+trié**, dans la même fonction de rendu, l'une sous l'autre. Les recalculer
+chacune de son côté est la garantie qu'elles divergeront.
+
+Une carte se décrit, elle ne s'écrit pas : `carteListe()` est le seul gabarit
+(titre, valeur, description, pastilles, actions) et `rendreCartes()` le seul
+point de montage. `titre`, `valeur`, `desc` et les textes sont échappés par
+le gabarit ; seul `onclick` est du code de l'appelant, qui doit passer ses
+arguments par `escJs()`.
+
+**Les droits ne se rejouent pas dans la carte.** Si le tableau masque une
+action pour un rôle, la carte doit lire la même condition — idéalement la
+même fonction (`etatSortieCaisse()`, `peutVoirCaisse()`, `isAdmin()`), jamais
+une copie de la règle.
+
+Le bouton flottant suit la même discipline : il ne connaît aucune action, il
+recopie le bouton « + … » de l'en-tête de la section ouverte et lui relaie le
+clic. Un bouton masqué par le rôle masque donc le bouton flottant, sans une
+ligne de plus.
+
 ### Aucune identité de boutique en dur
 
 Jamais « KAYOR », « Dakar », ni un logo écrit dans le code. Tout document
