@@ -203,10 +203,15 @@ bleu = information. C'est vrai pour la tranche gauche d'une tuile
 (`.metric-card.ton-*`) comme d'une carte de liste (`ton` passé à
 `carteListe()`).
 
-**Lettres noires sur l'or, jamais blanches.** Le blanc sur
-`--kayor-gradient` tombe à 1,17:1 : invisible sur un téléphone en plein jour,
-et c'est le bouton le plus cliqué de l'application. `--kayor-noir` tient
-5,5:1 au point le plus sombre du dégradé.
+**L'or est plat, lettres noires.** Pas de dégradé doré, nulle part (décidé le
+2026-10-21) : `--kayor-or` en fond, `--kayor-or-fonce` au survol,
+`--kayor-noir` pour le texte. Le blanc sur l'or tombait à 1,17:1 — invisible
+sur un téléphone en plein jour, et c'est le bouton le plus cliqué de
+l'application ; le noir de la charte tient 7,7:1.
+
+**Le logo de la boutique est un JPEG, donc sans transparence.** Dans le
+panneau latéral il passe par `mix-blend-mode: multiply`, qui efface son fond
+blanc dans le sable. Ne pas lui remettre une bande blanche autour.
 
 Toute nouvelle couleur de texte se vérifie à 4,5:1 sur son fond réel (3:1
 au-delà de 18 px ou en gras ≥ 14 px).

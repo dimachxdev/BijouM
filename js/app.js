@@ -17,7 +17,7 @@ const KAYOR_LOGO_B64 = 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAgAAZABkAAD/7AARR
  * qui « peut tout faire » alors que les droits sont restreints, c'est presque
  * toujours ça.
  */
-const APP_VERSION = '2026-10-21-couleurs';
+const APP_VERSION = '2026-10-21-or-plat';
 
 function loadLS(k, fb) { try { const s=localStorage.getItem(k); return s?JSON.parse(s):fb; } catch { return fb; } }
 
