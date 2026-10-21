@@ -20,7 +20,7 @@
  * qui « peut tout faire » alors que les droits sont restreints, c'est presque
  * toujours ça.
  */
-const APP_VERSION = '2026-10-21-totaux';
+const APP_VERSION = '2026-10-21-totaux-c';
 
 function loadLS(k, fb) { try { const s=localStorage.getItem(k); return s?JSON.parse(s):fb; } catch { return fb; } }
 
@@ -1123,9 +1123,23 @@ function renderDashboard(){
   document.getElementById('metric-ca-nb').textContent=ventesMois.length+' vente'+(ventesMois.length>1?'s':'');
   document.getElementById('metric-restants').textContent=fmt(totalRestants);
   document.getElementById('metric-nb-restants').textContent=nbRestants+' client'+(nbRestants>1?'s':'');
+  // Les trois composantes du solde, chacune sur sa propre tuile. Elles
+  // tenaient dans le sous-titre du solde, sous forme d'opération à refaire.
+  const nbVentesEncaissees = STATE.ventes.filter(v=>encaisseReel(v)>0).length;
+  const nbDepots = (STATE.comptesClients||[]).reduce((s,cc)=>
+    s + (cc.mouvements||[]).filter(m=>m.type==='depot').length, 0);
+  document.getElementById('metric-encaisse').textContent   = fmt(totalEncaisse);
+  document.getElementById('metric-nb-encaisse').textContent =
+    nbVentesEncaissees+' vente'+(nbVentesEncaissees>1?'s':'');
+  document.getElementById('metric-depots').textContent     = fmt(totalDepots);
+  document.getElementById('metric-nb-depots').textContent  =
+    nbDepots+' dépôt'+(nbDepots>1?'s':'');
+  document.getElementById('metric-sorti').textContent      = '− '+fmt(totalDecaiss);
+  document.getElementById('metric-nb-sorti').textContent   =
+    STATE.decaissements.length+' sortie'+(STATE.decaissements.length>1?'s':'');
+
   document.getElementById('metric-decaiss').textContent=fmt(soldeNet);
-  document.getElementById('metric-nb-decaiss').textContent=
-    fmt(totalEncaisse)+' ventes + '+fmt(totalDepots)+' dépôts − '+fmt(totalDecaiss)+' décaissé';
+  document.getElementById('metric-nb-decaiss').textContent='ce qui doit être en caisse';
   document.getElementById('metric-arrhes').textContent=fmt(totalArrhes);
   document.getElementById('metric-nb-arrhes').textContent=arrhesEnCours.length+' bijou'+(arrhesEnCours.length>1?'x':'');
 
@@ -4421,22 +4435,37 @@ function renderRapportJournalier() {
   // sinon le rapport d'une journée ne correspond pas au contenu du tiroir.
   // Seuls les dépôts font entrer de l'argent : une écriture d'annulation de
   // retrait n'apporte rien au tiroir (même règle que totalDepotsEpargne).
-  const depotsJ = STATE.comptesClients.reduce(function(s, cc){
+  const depotsJ = (STATE.comptesClients||[]).reduce(function(s, cc){
     return s + (cc.mouvements||[]).reduce(function(t, m){
       return (m.type === 'depot' && dansPeriode(m.date)) ? t + (m.montant||0) : t;
     }, 0);
   }, 0);
 
   const tV = ventesJ.filter(v=>!v.annulee).reduce((s,v)=>s+(v.montant||0),0);
-  const tE = ventesJ.reduce((s,v)=>s+encaisseReel(v),0) + depotsJ;
+  // `tE` additionnait les dépôts et s'affichait sous l'intitulé « Encaissé
+  // du jour » : le chiffre ne correspondait pas à son étiquette. Les deux
+  // sont maintenant séparés — le solde, lui, ne bouge pas.
+  const tE = ventesJ.reduce((s,v)=>s+encaisseReel(v),0);
   const tD = decaissJ.reduce((s,d)=>s+(d.montant||0),0);
-  const sNet = tE - tD;
+  const sNet = tE + depotsJ - tD;
+
+  const nbVentesEncaissees = ventesJ.filter(v=>encaisseReel(v)>0).length;
+  const nbDepotsJ = (STATE.comptesClients||[]).reduce(function(s, cc){
+    return s + (cc.mouvements||[]).filter(function(m){
+      return m.type === 'depot' && dansPeriode(m.date);
+    }).length;
+  }, 0);
 
   // Métriques
   document.getElementById('rj-ventes').textContent   = fmt(tV);
   document.getElementById('rj-ventes-nb').textContent= ventesJ.length+' vente'+(ventesJ.length>1?'s':'');
   document.getElementById('rj-encaisse').textContent  = fmt(tE);
-  document.getElementById('rj-decaiss').textContent   = fmt(tD);
+  document.getElementById('rj-encaisse-nb').textContent=
+    nbVentesEncaissees+' vente'+(nbVentesEncaissees>1?'s':'');
+  document.getElementById('rj-depots').textContent    = fmt(depotsJ);
+  document.getElementById('rj-depots-nb').textContent =
+    nbDepotsJ+' dépôt'+(nbDepotsJ>1?'s':'');
+  document.getElementById('rj-decaiss').textContent   = '− '+fmt(tD);
   document.getElementById('rj-decaiss-nb').textContent= decaissJ.length+' op.'+(decaissJ.length>1?'s':'');
   document.getElementById('rj-solde').textContent     = fmt(sNet);
   const sb = document.getElementById('rj-solde-badge');
@@ -4531,6 +4560,9 @@ function imprimerRapportJournalier() {
 <style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:'Segoe UI',Arial,sans-serif;font-size:12px;color:#111;background:#fff;padding:20px}
 h1{font-size:18px;margin-bottom:4px}.rpt-head{margin-bottom:18px;padding-bottom:10px;border-bottom:2px solid #1a1916}
 .metrics-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px}
+/* Sur papier aussi : cinq totaux tiennent sur une rangée, sans quoi le
+   solde net se retrouve seul sous les quatre autres. */
+.metrics-grid-5{grid-template-columns:repeat(5,1fr)}
 .metric-card{background:#f7f6f3;border-radius:6px;padding:10px}.metric-label{font-size:9px;text-transform:uppercase;letter-spacing:0.4px;color:#666;margin-bottom:3px}
 .metric-value{font-size:16px;font-weight:700}.metric-badge{font-size:10px;padding:2px 6px;border-radius:20px;display:inline-block;margin-top:3px}
 .badge-info{background:#e6f1fb;color:#185fa5}.badge-success{background:#eaf3de;color:#3b6d11}.badge-warn{background:#faeeda;color:#854f0b}.badge-danger{background:#fcebeb;color:#a32d2d}

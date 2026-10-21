@@ -271,6 +271,13 @@ html, body {
 .metric-card.ton-caisse  { --ton:#c9a84c; --ton-bg:#fdf8e9; }
 .metric-card.ton-attente { --ton:#c98a20; --ton-bg:#fdf5e7; }
 .metric-card.ton-info    { --ton:#2f7ac4; --ton-bg:#eff5fc; }
+/* Intitulé d'une rangée de tuiles : sept tuiles d'affilée ne disent pas
+   lesquelles parlent de la même chose. */
+.bloc-titre {
+  font-size: 10px; font-weight: 700; letter-spacing: 0.8px;
+  text-transform: uppercase; color: var(--text-secondary);
+  margin: 2px 0 8px 2px;
+}
 .metric-label { font-size: 10px; color: var(--text-secondary); margin-bottom: 5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.4px; }
 .metric-value { font-size: 18px; font-weight: 600; color: var(--text-primary); letter-spacing: -0.5px; margin-bottom: 5px; word-break: break-all; }
 .metric-badge { font-size: 11px; padding: 2px 8px; border-radius: 20px; font-weight: 500; display: inline-block; }
@@ -720,6 +727,9 @@ tbody tr:hover td { background: #f3eedf; }
   .main { overflow-y: auto; }
   .section { padding: 24px 28px; max-width: 1300px; }
   .metrics-grid { grid-template-columns: repeat(4, minmax(0,1fr)); gap: 12px; }
+  /* Cinq totaux sur une rangée : sur quatre colonnes, le cinquième se
+     retrouvait seul en dessous et paraissait détaché des autres. */
+  .metrics-grid-5 { grid-template-columns: repeat(5, minmax(0,1fr)); }
   .form-row-3 { grid-template-columns: 1fr 1fr 1fr; }
   .bar-label { width: 120px; font-size: 12px; }
   .bar-val   { font-size: 12px; }

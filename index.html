@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>KAYOR — Brillez sans effort</title>
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml" />
-  <link rel="stylesheet" href="css/style.css?v=2026-10-21k" />
+  <link rel="stylesheet" href="css/style.css?v=2026-10-21m" />
 </head>
 <body>
 
@@ -200,11 +200,26 @@
         <div><h1 class="page-title">Tableau de bord</h1><p class="page-sub" id="dashboard-date"></p></div>
         <button class="btn btn-secondary" id="btn-export-rapport" onclick="exporterRapport()">⬇ Rapport</button>
       </div>
+      <!-- L'activité : ce que la boutique a vendu et ce qu'on lui doit. -->
       <div class="metrics-grid">
         <div class="metric-card ton-recette"><div class="metric-label">CA du mois</div><div class="metric-value" id="metric-ca">—</div><span class="metric-badge badge-info" id="metric-ca-nb">—</span></div>
         <div class="metric-card ton-attente"><div class="metric-label">Restants dus</div><div class="metric-value" id="metric-restants">—</div><span class="metric-badge badge-warn" id="metric-nb-restants">—</span></div>
-        <div class="metric-card" id="carte-solde-caisse"><div class="metric-label">💰 Solde net caisse</div><div class="metric-value" id="metric-decaiss">—</div><span class="metric-badge badge-info" id="metric-nb-decaiss">—</span></div>
         <div class="metric-card ton-info"><div class="metric-label">Arrhes &amp; Commandes</div><div class="metric-value" id="metric-arrhes">—</div><span class="metric-badge badge-warn" id="metric-nb-arrhes">—</span></div>
+      </div>
+
+      <!-- La caisse. Le solde net portait ses trois composantes dans un
+           sous-titre — « 135 000 encaissé + 85 000 dépôts − 80 000 décaissé » —
+           qu'il fallait recalculer pour s'en servir. Elles sont maintenant
+           trois tuiles, et le solde reste la conclusion de la rangée.
+           Toute la rangée disparaît pour un rôle sans accès à la caisse. -->
+      <div id="carte-solde-caisse">
+        <div class="bloc-titre">Caisse</div>
+        <div class="metrics-grid">
+          <div class="metric-card ton-recette"><div class="metric-label">Encaissé</div><div class="metric-value" id="metric-encaisse">—</div><span class="metric-badge badge-success" id="metric-nb-encaisse">—</span></div>
+          <div class="metric-card ton-recette"><div class="metric-label">Dépôts épargne</div><div class="metric-value" id="metric-depots">—</div><span class="metric-badge badge-success" id="metric-nb-depots">—</span></div>
+          <div class="metric-card ton-depense"><div class="metric-label">Décaissé</div><div class="metric-value" id="metric-sorti">—</div><span class="metric-badge badge-danger" id="metric-nb-sorti">—</span></div>
+          <div class="metric-card ton-caisse"><div class="metric-label">💰 Solde net caisse</div><div class="metric-value" id="metric-decaiss">—</div><span class="metric-badge badge-info" id="metric-nb-decaiss">—</span></div>
+        </div>
       </div>
       <div class="two-col">
         <div class="card">
@@ -606,11 +621,16 @@
           <button class="btn btn-primary" onclick="imprimerRapportJournalier()">🖨 Exporter PDF</button>
         </div>
       </div>
-      <div class="metrics-grid">
-        <div class="metric-card ton-recette"><div class="metric-label">Ventes du jour</div><div class="metric-value" id="rj-ventes">—</div><span class="metric-badge badge-success" id="rj-ventes-nb">—</span></div>
-        <div class="metric-card ton-recette"><div class="metric-label">Encaissé du jour</div><div class="metric-value" id="rj-encaisse">—</div><span class="metric-badge badge-info">en caisse</span></div>
-        <div class="metric-card ton-depense"><div class="metric-label">Décaissements</div><div class="metric-value" id="rj-decaiss">—</div><span class="metric-badge badge-danger" id="rj-decaiss-nb">—</span></div>
-        <div class="metric-card ton-caisse"><div class="metric-label">Solde net du jour</div><div class="metric-value" id="rj-solde">—</div><span class="metric-badge" id="rj-solde-badge">—</span></div>
+      <!-- Même découpage que le tableau de bord : chaque composante du solde
+           est un total à part. « Encaissé du jour » additionnait en silence
+           les dépôts d'épargne — l'intitulé disait une chose, le chiffre en
+           disait une autre. Les dépôts ont leur propre tuile. -->
+      <div class="metrics-grid metrics-grid-5">
+        <div class="metric-card ton-recette"><div class="metric-label">Ventes</div><div class="metric-value" id="rj-ventes">—</div><span class="metric-badge badge-success" id="rj-ventes-nb">—</span></div>
+        <div class="metric-card ton-recette"><div class="metric-label">Encaissé</div><div class="metric-value" id="rj-encaisse">—</div><span class="metric-badge badge-success" id="rj-encaisse-nb">—</span></div>
+        <div class="metric-card ton-recette"><div class="metric-label">Dépôts épargne</div><div class="metric-value" id="rj-depots">—</div><span class="metric-badge badge-success" id="rj-depots-nb">—</span></div>
+        <div class="metric-card ton-depense"><div class="metric-label">Décaissé</div><div class="metric-value" id="rj-decaiss">—</div><span class="metric-badge badge-danger" id="rj-decaiss-nb">—</span></div>
+        <div class="metric-card ton-caisse"><div class="metric-label">💰 Solde net</div><div class="metric-value" id="rj-solde">—</div><span class="metric-badge" id="rj-solde-badge">—</span></div>
       </div>
       <div class="two-col">
         <div class="card">
@@ -1521,11 +1541,11 @@
 
 <div class="toast" id="toast"></div>
   <!-- Supabase SDK -->
-  <script src="js/security.js?v=2026-10-21k"></script>
-  <script src="js/auth.js?v=2026-10-21k"></script>
-  <script src="js/data.js?v=2026-10-21k"></script>
-  <script src="js/supabase.js?v=2026-10-21k"></script>
-  <script src="js/app.js?v=2026-10-21k"></script>
+  <script src="js/security.js?v=2026-10-21m"></script>
+  <script src="js/auth.js?v=2026-10-21m"></script>
+  <script src="js/data.js?v=2026-10-21m"></script>
+  <script src="js/supabase.js?v=2026-10-21m"></script>
+  <script src="js/app.js?v=2026-10-21m"></script>
 
 <!-- MODAL AJUSTER STOCK -->
 <div class="modal-backdrop" id="modal-ajust-stock">
