@@ -20,7 +20,7 @@
  * qui « peut tout faire » alors que les droits sont restreints, c'est presque
  * toujours ça.
  */
-const APP_VERSION = '2026-10-21-logo-boutique';
+const APP_VERSION = '2026-10-21-totaux';
 
 function loadLS(k, fb) { try { const s=localStorage.getItem(k); return s?JSON.parse(s):fb; } catch { return fb; } }
 
@@ -1197,17 +1197,19 @@ function renderJournal(){
     `${STATE.ventes.length} ventes · ${ventes.length} retenue${ventes.length>1?'s':''} par le filtre`
     + (nbAnnulees ? ` · ${nbAnnulees} annulée${nbAnnulees>1?'s':''} (hors total)` : '');
   document.getElementById('montant-cumul').textContent   = fmt(tCumul);
-  document.getElementById('montant-encaisse').textContent= fmt(tSoldeNet); // encaissé − décaissé
-  // Le même détail que sur le tableau de bord : sans lui, impossible de
-  // retomber sur le total à partir des chiffres affichés à côté.
-  const dSol = document.getElementById('detail-solde-caisse');
-  if (dSol) {
-    const encaisse = STATE.ventes.reduce((s,v)=>s+encaisseReel(v),0);
-    const depots   = totalDepotsEpargne(false);
-    const dec      = STATE.decaissements.reduce((s,d)=>s+(d.montant||0),0);
-    dSol.textContent = '(' + fmt(encaisse) + ' encaissé + ' + fmt(depots)
-                     + ' dépôts − ' + fmt(dec) + ' décaissé)';
-  }
+  document.getElementById('montant-encaisse').textContent= fmt(tSoldeNet);
+
+  // Les trois composantes du solde, chacune comme total à part entière.
+  // Elles tenaient dans une parenthèse « 135 000 encaissé + 85 000 dépôts
+  // − 80 000 décaissé » : il fallait refaire l'addition pour s'en servir.
+  // Ce sont les mêmes fonctions que le tableau de bord et l'onglet
+  // Décaissements — trois écrans, un seul calcul.
+  document.getElementById('total-encaisse').textContent =
+    fmt(STATE.ventes.reduce((s,v)=>s+encaisseReel(v),0));
+  document.getElementById('total-depots').textContent   = fmt(totalDepotsEpargne(false));
+  document.getElementById('total-decaisse').textContent =
+    '− ' + fmt(STATE.decaissements.reduce((s,d)=>s+(d.montant||0),0));
+
   document.getElementById('total-restants').textContent  = fmt(tRest);
   document.getElementById('poids-local-total').textContent  = tLoc.toFixed(2)+'g';
   document.getElementById('poids-importe-total').textContent= tImp.toFixed(2)+'g';

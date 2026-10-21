@@ -459,18 +459,34 @@ tbody tr:hover td { background: #f3eedf; }
   margin-bottom: 12px;
 }
 .filter-select { width: 100%; }
+/* Une rangée de totaux, chacun lisible seul : intitulé au-dessus, chiffre
+   en dessous. En ligne continue séparée par des barres verticales, sept
+   chiffres formaient une phrase qu'il fallait relire deux fois. */
 .cumul-bar {
-  display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
-  padding: 9px 12px;
+  display: flex; flex-wrap: wrap; align-items: flex-start;
+  gap: 10px 16px;
+  padding: 10px 12px;
   background: var(--kayor-or-bg);
   border: 1px solid rgba(201,168,76,0.35);
   border-radius: var(--radius-md);
   margin-bottom: 12px; font-size: 12px;
 }
-.cumul-label { color: var(--text-secondary); }
-.cumul-value { font-weight: 600; color: var(--text-primary); }
-.cumul-warn  { font-weight: 600; color: var(--warning-text); }
-.cumul-sep   { color: var(--border-medium); }
+/* Transparent à la mise en page : les postes du bloc caisse s'alignent avec
+   les autres, tout en restant masquables d'un seul geste. */
+#cumul-solde-caisse { display: contents; }
+.cumul-poste { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.cumul-label { font-size: 10px; font-weight: 600; letter-spacing: 0.3px;
+               text-transform: uppercase; color: var(--text-secondary);
+               white-space: nowrap; }
+.cumul-value { font-weight: 600; font-size: 13.5px; color: var(--text-primary);
+               white-space: nowrap; }
+.cumul-warn  { font-weight: 600; font-size: 13.5px; color: var(--warning-text);
+               white-space: nowrap; }
+.cumul-sortie { color: var(--danger-text); }
+/* Le solde net est la conclusion, pas un poste parmi d'autres : il se
+   détache par un filet doré sur sa gauche. */
+.cumul-poste-fort { padding-left: 14px; border-left: 2px solid var(--kayor-or); }
+.cumul-poste-fort .cumul-value { font-size: 15px; }
 
 /* ============================================================
    CARAT BADGES

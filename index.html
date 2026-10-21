@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>KAYOR — Brillez sans effort</title>
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml" />
-  <link rel="stylesheet" href="css/style.css?v=2026-10-21j" />
+  <link rel="stylesheet" href="css/style.css?v=2026-10-21k" />
 </head>
 <body>
 
@@ -259,16 +259,50 @@
           <option value="">Tout type</option><option value="local">Local</option><option value="importe">Importé</option>
         </select>
       </div>
+      <!-- Chaque poste est un total à part entière. Le solde net était suivi
+           d'une parenthèse « 135 000 encaissé + 85 000 dépôts − 80 000
+           décaissé » : il fallait refaire l'opération pour savoir d'où il
+           sortait. Les trois composantes sont maintenant des chiffres à lire,
+           et le solde reste la conclusion. -->
       <div class="cumul-bar">
-        <span class="cumul-label" title="Chiffre d'affaires, ventes annulées exclues. Ce n'est pas l'argent en caisse.">CA (hors annulées) :</span><span class="cumul-value" id="montant-cumul">—</span>
-        <span class="cumul-sep">|</span>
-        <span id="cumul-solde-caisse"><span class="cumul-label">💰 Solde net caisse :</span><span class="cumul-value" id="montant-encaisse">—</span>
-        <span class="cumul-detail" id="detail-solde-caisse" style="font-size:11px;color:var(--text-secondary);margin-left:6px"></span>
-        <span class="cumul-sep">|</span></span>
-        <span class="cumul-label">⏳ Restants :</span><span class="cumul-warn" id="total-restants">—</span>
-        <span class="cumul-sep">|</span>
-        <span class="cumul-label">Local :</span><span class="cumul-value" id="poids-local-total">—</span>
-        <span class="cumul-label" style="margin-left:8px">Importé :</span><span class="cumul-value" id="poids-importe-total">—</span>
+        <span class="cumul-poste">
+          <span class="cumul-label" title="Chiffre d'affaires, ventes annulées exclues. Ce n'est pas l'argent en caisse.">CA hors annulées</span>
+          <span class="cumul-value" id="montant-cumul">—</span>
+        </span>
+        <!-- Tout ce bloc disparaît pour un rôle sans accès à la caisse
+             (appliquerVisibiliteCaisse). `display:contents` le rend
+             transparent à la mise en page : ses postes s'alignent avec les
+             autres, mais il reste un seul élément à masquer. -->
+        <span id="cumul-solde-caisse">
+          <span class="cumul-poste">
+            <span class="cumul-label">Encaissé</span>
+            <span class="cumul-value" id="total-encaisse">—</span>
+          </span>
+          <span class="cumul-poste">
+            <span class="cumul-label">Dépôts épargne</span>
+            <span class="cumul-value" id="total-depots">—</span>
+          </span>
+          <span class="cumul-poste">
+            <span class="cumul-label">Décaissé</span>
+            <span class="cumul-value cumul-sortie" id="total-decaisse">—</span>
+          </span>
+          <span class="cumul-poste cumul-poste-fort">
+            <span class="cumul-label">💰 Solde net caisse</span>
+            <span class="cumul-value" id="montant-encaisse">—</span>
+          </span>
+        </span>
+        <span class="cumul-poste">
+          <span class="cumul-label">⏳ Restants dus</span>
+          <span class="cumul-warn" id="total-restants">—</span>
+        </span>
+        <span class="cumul-poste">
+          <span class="cumul-label">Or local</span>
+          <span class="cumul-value" id="poids-local-total">—</span>
+        </span>
+        <span class="cumul-poste">
+          <span class="cumul-label">Or importé</span>
+          <span class="cumul-value" id="poids-importe-total">—</span>
+        </span>
       </div>
       <div class="card avec-cartes"><div class="table-wrap">
         <table class="journal-table">
@@ -1487,11 +1521,11 @@
 
 <div class="toast" id="toast"></div>
   <!-- Supabase SDK -->
-  <script src="js/security.js?v=2026-10-21j"></script>
-  <script src="js/auth.js?v=2026-10-21j"></script>
-  <script src="js/data.js?v=2026-10-21j"></script>
-  <script src="js/supabase.js?v=2026-10-21j"></script>
-  <script src="js/app.js?v=2026-10-21j"></script>
+  <script src="js/security.js?v=2026-10-21k"></script>
+  <script src="js/auth.js?v=2026-10-21k"></script>
+  <script src="js/data.js?v=2026-10-21k"></script>
+  <script src="js/supabase.js?v=2026-10-21k"></script>
+  <script src="js/app.js?v=2026-10-21k"></script>
 
 <!-- MODAL AJUSTER STOCK -->
 <div class="modal-backdrop" id="modal-ajust-stock">
