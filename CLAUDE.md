@@ -98,6 +98,16 @@ contrôle interne dit qui entre.
 Toute fonction porte aussi `set search_path = public, pg_temp` — sans quoi la
 résolution des noms dépend de l'appelant.
 
+**Exception : les fonctions qui appellent `crypt()`** (`portail_login`,
+`definir_pin_client`) ont besoin de `public, extensions, pg_temp` — pgcrypto
+vit dans `extensions`. L'oublier ne casse rien à l'application de la
+migration : la fonction se crée très bien et échoue seulement à l'appel, avec
+« function crypt(text, text) does not exist ». Le portail cliente est alors
+entièrement hors service. **C'est arrivé deux fois** (septembre, puis le
+2026-10-21). Après toute réécriture d'une de ces deux fonctions, appeler la
+route une fois avant de passer à autre chose — une migration qui « réussit »
+ne prouve rien.
+
 ### Valider dans la fonction, pas seulement dans le formulaire
 
 Le navigateur est une commodité, jamais une barrière. Format du code boutique,
@@ -283,9 +293,36 @@ presque toujours un cache navigateur ou un déploiement en retard, pas un bug.
   de son jeton. Le JWT prouve l'identité, jamais les droits.
   **Corollaire** : ne jamais écrire un point d'entrée qui se fie au seul contenu
   du jeton (une Edge Function, par exemple) — il contournerait cette révocation.
-- **Le portail cliente compte les échecs** : 5 tentatives de PIN ratées
-  bloquent 15 minutes (`portail_tentatives`). Toute nouvelle voie
-  d'authentification doit avoir son propre frein.
+- **Le portail cliente a deux freins, pas un** (migration 015, 2026-10-21).
+
+  Le premier compte les échecs **par numéro** : 5 ratés bloquent 15 minutes
+  (`portail_tentatives`). Il ne protège que d'une chose — s'acharner sur un
+  numéro — et pendant des mois c'était le seul.
+
+  Le second compte les **numéros distincts visés par un même appelant**
+  (`portail_tentatives_ip`) : 12 en 30 minutes bloquent cette IP une heure.
+  C'est lui qui ferme le bourrage de codes PIN, l'attaque que le premier
+  laissait entièrement passer : essayer `1234` sur deux mille numéros ne
+  produisait qu'un échec par numéro, donc aucun blocage. Et c'est le même
+  défaut, retourné, qui permettait de bloquer toutes les clientes à volonté.
+
+  **Compter les numéros distincts et non les échecs bruts n'est pas un
+  détail** : les opérateurs mobiles d'ici partagent massivement leurs IP. Une
+  cliente qui se trompe trois fois sur son propre numéro ne doit rien
+  déclencher, alors qu'un balayage se trahit au douzième.
+
+  **L'IP se lit avec `app.ip_appelant()`, jamais à la main.** Elle prend
+  `cf-connecting-ip`, posé par le proxy et infalsifiable. Le repli sur
+  `x-forwarded-for` prend le **dernier** élément de la liste, jamais le
+  premier : le proxy ajoute l'IP réelle à la fin, donc lire le premier
+  laisserait un bot choisir son propre compteur en envoyant son en-tête — et
+  annulerait tout le dispositif. Vérifié par un test d'évasion le 2026-10-21.
+
+  Tout blocage doit se **réarmer** à l'expiration : `echecs` remis à zéro.
+  Sans ça le compteur reste au plafond et re-bloque au premier échec suivant,
+  indéfiniment.
+
+  Toute nouvelle voie d'authentification doit avoir ses deux freins.
 - **L'équipe reçoit ses accès de la propriétaire** (décidé le 2026-10-19, en
   remplacement de l'identification WhatsApp). Elle choisit l'identifiant et le
   mot de passe, les communique de vive voix, et peut les remplacer à tout
@@ -301,6 +338,28 @@ presque toujours un cache navigateur ou un déploiement en retard, pas un bug.
   hache. Ne jamais le stocker, l'afficher, le journaliser, ni le renvoyer dans
   une réponse — c'est la faille d'origine de ce projet (`admin/admin123` en
   clair dans `js/data.js` et dans la table `utilisateurs`).
+
+  **Tout mot de passe passe par `membres-admin`, et nulle part ailleurs**
+  (2026-10-21). Les cinq chemins — création de boutique, réinitialisation par
+  l'opérateur, création d'un compte d'équipe, réinitialisation par la
+  propriétaire, et `mon_mot_de_passe` pour son propre compte — y sont, et
+  chacun confronte le mot de passe aux fuites connues avant de l'accepter.
+
+  Le changement par la personne elle-même allait auparavant en direct sur
+  `/auth/v1/user` : aucune règle ne s'y appliquait côté serveur, alors que
+  c'est justement là que la propriétaire choisit son mot de passe définitif à
+  la première connexion. **Ne pas réintroduire d'appel direct à Auth pour
+  poser un mot de passe** — ce serait un contournement de toutes ces règles.
+
+  La vérification des fuites est faite par l'Edge Function, **jamais par le
+  navigateur** : k-anonymat, seuls les cinq premiers caractères du SHA-1
+  sortent, et la page livrée ne contacte toujours aucun domaine tiers
+  (règle 6 intacte). Le réglage natif de Supabase ferait la même chose mais
+  exige le plan Pro.
+
+  Si Have I Been Pwned ne répond pas, **on laisse passer** : refuser tous les
+  mots de passe parce qu'un service tiers est tombé bloquerait la création de
+  comptes. Le minimum de caractères reste le verrou dur.
 
   **La connexion WhatsApp et l'invitation d'équipe ont été retirées le
   2026-10-20.** Un compte d'équipe se crée uniquement par « + Créer un compte ».
@@ -397,9 +456,26 @@ inévitable :
 
 `connexions` n'a **que** des policies `INSERT` et `SELECT` : ni `UPDATE`, ni
 `DELETE`. Personne ne peut effacer une trace, pas même le propriétaire. **Ne
-jamais ajouter ces policies.**
+jamais ajouter ces policies.** Même règle pour `portail_journal`, qui n'a
+qu'un `SELECT`.
 
 Y consigner tout geste sensible, pas seulement les connexions.
+
+**Un échec se consigne autant qu'un succès.** `connexions` ne gardait que les
+connexions réussies : une attaque en cours était donc invisible, il n'y avait
+rien à détecter ni à alerter. `portail_journal` (migration 015) enregistre
+chaque tentative sur le portail — succès, échec, blocage.
+
+`connexions` ne pouvait pas servir à ça : son `organisation_id` est `NOT NULL`,
+or une tentative sur un numéro inexistant n'appartient à aucune boutique — et
+c'est précisément la trace d'un bourrage. D'où une table à part, dont
+`organisation_id` est nullable ; ces lignes-là ne sont visibles que de
+l'opérateur.
+
+**Le numéro n'est jamais journalisé en clair** : une empreinte pour compter
+les numéros distincts, et les quatre derniers chiffres pour qu'un humain
+reconnaisse sa cliente. Garder en clair les numéros visés par un bourrage
+reviendrait à constituer un fichier qu'on n'a aucune raison de détenir.
 
 ---
 
@@ -416,8 +492,11 @@ Y consigner tout geste sensible, pas seulement les connexions.
 
 ## 9. Avant la première boutique payante
 
-- [ ] Activer la **protection des mots de passe compromis** (Supabase vérifie
-      HaveIBeenPwned) — désactivée aujourd'hui, c'est une case à cocher.
+- [x] ~~Activer la **protection des mots de passe compromis**~~ — fait le
+      2026-10-21, **autrement**. Le réglage natif de Supabase est réservé au
+      plan Pro ; `membres-admin` interroge donc lui-même Have I Been Pwned.
+      Le linter continuera d'afficher l'alerte : c'est normal, il ne voit que
+      le réglage natif. Voir « Mots de passe » ci-dessous.
 - [ ] Activer la **MFA** (TOTP) et l'exiger des rôles `proprietaire` et `admin`.
 - [x] ~~Retirer **EmailJS**~~ et ~~supprimer `public.utilisateurs_archive`~~ —
       faits le 2026-10-14. Le portail cliente ne fait plus **aucune** requête

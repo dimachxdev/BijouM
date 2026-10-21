@@ -218,18 +218,24 @@ console.log('KAYOR · auth.js', '2026-10-21b');
       throw new Error('Le mot de passe doit faire au moins 12 caractères.');
     }
 
-    var r = await fetchTimeout(URL_BASE + '/auth/v1/user', {
-      method:  'PUT',
-      headers: enTetes(),
-      body:    JSON.stringify({ password: nouveau })
+    // Même chemin que le changement ordinaire : c'est l'Edge Function qui pose
+    // le mot de passe, donc la confrontation aux fuites connues s'applique
+    // aussi ici. Un appel direct à Auth la contournerait.
+    var hr = enTetes();
+    var r = await fetchTimeout(URL_BASE + '/functions/v1/membres-admin', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json',
+                 'apikey': hr['apikey'], 'Authorization': hr['Authorization'] },
+      body:    JSON.stringify({ action: 'mon_mot_de_passe', motdepasse: nouveau })
     });
 
     if (!r.ok) {
       var d = await r.json().catch(function () { return {}; });
-      var m = (d.msg || d.message || '').toLowerCase();
+      var m = (d.erreur || d.msg || d.message || '').toLowerCase();
       if (m.indexOf('different from the old') !== -1) {
         throw new Error('Choisissez un mot de passe différent de l\'ancien.');
       }
+      if (d.erreur) throw new Error(d.erreur);
       throw new Error('Enregistrement refusé. Le lien a peut-être expiré.');
     }
 
@@ -483,12 +489,25 @@ console.log('KAYOR · auth.js', '2026-10-21b');
     if (!nouveau || nouveau.length < 12) {
       throw new Error('Le mot de passe doit faire au moins 12 caractères.');
     }
-    var r = await fetchTimeout(URL_BASE + '/auth/v1/user', {
-      method:  'PUT',
-      headers: enTetes(),
-      body:    JSON.stringify({ password: nouveau })
+    // Passe par l'Edge Function, pas par /auth/v1/user en direct : c'est là
+    // que le mot de passe est confronté aux fuites connues et que l'on
+    // revérifie que le compte est toujours actif. Un appel direct à Auth
+    // n'aurait appliqué aucune de ces deux règles.
+    // En-têtes réduits au nécessaire : `enTetes()` ajoute le `Prefer` de
+    // PostgREST, qui ne veut rien dire ici et avait déjà fait échouer tout
+    // l'appel en préflight — « Failed to fetch », sans autre explication.
+    var h = enTetes();
+    var r = await fetchTimeout(URL_BASE + '/functions/v1/membres-admin', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json',
+                 'apikey': h['apikey'], 'Authorization': h['Authorization'] },
+      body:    JSON.stringify({ action: 'mon_mot_de_passe', motdepasse: nouveau })
     });
-    if (!r.ok) throw new Error('Changement refusé (' + r.status + ').');
+    var rep = {};
+    try { rep = await r.json(); } catch (e) { /* réponse illisible */ }
+    if (!r.ok || !rep.ok) {
+      throw new Error(rep.erreur || 'Changement refusé (' + r.status + ').');
+    }
 
     // Le drapeau tombe côté serveur : une fonction dédiée, qui ne sait baisser
     // que le sien. Un UPDATE direct laisserait une propriétaire modifier

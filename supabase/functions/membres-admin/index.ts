@@ -50,6 +50,54 @@ function entetes(req: Request) {
 
 function valideIdentifiant(v: string) { return /^[a-z0-9._-]{2,30}$/.test(v); }
 
+/**
+ * Ce mot de passe figure-t-il dans une fuite connue ?
+ *
+ * Supabase sait le faire nativement — mais c'est réservé au plan Pro. On le
+ * refait ici, et mieux placé : la vérification est côté serveur, donc c'est
+ * une barrière, pas un conseil affiché à l'écran.
+ *
+ * k-ANONYMAT. Le SHA-1 est calculé ICI et on n'envoie que ses CINQ premiers
+ * caractères. Have I Been Pwned renvoie tous les suffixes commençant ainsi —
+ * plusieurs centaines — et la comparaison se fait chez nous. Le mot de passe
+ * ne sort pas, son empreinte complète non plus. `Add-Padding` complète la
+ * réponse de lignes factices pour que sa taille ne dise rien non plus.
+ *
+ * Et c'est l'Edge Function qui appelle, JAMAIS le navigateur : la règle
+ * « aucune page ne charge quoi que ce soit hors de son domaine » tient. C'est
+ * la seule façon d'avoir cette protection sans écorner la règle 6.
+ *
+ * En cas de panne ou de lenteur de HIBP, on laisse passer. Refuser tous les
+ * mots de passe parce qu'un service tiers est tombé bloquerait la création de
+ * comptes — et le vrai verrou reste le minimum de caractères imposé au-dessus.
+ */
+async function motDePasseCompromis(mdp: string): Promise<boolean> {
+  try {
+    const somme = await crypto.subtle.digest('SHA-1', new TextEncoder().encode(mdp));
+    const sha1 = Array.from(new Uint8Array(somme))
+      .map((o) => o.toString(16).padStart(2, '0')).join('').toUpperCase();
+
+    const r = await fetch('https://api.pwnedpasswords.com/range/' + sha1.slice(0, 5), {
+      headers: { 'Add-Padding': 'true' },
+      signal: AbortSignal.timeout(4000),
+    });
+    if (!r.ok) return false;
+
+    const suffixe = sha1.slice(5);
+    const texte = await r.text();
+    return texte.split('\n').some((ligne) => {
+      const [suf, nb] = ligne.split(':');
+      // Les lignes de remplissage de `Add-Padding` portent un compte de 0.
+      return suf.trim() === suffixe && parseInt(nb || '0', 10) > 0;
+    });
+  } catch {
+    return false;
+  }
+}
+
+const MDP_COMPROMIS =
+  'Ce mot de passe figure dans une fuite de données connue. Choisissez-en un autre.';
+
 /** « fatou@kay.kayor.app » → « fatou@kay », ce qu'on dicte à voix haute. */
 function loginCourt(adresse: string) {
   return adresse.endsWith(SUFFIXE) ? adresse.slice(0, -SUFFIXE.length) : adresse;
@@ -85,6 +133,40 @@ Deno.serve(async (req: Request) => {
   };
 
   // =========================================================================
+  // CHACUN — changer SON propre mot de passe
+  // =========================================================================
+  // Ce chemin passait auparavant en direct par /auth/v1/user : aucune règle
+  // ne s'y appliquait côté serveur, et c'est pourtant là que la propriétaire
+  // choisit son mot de passe définitif à la première connexion.
+  //
+  // On revérifie que l'appelant est un membre ACTIF, et pas seulement porteur
+  // d'un jeton valide : sans ça, suspendre quelqu'un ne l'empêcherait pas de
+  // changer son mot de passe jusqu'à l'expiration de son jeton.
+  if (action === 'mon_mot_de_passe') {
+    const motdepasse = corps.motdepasse || '';
+    if (motdepasse.length < 12) {
+      return repondre({ ok: false, erreur: 'Le mot de passe doit faire au moins 12 caractères.' }, 400);
+    }
+
+    const { data: moi } = await admin.from('membres')
+      .select('user_id').eq('user_id', appelant).eq('actif', true).maybeSingle();
+    const operateur = moi ? false : await estOperateur();
+    if (!moi && !operateur) {
+      return repondre({ ok: false, erreur: 'Compte inactif. Contactez votre responsable.' }, 403);
+    }
+
+    if (await motDePasseCompromis(motdepasse)) {
+      return repondre({ ok: false, erreur: MDP_COMPROMIS }, 400);
+    }
+
+    const { error: errMdp } = await admin.auth.admin
+      .updateUserById(appelant, { password: motdepasse });
+    if (errMdp) return repondre({ ok: false, erreur: errMdp.message }, 400);
+
+    return repondre({ ok: true });
+  }
+
+  // =========================================================================
   // OPÉRATEUR — ouvrir une boutique et poser le compte de sa propriétaire
   // =========================================================================
   if (action === 'creer_boutique') {
@@ -111,6 +193,10 @@ Deno.serve(async (req: Request) => {
     }
     if (motdepasse.length < 8) {
       return repondre({ ok: false, erreur: 'Le mot de passe doit faire au moins 8 caractères.' }, 400);
+    }
+
+    if (await motDePasseCompromis(motdepasse)) {
+      return repondre({ ok: false, erreur: MDP_COMPROMIS }, 400);
     }
 
     const { data: existe } = await admin.from('organisations')
@@ -176,6 +262,10 @@ Deno.serve(async (req: Request) => {
       return repondre({ ok: false, erreur: 'Le mot de passe doit faire au moins 8 caractères.' }, 400);
     }
 
+    if (await motDePasseCompromis(motdepasse)) {
+      return repondre({ ok: false, erreur: MDP_COMPROMIS }, 400);
+    }
+
     // Volontairement limité à la propriétaire : l'équipe relève d'elle, pas
     // de l'opérateur. Une boutique en compte normalement une seule active.
     const { data: proprios } = await admin.from('membres')
@@ -236,6 +326,10 @@ Deno.serve(async (req: Request) => {
       return repondre({ ok: false, erreur: 'Le mot de passe doit faire au moins 8 caractères.' }, 400);
     }
 
+    if (await motDePasseCompromis(motdepasse)) {
+      return repondre({ ok: false, erreur: MDP_COMPROMIS }, 400);
+    }
+
     const adresse = identifiant + '@' + slug.toLowerCase() + SUFFIXE;
     const { data: cree, error: errCreation } = await admin.auth.admin.createUser({
       email: adresse, password: motdepasse, email_confirm: true,
@@ -274,8 +368,13 @@ Deno.serve(async (req: Request) => {
     if (motdepasse.length < 8) {
       return repondre({ ok: false, erreur: 'Le mot de passe doit faire au moins 8 caractères.' }, 400);
     }
+
     if (userId === appelant) {
       return repondre({ ok: false, erreur: 'Changez votre propre mot de passe depuis votre profil.' }, 400);
+    }
+
+    if (await motDePasseCompromis(motdepasse)) {
+      return repondre({ ok: false, erreur: MDP_COMPROMIS }, 400);
     }
 
     const { data: cible } = await admin.from('membres')

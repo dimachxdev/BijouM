@@ -1,0 +1,25 @@
+-- ===========================================================================
+-- 016 — Correctif immédiat de 015
+-- Appliquée le 2026-10-21, quelques minutes après 015.
+-- ===========================================================================
+-- En réécrivant portail_login, j'avais posé `search_path = public, pg_temp`
+-- en suivant la règle générale du projet. Mais `crypt()` vient de pgcrypto,
+-- installé dans le schéma `extensions` : la vérification du code PIN
+-- renvoyait « function crypt(text, text) does not exist », et plus aucune
+-- cliente ne pouvait se connecter au portail. Entre 015 et 016, le portail
+-- était cassé.
+--
+-- C'est exactement ce que la migration `portail_search_path_extensions`
+-- avait déjà corrigé une fois, en septembre. La règle « search_path figé »
+-- reste bonne ; elle doit seulement inclure `extensions` pour les fonctions
+-- qui hachent ou comparent un hachage — aujourd'hui `portail_login` et
+-- `definir_pin_client`, les deux seules à appeler `crypt()`.
+--
+-- Leçon pratique : après toute réécriture d'une de ces deux fonctions,
+-- appeler la route une fois avant de passer à autre chose. Une migration
+-- qui « réussit » ne prouve rien — celle-ci avait réussi.
+--
+-- Le fichier 015 ci-joint porte déjà le search_path corrigé : le rejouer
+-- depuis zéro ne reproduit pas la panne.
+alter function public.portail_login(text, text)
+  set search_path = public, extensions, pg_temp;
