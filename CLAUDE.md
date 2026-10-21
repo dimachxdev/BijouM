@@ -254,11 +254,43 @@ recopie le bouton « + … » de l'en-tête de la section ouverte et lui relaie 
 clic. Un bouton masqué par le rôle masque donc le bouton flottant, sans une
 ligne de plus.
 
+### La facture n'a qu'une feuille de style
+
+`FACTURE_CSS` (dans `js/app.js`) sert **à la fois** l'aperçu à l'écran et la
+fenêtre d'impression. Elles avaient divergé jusqu'à l'absurde : les classes
+`.facture-*` n'existaient que dans la fenêtre d'impression, donc l'aperçu
+affichait du HTML brut — on validait une facture sans mise en page avant d'en
+imprimer une autre. Ne pas réintroduire de second jeu de règles.
+
+Deux pièges, tous deux rencontrés le 2026-10-21 :
+
+- **Aucun accent grave dans ce bloc.** C'est un littéral de gabarit ; un seul
+  le referme et casse tout le fichier. `node --check js/app.js` après chaque
+  retouche.
+- **`.facture-table` porte `min-width:0`.** La feuille de l'application impose
+  `min-width:520px` à *toute* table, pour le défilement des listes. Sans ce
+  rappel, la facture héritait de 520 px dans une modale de 330 px.
+
+La colonne du détail est **Description · Carat · Poids · Montant** (décidé le
+2026-10-21). Le poids est le total : la distinction or local / or importé
+reste au journal, elle regarde la gestion du stock, pas la cliente.
+
 ### Aucune identité de boutique en dur
 
 Jamais « KAYOR », « Dakar », ni un logo écrit dans le code. Tout document
 imprimé lit `boutiqueInfos()`, `boutiqueLigneContact()`, `_logoFacture()`,
 `_slugFichier()`. En SaaS, chaque boutique imprime la sienne.
+
+**Et surtout : pas de repli sur l'identité du logiciel.** `_logoFacture()`
+retombait sur le logo KAYOR quand la boutique n'avait pas téléversé le sien —
+une bijouterie imprimait donc la marque de son fournisseur de logiciel sur
+les factures remises à ses clientes. Sans logo, **aucune image** : le nom
+commercial est à côté et tient seul l'en-tête. Corrigé le 2026-10-21, et la
+constante `KAYOR_LOGO_B64` (60 Ko de base64 chargés à chaque ouverture) a été
+retirée avec elle — l'original reste dans `assets/`.
+
+Un repli vers la marque du logiciel est pire qu'un champ vide : le champ vide
+se voit et se remplit, le repli se confond avec un choix de la boutique.
 
 ### Colonnes explicites sur `clients`
 
