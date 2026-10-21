@@ -379,6 +379,41 @@ presque toujours un cache navigateur ou un déploiement en retard, pas un bug.
 
 ---
 
+## 4 bis. Le plan service — deux niveaux
+
+Décidé le 2026-10-21, posé par la migration 017.
+
+`operateurs` était plat : on y était, ou on n'y était pas, et quiconque y
+figurait pouvait suspendre une boutique payante. Il porte désormais un `role` :
+
+| | peut |
+|---|---|
+| `proprietaire` | tout, **et seul** : plan, échéance, suspendre/réactiver une boutique, nommer et révoquer les opérateurs |
+| `admin` | ouvrir une boutique, rendre son accès à une propriétaire, lire la liste et le journal des tentatives |
+
+Le défaut à l'insertion est `admin` — un opérateur ajouté sans précision est
+le niveau le moins puissant. L'inverse serait dangereux.
+
+`app.est_operateur()` répond toujours « est sur le plan service » et garde ce
+qui est ouvert aux deux. `app.est_proprietaire_saas()` garde le reste.
+
+**Le plan service ne lit aucune donnée métier.** Ni ventes, ni caisse, ni
+clientes — RLS filtre sur `app.current_org()` et un opérateur n'est membre
+d'aucune organisation. C'est ce qui fait qu'une fuite d'un compte de service
+n'expose le chiffre d'affaires de personne. Décision explicitement reconduite
+le 2026-10-21 : **ne pas ouvrir de lecture inter-boutiques** sans la rouvrir.
+Dépanner une boutique se fait au téléphone avec sa propriétaire.
+
+**Le compte du fondateur est propriétaire du service, et rien d'autre** : il
+n'est membre d'aucune boutique, pour que les gestes de service et les gestes
+de commerçant ne partagent jamais la même session.
+
+Nommer ou révoquer un opérateur passe par `nommer_operateur()` et
+`revoquer_operateur()`, jamais par un `insert` à la main : une action sans
+fonction est une action sans contrôle. `revoquer_operateur()` refuse de
+retirer le dernier `proprietaire` — sans quoi plus personne ne pourrait
+changer un plan.
+
 ## 5. Abonnement et accès payant
 
 Le plan et la date d'expiration vivent dans `organisations` et **ne sont jamais
@@ -386,9 +421,11 @@ lus depuis le navigateur pour accorder un droit**. `app.org_active()` conditionn
 toutes les écritures : une boutique expirée ou suspendue passe en lecture seule
 côté base, pas côté interface.
 
-- Seul l'opérateur du service change un plan ou une échéance
-  (`creer_boutique()`, `basculer_boutique()`, toutes deux derrière
-  `app.est_operateur()`).
+- Seul le **propriétaire du service** change un plan ou une échéance, pas un
+  simple `admin` du plan service (voir § 4 bis). `creer_boutique()` reste
+  ouverte aux deux ; `modifier_boutique()` et `basculer_boutique()` doivent
+  passer derrière `app.est_proprietaire_saas()` — **pas encore fait**, c'est
+  la partie B annoncée en fin de migration 017.
 - Le jour où un paiement en ligne existera : signature des webhooks vérifiée,
   traitement idempotent, et **déblocage uniquement sur confirmation du
   prestataire** — jamais sur un appel venu du navigateur.
