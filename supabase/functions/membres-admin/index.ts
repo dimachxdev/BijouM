@@ -248,6 +248,77 @@ Deno.serve(async (req: Request) => {
   }
 
   // =========================================================================
+  // OPÉRATEUR — poser une propriétaire sur une boutique qui existe déjà
+  // =========================================================================
+  // `creer_boutique` crée la propriétaire en même temps que la boutique, et
+  // c'était le seul chemin. Il n'y en avait donc aucun pour :
+  //   — détacher le compte du fondateur d'une boutique en lui donnant une
+  //     vraie propriétaire (ce qu'on fait le 2026-10-22) ;
+  //   — réparer une boutique restée sans aucun membre, où plus personne ne
+  //     peut entrer. « Marjan Bijouterie Saint louis » est dans ce cas.
+  //
+  // Volontairement réservé à l'opérateur : donner une propriétaire à une
+  // boutique est un geste de service, pas un geste de commerçante.
+  if (action === 'creer_proprietaire') {
+    if (!await estOperateur()) {
+      return repondre({ ok: false, erreur: "Réservé à l'opérateur du service." }, 403);
+    }
+
+    const orgId       = (corps.organisation_id || '').trim();
+    const identifiant = (corps.identifiant || '').trim().toLowerCase();
+    const nom         = (corps.nom || '').trim();
+    const motdepasse  = corps.motdepasse || '';
+    const telephone   = (corps.telephone || '').replace(/[^0-9]/g, '') || null;
+
+    if (!orgId) return repondre({ ok: false, erreur: 'Boutique non précisée.' }, 400);
+    if (!nom)   return repondre({ ok: false, erreur: 'Le nom est obligatoire.' }, 400);
+    if (!valideIdentifiant(identifiant)) {
+      return repondre({ ok: false, erreur: "L'identifiant doit faire 2 à 30 caractères : lettres, chiffres, point, tiret." }, 400);
+    }
+    if (motdepasse.length < 8) {
+      return repondre({ ok: false, erreur: 'Le mot de passe doit faire au moins 8 caractères.' }, 400);
+    }
+
+    if (await motDePasseCompromis(motdepasse)) {
+      return repondre({ ok: false, erreur: MDP_COMPROMIS }, 400);
+    }
+
+    const { data: org } = await admin.from('organisations')
+      .select('id, nom, slug').eq('id', orgId).maybeSingle();
+    if (!org)       return repondre({ ok: false, erreur: 'Boutique introuvable.' }, 404);
+    if (!org.slug)  return repondre({ ok: false, erreur: 'Boutique sans code.' }, 400);
+
+    const adresse = identifiant + '@' + String(org.slug).toLowerCase() + SUFFIXE;
+    const { data: cree, error: errCompte } = await admin.auth.admin.createUser({
+      email: adresse, password: motdepasse, email_confirm: true,
+      user_metadata: { nom, cree_par: appelant },
+    });
+
+    if (errCompte || !cree?.user) {
+      const m = (errCompte?.message || '').toLowerCase();
+      return repondre({ ok: false, erreur: (m.includes('already') || m.includes('exist'))
+        ? 'Cet identifiant est déjà pris dans cette boutique.'
+        : (errCompte?.message || 'Création du compte refusée.') }, 400);
+    }
+
+    // Même raison qu'à la création d'une boutique : ce mot de passe a été
+    // posé par l'opérateur et dicté de vive voix, il ne doit pas durer.
+    const { error: errMembre } = await admin.from('membres').insert({
+      user_id: cree.user.id, organisation_id: org.id,
+      nom, role: 'proprietaire', actif: true,
+      email: adresse, telephone, doit_changer_mdp: true,
+    });
+
+    if (errMembre) {
+      await admin.auth.admin.deleteUser(cree.user.id);
+      return repondre({ ok: false, erreur: 'Rattachement impossible : ' + errMembre.message }, 400);
+    }
+
+    return repondre({ ok: true, user_id: cree.user.id,
+      nom_boutique: org.nom, nom, login: identifiant + '@' + String(org.slug).toLowerCase() });
+  }
+
+  // =========================================================================
   // OPÉRATEUR — rendre son accès à une propriétaire qui l'a perdu
   // =========================================================================
   if (action === 'motdepasse_proprietaire') {

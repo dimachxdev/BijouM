@@ -355,6 +355,36 @@ presque toujours un cache navigateur ou un déploiement en retard, pas un bug.
   indéfiniment.
 
   Toute nouvelle voie d'authentification doit avoir ses deux freins.
+- **La connexion de l'équipe ne peut pas avoir les siens** — et il ne faut pas
+  faire semblant (tranché le 2026-10-22).
+
+  Elle ne passe pas par notre code : `auth.js` appelle `/auth/v1/token` chez
+  Supabase avec la clé publique, lisible dans `js/supabase.js`. Un frein posé
+  dans une Edge Function serait donc **facultatif** : un bot lit le source et
+  appelle l'endpoint en direct. Il ne ralentirait que l'interface, c'est-à-dire
+  les vendeuses, et donnerait une fausse assurance — le piège que décrit déjà
+  « RLS filtre, RLS ne lève pas d'erreur ».
+
+  C'est la différence avec le portail : là, `portail_login()` **est** le seul
+  chemin. Ici, Supabase Auth est le chemin, et on ne peut pas le fermer.
+
+  Le seul mécanisme inviolable serait le **Password Verification Hook** de
+  Supabase, appelé par Auth à chaque vérification. Il est réservé aux plans
+  **Teams et Enterprise** — pas même Pro. À reconsidérer le jour où ce plan
+  se justifie, pas avant.
+
+  **Ce qui est fait à la place** : la limite native *Authentication → Rate
+  Limits → Sign in / Sign ups*, baissée de 30 à 10 par 5 minutes et par IP.
+  Elle s'applique sur le vrai chemin. **Ne pas baisser « Token refresh »** :
+  `programmerRefresh()` rafraîchit le jeton en continu, et la session des
+  vendeuses tomberait en pleine journée.
+
+  **Turnstile a été écarté pour la même raison et une autre** (2026-10-22) :
+  il exige de charger `challenges.cloudflare.com` dans la page de connexion —
+  là où le jeton se crée — ce qui briserait la règle 6. Un défi anti-bot doit
+  s'exécuter dans le navigateur ; il ne peut pas passer par une Edge Function
+  comme la vérification Have I Been Pwned. Ne pas le reproposer sans rouvrir
+  franchement la règle 6.
 - **L'équipe reçoit ses accès de la propriétaire** (décidé le 2026-10-19, en
   remplacement de l'identification WhatsApp). Elle choisit l'identifiant et le
   mot de passe, les communique de vive voix, et peut les remplacer à tout
@@ -411,40 +441,44 @@ presque toujours un cache navigateur ou un déploiement en retard, pas un bug.
 
 ---
 
-## 4 bis. Le plan service — deux niveaux
+## 4 bis. Le plan service
 
-Décidé le 2026-10-21, posé par la migration 017.
+Il y a **un seul opérateur**, et c'est le fondateur. Son compte est
+opérateur **et rien d'autre** : il n'est membre d'aucune boutique.
 
-`operateurs` était plat : on y était, ou on n'y était pas, et quiconque y
-figurait pouvait suspendre une boutique payante. Il porte désormais un `role` :
+Jusqu'au 2026-10-22, le même compte ouvrait la console de service et tenait
+une bijouterie au comptoir. C'est le compte du comptoir qui s'expose — mot
+de passe lu par-dessus l'épaule, téléphone partagé, appareil perdu — et le
+perdre revenait à perdre le service entier, pas une bijouterie. La
+bijouterie a donc reçu sa propre propriétaire (migration 017).
 
-| | peut |
-|---|---|
-| `proprietaire` | tout, **et seul** : plan, échéance, suspendre/réactiver une boutique, nommer et révoquer les opérateurs |
-| `admin` | ouvrir une boutique, rendre son accès à une propriétaire, lire la liste et le journal des tentatives |
+**Ne pas rattacher le compte de service à une boutique**, même « juste pour
+suivre la sienne ». Une boutique se suit avec un compte de boutique.
 
-Le défaut à l'insertion est `admin` — un opérateur ajouté sans précision est
-le niveau le moins puissant. L'inverse serait dangereux.
-
-`app.est_operateur()` répond toujours « est sur le plan service » et garde ce
-qui est ouvert aux deux. `app.est_proprietaire_saas()` garde le reste.
+`operateurs` reste donc **plat** : pas de hiérarchie `proprietaire` / `admin`
+au niveau service. Une migration la posait ; elle a été écrite puis
+supprimée sans jamais être appliquée, parce qu'elle départageait des gens
+qui n'existent pas. **À reprendre le jour où un deuxième opérateur
+arrive**, pas avant — et ce jour-là le défaut à l'insertion doit être le
+niveau le moins puissant.
 
 **Le plan service ne lit aucune donnée métier.** Ni ventes, ni caisse, ni
 clientes — RLS filtre sur `app.current_org()` et un opérateur n'est membre
-d'aucune organisation. C'est ce qui fait qu'une fuite d'un compte de service
-n'expose le chiffre d'affaires de personne. Décision explicitement reconduite
-le 2026-10-21 : **ne pas ouvrir de lecture inter-boutiques** sans la rouvrir.
+d'aucune organisation *en tant qu'opérateur*. Le fondateur voit sa propre
+boutique parce qu'il en est membre, pas parce qu'il est opérateur. Décision
+reconduite le 2026-10-22 : **ne pas ouvrir de lecture inter-boutiques**.
 Dépanner une boutique se fait au téléphone avec sa propriétaire.
 
-**Le compte du fondateur est propriétaire du service, et rien d'autre** : il
-n'est membre d'aucune boutique, pour que les gestes de service et les gestes
-de commerçant ne partagent jamais la même session.
+**Poser une propriétaire sur une boutique qui existe déjà** passe par
+l'action `creer_proprietaire` de `membres-admin`, réservée à l'opérateur.
+Avant elle, le seul chemin était `creer_boutique`, qui crée la propriétaire
+*en même temps* que la boutique : il n'existait donc aucun moyen de réparer
+une boutique restée sans membre. « Marjan Bijouterie Saint louis » est dans
+ce cas — personne ne peut y entrer.
 
-Nommer ou révoquer un opérateur passe par `nommer_operateur()` et
-`revoquer_operateur()`, jamais par un `insert` à la main : une action sans
-fonction est une action sans contrôle. `revoquer_operateur()` refuse de
-retirer le dernier `proprietaire` — sans quoi plus personne ne pourrait
-changer un plan.
+Ne jamais créer un compte en insérant dans `auth.users` à la main : le
+hachage du mot de passe et la table des identités sont faits par l'API
+Admin, et un compte posé en SQL ne peut pas se connecter.
 
 ## 5. Abonnement et accès payant
 
@@ -453,11 +487,9 @@ lus depuis le navigateur pour accorder un droit**. `app.org_active()` conditionn
 toutes les écritures : une boutique expirée ou suspendue passe en lecture seule
 côté base, pas côté interface.
 
-- Seul le **propriétaire du service** change un plan ou une échéance, pas un
-  simple `admin` du plan service (voir § 4 bis). `creer_boutique()` reste
-  ouverte aux deux ; `modifier_boutique()` et `basculer_boutique()` doivent
-  passer derrière `app.est_proprietaire_saas()` — **pas encore fait**, c'est
-  la partie B annoncée en fin de migration 017.
+- Seul l'opérateur du service change un plan ou une échéance
+  (`creer_boutique()`, `modifier_boutique()`, `basculer_boutique()`, toutes
+  derrière `app.est_operateur()`). Il n'y a qu'un opérateur — voir § 4 bis.
 - Le jour où un paiement en ligne existera : signature des webhooks vérifiée,
   traitement idempotent, et **déblocage uniquement sur confirmation du
   prestataire** — jamais sur un appel venu du navigateur.
@@ -567,6 +599,10 @@ reviendrait à constituer un fichier qu'on n'a aucune raison de détenir.
       Le linter continuera d'afficher l'alerte : c'est normal, il ne voit que
       le réglage natif. Voir « Mots de passe » ci-dessous.
 - [ ] Activer la **MFA** (TOTP) et l'exiger des rôles `proprietaire` et `admin`.
+- [x] ~~Freiner le bourrage sur la connexion d'équipe~~ — fait le 2026-10-22
+      par la limite native de Supabase Auth (30 → 10 / 5 min / IP). Un frein
+      applicatif aurait été contournable et Turnstile aurait cassé la règle 6 :
+      voir § 4.
 - [x] ~~Retirer **EmailJS**~~ et ~~supprimer `public.utilisateurs_archive`~~ —
       faits le 2026-10-14. Le portail cliente ne fait plus **aucune** requête
       vers un domaine tiers.
