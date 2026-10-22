@@ -490,6 +490,12 @@ les comptes rattachés, puis l'action `supprimer_comptes` de `membres-admin`
 les retire de l'authentification. Les identités et les sessions ne vivent pas
 dans une table ordinaire — seule l'API Admin les nettoie.
 
+**`supprimer_comptes` ne touche jamais un compte du plan service**, ni celui
+de l'appelant. « Jamais soi-même » ne suffisait pas : le jour où un deuxième
+opérateur existe, il supprimerait une boutique dont le premier est membre et
+emporterait son compte de service — la console entière avec. `operateurs`
+n'est jamais effacé par `supprimer_boutique()` non plus.
+
 **Poser une propriétaire sur une boutique qui existe déjà** passe par
 l'action `creer_proprietaire` de `membres-admin`, réservée à l'opérateur.
 ⚠ **Écrite le 2026-10-22, pas encore déployée ni testée** — vérifier qu'elle

@@ -343,9 +343,20 @@ Deno.serve(async (req: Request) => {
     const gardes: string[] = [];
     for (const id of ids) {
       if (id === appelant) { gardes.push(id); continue; }   // jamais soi-même
+
+      // Jamais un compte du plan service non plus. « Jamais soi-même » ne
+      // suffit pas : le jour où un deuxième opérateur existe, il supprimerait
+      // une boutique dont un autre opérateur est membre, et emporterait le
+      // compte de service de celui-ci — la console entière avec. Le seul
+      // opérateur d'aujourd'hui est aussi propriétaire d'une boutique : la
+      // mine est déjà posée, elle attend le deuxième.
+      const { data: estOp } = await admin.from('operateurs')
+        .select('user_id').eq('user_id', id).maybeSingle();
+      if (estOp) { gardes.push(id); continue; }
+
       const { data: encore } = await admin.from('membres')
         .select('user_id').eq('user_id', id).maybeSingle();
-      if (encore) { gardes.push(id); continue; }            // encore rattaché
+      if (encore) { gardes.push(id); continue; }            // encore rattaché ailleurs
       const { error } = await admin.auth.admin.deleteUser(id);
       if (!error) retires++;
     }
