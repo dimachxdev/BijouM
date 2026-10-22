@@ -600,13 +600,16 @@ reviendrait à constituer un fichier qu'on n'a aucune raison de détenir.
       plan Pro ; `membres-admin` interroge donc lui-même Have I Been Pwned.
       Le linter continuera d'afficher l'alerte : c'est normal, il ne voit que
       le réglage natif. Voir « Mots de passe » ci-dessous.
-- [ ] **Détacher le compte de service de la boutique** — écrit le 2026-10-22,
-      rien d'appliqué. Dans cet ordre : déployer `membres-admin` (action
-      `creer_proprietaire`), créer la propriétaire depuis la console
-      opérateur, vérifier qu'elle se connecte, puis jouer
-      `migrations/017_detacher_le_compte_de_service.sql`. L'ordre n'est pas
-      négociable : la migration refuse de laisser une boutique sans
-      propriétaire. Même geste pour réparer « Marjan Bijouterie Saint louis ».
+- [ ] **Nettoyer les boutiques d'essai, puis détacher le compte de service.**
+      Écrit le 2026-10-22, rien d'appliqué. Dans cet ordre :
+      `migrations/018_nettoyage_boutiques_de_test.sql` (inventaire d'abord,
+      suppression ensuite), **puis**
+      `migrations/017_detacher_le_compte_de_service.sql`. L'inverse échoue :
+      017 refuse de laisser une boutique sans propriétaire, or le compte de
+      service est la seule propriétaire de l'ancienne.
+      ⚠ 018 supprime définitivement et il n'y a **aucune sauvegarde** : il ne
+      vaut que tant que tout est de l'essai. Après la première boutique
+      payante, ne plus jamais le rejouer tel quel.
 - [ ] Activer la **MFA** (TOTP) et l'exiger des rôles `proprietaire` et `admin`.
 - [x] ~~Freiner le bourrage sur la connexion d'équipe~~ — fait le 2026-10-22
       par la limite native de Supabase Auth (30 → 10 / 5 min / IP). Un frein
