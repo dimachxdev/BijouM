@@ -319,6 +319,41 @@ Deno.serve(async (req: Request) => {
   }
 
   // =========================================================================
+  // OPÉRATEUR — retirer les comptes d'une boutique supprimée
+  // =========================================================================
+  // Second temps de la suppression. Le premier, `supprimer_boutique()` en
+  // SQL, efface les données et renvoie les comptes à retirer ; il ne peut pas
+  // les supprimer lui-même, parce que les identités et les sessions ne vivent
+  // pas dans une table ordinaire — seule l'API Admin les nettoie.
+  //
+  // Volontairement bête : elle ne décide rien. Les verrous sont dans la
+  // fonction SQL, qui a déjà refusé si quoi que ce soit l'interdisait. On
+  // refuse seulement de toucher un compte encore rattaché à une boutique —
+  // filet de sécurité si cette action était appelée seule.
+  if (action === 'supprimer_comptes') {
+    if (!await estOperateur()) {
+      return repondre({ ok: false, erreur: "Réservé à l'opérateur du service." }, 403);
+    }
+
+    const ids: string[] = Array.isArray((corps as Record<string, unknown>).user_ids)
+      ? ((corps as unknown as { user_ids: string[] }).user_ids) : [];
+    if (ids.length === 0) return repondre({ ok: true, retires: 0 });
+
+    let retires = 0;
+    const gardes: string[] = [];
+    for (const id of ids) {
+      if (id === appelant) { gardes.push(id); continue; }   // jamais soi-même
+      const { data: encore } = await admin.from('membres')
+        .select('user_id').eq('user_id', id).maybeSingle();
+      if (encore) { gardes.push(id); continue; }            // encore rattaché
+      const { error } = await admin.auth.admin.deleteUser(id);
+      if (!error) retires++;
+    }
+
+    return repondre({ ok: true, retires, conserves: gardes.length });
+  }
+
+  // =========================================================================
   // OPÉRATEUR — rendre son accès à une propriétaire qui l'a perdu
   // =========================================================================
   if (action === 'motdepasse_proprietaire') {

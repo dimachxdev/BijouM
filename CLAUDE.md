@@ -469,6 +469,27 @@ boutique parce qu'il en est membre, pas parce qu'il est opérateur. Décision
 reconduite le 2026-10-22 : **ne pas ouvrir de lecture inter-boutiques**.
 Dépanner une boutique se fait au téléphone avec sa propriétaire.
 
+**Supprimer une boutique** est l'action la plus destructrice du produit :
+elle efface l'historique commercial entier d'un tenant. Les verrous vivent
+dans `supprimer_boutique()` (migration 019), pas dans le navigateur :
+
+1. opérateur du service, et personne d'autre ;
+2. le **code boutique doit être retapé** et correspondre — un identifiant
+   transmis par erreur ne peut pas emporter une autre boutique ;
+3. la boutique doit être **déjà suspendue** : supprimer devient deux gestes
+   séparés dans le temps, pas un clic dans une liste ;
+4. **ni épargne de cliente, ni créance en cours** — l'argent gardé pour une
+   cliente n'est pas le nôtre, et une créance est une preuve de dette.
+
+Le bouton 🗑 n'apparaît que sur une boutique suspendue. Ce n'est pas lui qui
+protège : la fonction refuse de toute façon. **Ne jamais déplacer un de ces
+quatre contrôles vers `operateur.js`.**
+
+La suppression se fait en deux temps : le SQL efface les données et renvoie
+les comptes rattachés, puis l'action `supprimer_comptes` de `membres-admin`
+les retire de l'authentification. Les identités et les sessions ne vivent pas
+dans une table ordinaire — seule l'API Admin les nettoie.
+
 **Poser une propriétaire sur une boutique qui existe déjà** passe par
 l'action `creer_proprietaire` de `membres-admin`, réservée à l'opérateur.
 ⚠ **Écrite le 2026-10-22, pas encore déployée ni testée** — vérifier qu'elle

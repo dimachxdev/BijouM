@@ -177,7 +177,16 @@
           + '<button class="btn small" data-edit="' + esc(b.id) + '" title="Modifier">✎</button>'
           + '<button class="btn small ' + (b.actif ? 'btn-danger' : '') + '" '
           + 'data-org="' + esc(b.id) + '" data-actif="' + (b.actif ? '0' : '1') + '">'
-          + (b.actif ? 'Suspendre' : 'Réactiver') + '</button></div></td>'
+          + (b.actif ? 'Suspendre' : 'Réactiver') + '</button>'
+          // Supprimer n'apparaît que sur une boutique déjà suspendue. Ce n'est
+          // pas une politesse d'affichage : la fonction SQL refuse de toute
+          // façon tant qu'elle est active. Le bouton suit la règle, il ne la
+          // porte pas.
+          + (b.actif ? '' :
+              '<button class="btn small btn-danger" data-suppr="' + esc(b.id) + '"'
+              + ' data-slug="' + esc(b.slug) + '" data-nom="' + esc(b.nom) + '"'
+              + ' title="Supprimer définitivement">🗑</button>')
+          + '</div></td>'
           + '</tr>';
       }).join('');
     }
@@ -188,6 +197,12 @@
 
     Array.prototype.forEach.call(corps.querySelectorAll('button[data-org]'), function (btn) {
       btn.onclick = function () { basculer(btn.dataset.org, btn.dataset.actif === '1'); };
+    });
+
+    Array.prototype.forEach.call(corps.querySelectorAll('button[data-suppr]'), function (btn) {
+      btn.onclick = function () {
+        supprimerBoutique(btn.dataset.suppr, btn.dataset.slug, btn.dataset.nom);
+      };
     });
     Array.prototype.forEach.call(corps.querySelectorAll('button[data-edit]'), function (btn) {
       btn.onclick = function () { ouvrirEdition(btn.dataset.edit); };
@@ -326,6 +341,56 @@
       await rpc('basculer_boutique', { p_org_id: orgId, p_actif: versActif });
       await rafraichir();
       message('✓ « ' + b.nom + ' » ' + (versActif ? 'réactivée.' : 'suspendue.'));
+    } catch (e) { message(e.message, true); }
+  }
+
+  /**
+   * Supprime définitivement une boutique et tout son historique.
+   *
+   * Tout ce qui compte se passe dans `supprimer_boutique()` côté SQL : rôle
+   * opérateur, code retapé, boutique déjà suspendue, ni épargne de cliente
+   * ni créance en cours. Ce qui suit ne fait que demander le code et relayer
+   * — si cette fonction disparaissait, rien ne serait moins protégé.
+   *
+   * Deux temps : le SQL efface les données et renvoie les comptes rattachés,
+   * puis `membres-admin` les retire de l'authentification. Les identités et
+   * les sessions ne vivent pas dans une table ordinaire.
+   */
+  async function supprimerBoutique(orgId, slug, nom) {
+    var saisi = prompt(
+      'Supprimer « ' + nom + ' » DÉFINITIVEMENT.\n\n'
+      + 'Ventes, clientes, stock, caisse et comptes épargne seront effacés.\n'
+      + 'Il n\'y a aucune sauvegarde : rien ne reviendra.\n\n'
+      + 'Tapez le code de la boutique pour confirmer : ' + slug);
+    if (saisi === null) return;
+
+    try {
+      var d = await rpc('supprimer_boutique', { p_org_id: orgId, p_slug: saisi });
+
+      // Les comptes de connexion, second temps. Un échec ici ne remet pas la
+      // boutique : elle est déjà partie. On le dit plutôt que de le taire.
+      var retires = 0;
+      if (d && d.comptes && d.comptes.length) {
+        try {
+          var r = await fetch(SUPABASE_URL + '/functions/v1/membres-admin', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json',
+                       'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + jeton },
+            body: JSON.stringify({ action: 'supprimer_comptes', user_ids: d.comptes })
+          });
+          var j = await r.json().catch(function () { return {}; });
+          retires = j.retires || 0;
+        } catch (e) {
+          await rafraichir();
+          message('Boutique supprimée, mais ses comptes de connexion subsistent. '
+                + 'Retirez-les depuis Authentication → Users.', true);
+          return;
+        }
+      }
+
+      await rafraichir();
+      message('✓ « ' + d.nom + ' » supprimée — ' + (d.ventes_supprimees || 0)
+            + ' vente(s), ' + retires + ' compte(s) retiré(s).');
     } catch (e) { message(e.message, true); }
   }
 
