@@ -471,6 +471,8 @@ Dépanner une boutique se fait au téléphone avec sa propriétaire.
 
 **Poser une propriétaire sur une boutique qui existe déjà** passe par
 l'action `creer_proprietaire` de `membres-admin`, réservée à l'opérateur.
+⚠ **Écrite le 2026-10-22, pas encore déployée ni testée** — vérifier qu'elle
+répond avant de s'appuyer dessus, et retirer cette ligne une fois en place.
 Avant elle, le seul chemin était `creer_boutique`, qui crée la propriétaire
 *en même temps* que la boutique : il n'existait donc aucun moyen de réparer
 une boutique restée sans membre. « Marjan Bijouterie Saint louis » est dans
@@ -598,6 +600,13 @@ reviendrait à constituer un fichier qu'on n'a aucune raison de détenir.
       plan Pro ; `membres-admin` interroge donc lui-même Have I Been Pwned.
       Le linter continuera d'afficher l'alerte : c'est normal, il ne voit que
       le réglage natif. Voir « Mots de passe » ci-dessous.
+- [ ] **Détacher le compte de service de la boutique** — écrit le 2026-10-22,
+      rien d'appliqué. Dans cet ordre : déployer `membres-admin` (action
+      `creer_proprietaire`), créer la propriétaire depuis la console
+      opérateur, vérifier qu'elle se connecte, puis jouer
+      `migrations/017_detacher_le_compte_de_service.sql`. L'ordre n'est pas
+      négociable : la migration refuse de laisser une boutique sans
+      propriétaire. Même geste pour réparer « Marjan Bijouterie Saint louis ».
 - [ ] Activer la **MFA** (TOTP) et l'exiger des rôles `proprietaire` et `admin`.
 - [x] ~~Freiner le bourrage sur la connexion d'équipe~~ — fait le 2026-10-22
       par la limite native de Supabase Auth (30 → 10 / 5 min / IP). Un frein
