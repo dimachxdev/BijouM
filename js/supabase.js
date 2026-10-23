@@ -935,7 +935,7 @@ async function prochainId(cle, prefixe, largeur) {
     method: 'POST', headers: H(),
     body: JSON.stringify({ p_cle: cle, p_prefixe: prefixe, p_largeur: largeur || 4 })
   });
-  if (!r.ok) throw new Error('Numérotation indisponible (' + r.status + ').');
+  if (!r.ok) throw await _erreurRpc(r, 'Numérotation indisponible');
   return r.json();   // PostgREST renvoie la chaîne directement
 }
 
@@ -952,7 +952,7 @@ async function ouvrirCompteEpargne(compteId, client, date, depotInitial) {
     body: JSON.stringify({ p_compte_id: compteId, p_client: client,
                            p_date: date, p_depot_initial: depotInitial })
   });
-  if (!r.ok) throw new Error('Création refusée (' + r.status + ').');
+  if (!r.ok) throw await _erreurRpc(r, 'Création refusée');
   return r.json();
 }
 
@@ -968,8 +968,29 @@ async function depotCompteEpargne(compteId, montant, date, note) {
     body: JSON.stringify({ p_compte_id: compteId, p_montant: montant,
                            p_date: date || null, p_note: note || null })
   });
-  if (!r.ok) throw new Error('Dépôt refusé (' + r.status + ').');
+  if (!r.ok) throw await _erreurRpc(r, 'Dépôt refusé');
   return r.json();
+}
+
+/**
+ * Transforme une réponse d'erreur PostgREST en message lisible.
+ *
+ * Sept appels se contentaient du code HTTP : « Vente refusée (500) » ne dit
+ * ni quelle contrainte a sauté, ni sur quelle colonne, ni pourquoi. Or
+ * PostgreSQL l'avait écrit dans le corps de la réponse — et on le jetait.
+ * Une panne devenait indiagnosticable sans accès à la base.
+ *
+ * `message` porte l'exception volontaire de nos fonctions (« Solde
+ * insuffisant »), donc il passe en tête. `details` et `hint` viennent du
+ * moteur : utiles au dépannage, mais derrière.
+ */
+async function _erreurRpc(r, prefixe) {
+  var d = {};
+  try { d = await r.json(); } catch (e) { /* corps vide ou illisible */ }
+  var msg    = d.message || d.erreur || d.msg || '';
+  var detail = [d.details, d.hint].filter(Boolean).join(' · ');
+  if (!msg) return new Error(prefixe + ' (' + r.status + ').');
+  return new Error(prefixe + ' : ' + msg + (detail ? ' — ' + detail : ''));
 }
 
 /**
@@ -1000,7 +1021,7 @@ async function venteSurCompteEpargne(p) {
       p_espece:          p.espece || 0
     })
   });
-  if (!r.ok) throw new Error('Vente refusée (' + r.status + ').');
+  if (!r.ok) throw await _erreurRpc(r, 'Vente refusée');
   return r.json();
 }
 
@@ -1019,7 +1040,7 @@ async function enregistrerPaiementVente(venteId, montant, date, paiement) {
       p_date: date || null, p_paiement: paiement || null
     })
   });
-  if (!r.ok) throw new Error('Paiement refusé (' + r.status + ').');
+  if (!r.ok) throw await _erreurRpc(r, 'Paiement refusé');
   return r.json();
 }
 
@@ -1033,7 +1054,7 @@ async function definirPinClient(clientId, pin) {
     method: 'POST', headers: H(),
     body: JSON.stringify({ p_client_id: clientId, p_pin: pin || '' })
   });
-  if (!r.ok) throw new Error('Enregistrement du code refusé (' + r.status + ').');
+  if (!r.ok) throw await _erreurRpc(r, 'Enregistrement du code refusé');
   return r.json();
 }
 
@@ -1048,7 +1069,7 @@ async function viderCompteEpargne(compteId, motif, date, note) {
     body: JSON.stringify({ p_compte_id: compteId, p_motif: motif,
                            p_date: date || null, p_note: note || null })
   });
-  if (!r.ok) throw new Error('Opération refusée (' + r.status + ').');
+  if (!r.ok) throw await _erreurRpc(r, 'Opération refusée');
   var d = await r.json();
   if (d && d.ok === false) throw new Error(d.erreur || 'Opération refusée.');
   return d;

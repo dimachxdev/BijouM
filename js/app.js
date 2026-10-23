@@ -20,7 +20,7 @@
  * qui « peut tout faire » alors que les droits sont restreints, c'est presque
  * toujours ça.
  */
-const APP_VERSION = '2026-10-21-totaux-c';
+const APP_VERSION = '2026-10-23-vente-epargne';
 
 function loadLS(k, fb) { try { const s=localStorage.getItem(k); return s?JSON.parse(s):fb; } catch { return fb; } }
 
@@ -907,9 +907,24 @@ function statutStock(i){
 }
 function tier(t){if(t>=1000000)return{label:'Platine',cls:'tier-platine'};if(t>=500000)return{label:'Or',cls:'tier-gold'};return{label:'Argent',cls:'tier-silver'};}
 
-function calcRestant(mId,aId,dId){
+/**
+ * Affiche le restant dû sous le couple montant / acompte.
+ *
+ * `videVautSolde` : sur la NOUVELLE vente, un acompte laissé vide signifie
+ * « soldé » — c'est ce que fait `enregistrerVente()`, et ce que promet le
+ * libellé du champ (« Laisser vide = soldé »). L'affichage, lui, lisait le
+ * vide comme zéro et annonçait « Restant dû : 50 000 F » sur une vente qui
+ * allait être enregistrée soldée. La vendeuse voyait l'inverse de ce qui
+ * partait en base.
+ *
+ * La fenêtre de MODIFICATION garde l'autre règle : vide y vaut bien zéro,
+ * parce qu'on y corrige un acompte existant. D'où le drapeau plutôt qu'un
+ * changement global.
+ */
+function calcRestant(mId,aId,dId,videVautSolde){
   const m=parseFloat(document.getElementById(mId)?.value)||0;
-  const a=parseFloat(document.getElementById(aId)?.value)||0;
+  const brut=(document.getElementById(aId)?.value||'').trim();
+  const a=(videVautSolde && brut==='') ? m : (parseFloat(brut)||0);
   const r=Math.max(0,m-a);
   const el=document.getElementById(dId);
   if(!el)return;

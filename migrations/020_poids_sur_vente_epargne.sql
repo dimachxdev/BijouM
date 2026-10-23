@@ -1,0 +1,79 @@
+-- ===========================================================================
+-- 020 — Le poids manque sur les ventes réglées sur l'épargne
+-- Écrite le 2026-10-23. NON APPLIQUÉE : il manque le corps actuel, voir plus bas.
+-- ===========================================================================
+-- CE QUI NE VA PAS
+--
+-- `vente_sur_compte_epargne()` ne prend aucun paramètre de poids :
+--
+--   p_vente_id, p_compte_id, p_date, p_description, p_montant,
+--   p_montant_compte, p_paiement, p_carat, p_type_bijou, p_num_facture,
+--   p_note_complement, p_espece
+--
+-- Pas de `p_poids`, pas de `p_local`, pas de `p_importe`. Le navigateur ne
+-- les envoie pas davantage (`venteSurCompteEpargne` dans js/supabase.js).
+--
+-- Or la vendeuse saisit bien un poids dans le formulaire, et le stock est
+-- déduit juste après par `deduireStock(stockRef, poids, nbArticles)`.
+--
+-- CONSÉQUENCE : sur toute vente payée sur épargne, le stock baisse mais la
+-- vente n'enregistre aucun poids. Les deux cessent de se recouper.
+--
+--   * colonnes « Local (g) » et « Importé (g) » du journal : vides ;
+--   * colonne « Poids » de la facture remise à la cliente : « — » ;
+--   * totaux « Or local » / « Or importé » de la barre de cumul : sous-estimés.
+--
+-- Pour une bijouterie, c'est le défaut le plus gênant des trois trouvés ce
+-- jour : l'or sort du stock sans laisser de trace dans les ventes.
+--
+-- ===========================================================================
+-- POURQUOI CE FICHIER EST VIDE DE SQL
+-- ===========================================================================
+-- Corriger demande un `create or replace` de la fonction entière. Son corps
+-- a été appliqué directement en base (migration `vente_epargne_avec_restant`
+-- du 2026-10-16) et n'existe dans aucun fichier ici — le 014 ne contient que
+-- sa documentation.
+--
+-- Le réécrire de mémoire perdrait du comportement sans prévenir : la
+-- transaction vente + retrait, le calcul `acompte = montant_compte + espece`,
+-- les contrôles de solde. Exactement ce qui a déjà coûté 40 000 F d'épargne
+-- à une cliente quand les deux écritures n'étaient pas atomiques.
+--
+-- PREMIÈRE CHOSE À FAIRE, base joignable :
+--
+--   select pg_get_functiondef(p.oid)
+--     from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+--    where n.nspname = 'public' and p.proname = 'vente_sur_compte_epargne';
+--
+-- Puis reposer ce corps à l'identique, en ajoutant trois paramètres en FIN
+-- de signature, avec valeur par défaut — pour que les appels existants
+-- continuent de fonctionner sans être modifiés :
+--
+--   p_poids   numeric default 0,
+--   p_local   numeric default 0,
+--   p_importe numeric default 0
+--
+-- …et en les écrivant dans l'INSERT sur `ventes`, aux colonnes `poids`,
+-- `local`, `importe`.
+--
+-- Ne pas oublier, après : `revoke` / `grant` sur la NOUVELLE signature, et
+-- supprimer l'ancienne si elle reste en double
+-- (`drop function public.vente_sur_compte_epargne(text,text,text,text,integer,integer,text,text,text,text,text,integer)`).
+--
+-- Côté navigateur, `venteSurCompteEpargne()` devra envoyer les trois, et
+-- `enregistrerVente()` les lui passer — il les calcule déjà pour la branche
+-- ordinaire (`local`, `importe` déduits de la provenance de l'article).
+--
+-- ===========================================================================
+-- DONNÉES DÉJÀ ENREGISTRÉES
+-- ===========================================================================
+-- Les ventes sur épargne passées resteront sans poids. Tout étant de l'essai
+-- au 2026-10-22, aucune reprise n'est nécessaire — mais si cela changeait,
+-- les repérer ainsi :
+--
+--   select id, date, client, montant, poids, local, importe
+--     from ventes
+--    where paiement like 'compte%'
+--      and coalesce(poids,0) = 0 and coalesce(local,0) = 0 and coalesce(importe,0) = 0
+--    order by date;
+-- ===========================================================================

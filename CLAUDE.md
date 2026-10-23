@@ -176,6 +176,18 @@ identifiants déjà pris, et les upserts écrasaient les ventes existantes.
 `nextId()` a été supprimé, ne pas le réintroduire. Deux postes qui vendent en
 même temps produiraient le même `V-0042`.
 
+### Ne jamais jeter le corps d'une erreur PostgREST
+
+Sept appels RPC ne gardaient que le code HTTP : « Vente refusée (500) ». Or
+PostgreSQL avait écrit la cause — contrainte violée, colonne, valeur — dans
+le corps de la réponse. Une panne devenait indiagnosticable sans accès à la
+base, et c'est exactement ce qui est arrivé le 2026-10-23.
+
+`_erreurRpc(r, prefixe)` dans `js/supabase.js` est le seul endroit où cela se
+lit : `message` en tête (c'est l'exception volontaire de nos fonctions, écrite
+pour la personne devant l'écran), `details` et `hint` derrière. **Tout nouvel
+appel RPC passe par lui.**
+
 ### Une table, trois fonctions d'écriture
 
 `dbSaveX`, `syncX` et `saveX` coexistent dans `js/supabase.js`. **Ajouter une
@@ -627,16 +639,32 @@ reviendrait à constituer un fichier qu'on n'a aucune raison de détenir.
       plan Pro ; `membres-admin` interroge donc lui-même Have I Been Pwned.
       Le linter continuera d'afficher l'alerte : c'est normal, il ne voit que
       le réglage natif. Voir « Mots de passe » ci-dessous.
-- [ ] **Nettoyer les boutiques d'essai, puis détacher le compte de service.**
-      Écrit le 2026-10-22, rien d'appliqué. Dans cet ordre :
-      `migrations/018_nettoyage_boutiques_de_test.sql` (inventaire d'abord,
-      suppression ensuite), **puis**
-      `migrations/017_detacher_le_compte_de_service.sql`. L'inverse échoue :
-      017 refuse de laisser une boutique sans propriétaire, or le compte de
-      service est la seule propriétaire de l'ancienne.
-      ⚠ 018 supprime définitivement et il n'y a **aucune sauvegarde** : il ne
-      vaut que tant que tout est de l'essai. Après la première boutique
-      payante, ne plus jamais le rejouer tel quel.
+- [ ] **Mise en ordre des comptes et des boutiques d'essai.** Tout est écrit,
+      **rien n'est appliqué ni testé** (2026-10-22). Dans cet ordre :
+
+      1. Appliquer `migrations/019_supprimer_boutique.sql`.
+      2. Déployer `membres-admin` — elle porte trois ajouts non déployés :
+         `creer_proprietaire`, `supprimer_comptes`, et le garde-fou qui
+         épargne les comptes du plan service.
+      3. Recharger la console opérateur (empreinte `2026-10-22a`).
+      4. Suspendre puis supprimer les boutiques d'essai **avec le bouton 🗑**,
+         en commençant par la plus inutile — ce code n'a jamais tourné.
+      5. Compter : `membres` et `operateurs` pour `djilybgueye@gmail.com`.
+         Attendu **0** et **1**. Si c'est le cas,
+         `migrations/017_detacher_le_compte_de_service.sql` est devenue
+         inutile — la suppression a fait le détachement — et
+         `migrations/018_nettoyage_boutiques_de_test.sql` aussi, remplacée
+         par le bouton. Supprimer les deux fichiers.
+      6. Vider `compteurs` de la boutique gardée pour repartir à `V-0001`.
+         **Supprimer les lignes, pas les mettre à zéro** : le trigger
+         `compteurs_monotone` annule silencieusement tout UPDATE qui baisse
+         une valeur. Vérifier avec une vente d'essai, puis la supprimer.
+- [ ] **Le poids manque sur les ventes réglées sur l'épargne.**
+      `vente_sur_compte_epargne()` n'a aucun paramètre de poids : le stock
+      baisse, la vente n'enregistre rien. Journal, facture et totaux or
+      sous-estiment. Marche à suivre dans
+      `migrations/020_poids_sur_vente_epargne.sql` — il faut d'abord sortir
+      le corps actuel de la fonction, qui n'existe dans aucun fichier ici.
 - [ ] Activer la **MFA** (TOTP) et l'exiger des rôles `proprietaire` et `admin`.
 - [x] ~~Freiner le bourrage sur la connexion d'équipe~~ — fait le 2026-10-22
       par la limite native de Supabase Auth (30 → 10 / 5 min / IP). Un frein
