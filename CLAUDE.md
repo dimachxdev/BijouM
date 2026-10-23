@@ -721,12 +721,13 @@ reviendrait à constituer un fichier qu'on n'a aucune raison de détenir.
         `create or replace` pour les deux.
 
       Puis rejouer les **six gestes dans les deux boutiques** (fin de 021).
-- [ ] **Le poids manque sur les ventes réglées sur l'épargne.**
-      `vente_sur_compte_epargne()` n'a aucun paramètre de poids : le stock
-      baisse, la vente n'enregistre rien. Journal, facture et totaux or
-      sous-estiment. Marche à suivre dans
-      `migrations/020_poids_sur_vente_epargne.sql` — il faut d'abord sortir
-      le corps actuel de la fonction, qui n'existe dans aucun fichier ici.
+- [ ] **Appliquer `migrations/022_vente_epargne_etanche.sql`** — écrite à
+      partir du corps réel, corrige quatre défauts d'un coup : le plantage,
+      le contrôle de solde qui additionnait les deux boutiques, l'`UPDATE`
+      qui écrasait le solde de la voisine, et le poids jamais enregistré.
+      Elle remplace les ébauches 020 et 021-A. **Recalculer ensuite les
+      soldes** (requête en fin de fichier) : le troisième défaut a pu les
+      fausser dans les deux boutiques.
 - [ ] Activer la **MFA** (TOTP) et l'exiger des rôles `proprietaire` et `admin`.
 - [x] ~~Freiner le bourrage sur la connexion d'équipe~~ — fait le 2026-10-22
       par la limite native de Supabase Auth (30 → 10 / 5 min / IP). Un frein

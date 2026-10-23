@@ -1018,7 +1018,12 @@ async function venteSurCompteEpargne(p) {
       // Ce que la cliente verse aujourd'hui EN PLUS du compte. Le serveur en
       // déduit l'acompte et le restant dû : une vente sur épargne peut donc
       // rester partiellement due (migration 014).
-      p_espece:          p.espece || 0
+      p_espece:          p.espece || 0,
+      // Le poids n'était pas transmis : le stock baissait, la vente n'en
+      // gardait aucune trace (migration 022).
+      p_poids:           p.poids   || 0,
+      p_local:           p.local   || 0,
+      p_importe:         p.importe || 0
     })
   });
   if (!r.ok) throw await _erreurRpc(r, 'Vente refusée');

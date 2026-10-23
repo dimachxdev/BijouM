@@ -20,7 +20,7 @@
  * qui « peut tout faire » alors que les droits sont restreints, c'est presque
  * toujours ça.
  */
-const APP_VERSION = '2026-10-23-vente-epargne';
+const APP_VERSION = '2026-10-23-epargne-etanche';
 
 function loadLS(k, fb) { try { const s=localStorage.getItem(k); return s?JSON.parse(s):fb; } catch { return fb; } }
 
@@ -1382,7 +1382,9 @@ async function enregistrerVente(){
     if(!cc){showToast('Aucun compte epargne actif pour ce client.');return;}
     if(montant>cc.solde){
       // Solde insuffisant ou vide → ouvrir modal complément
-      ouvrirComplementCC(cc, montant, date, desc, carat, typeBijou);
+      ouvrirComplementCC(cc, montant, date, desc, carat, typeBijou,
+        { ref: stockRef, poids: poids, local: local, importe: importe,
+          nbArticles: nbArticlesV });
       return;
     }
     // Vente + retrait en une seule transaction serveur : les enchaîner ici
@@ -1395,7 +1397,10 @@ async function enregistrerVente(){
       const res = await venteSurCompteEpargne({
         id: idCpt, compteId: cc.id, date: date, description: desc,
         montant: montant, montantCompte: montant,
-        paiement: 'compte', carat: carat, typeBijou: typeBijou, numFacture: facCpt
+        paiement: 'compte', carat: carat, typeBijou: typeBijou, numFacture: facCpt,
+        // Le poids était calculé puis abandonné : la vente partait sans lui
+        // alors que `deduireStock()` retirait bien l'or juste après.
+        poids: poids, local: local, importe: importe
       });
       if(!res || res.ok===false){ showToast('⛔ '+((res&&res.erreur)||'Vente refusée.')); return; }
       if(stockRef && (poids>0 || nbArticlesV>0)) await deduireStock(stockRef, poids, nbArticlesV);
@@ -3251,8 +3256,16 @@ function syncPoidsOr(prefix) {
 // ============================================
 // COMPLEMENT COMPTE ÉPARGNE INSUFFISANT
 // ============================================
-function ouvrirComplementCC(cc, montantVente, date, desc, carat, typeBijou) {
+function ouvrirComplementCC(cc, montantVente, date, desc, carat, typeBijou, stock) {
   var manque = montantVente - cc.solde;
+  // `stock` porte l'article et son poids. Ils n'étaient pas transmis : la
+  // vente aboutissait, le bijou partait, et l'inventaire le comptait encore.
+  var s = stock || {};
+  document.getElementById('complement-cc-stock-ref').value   = s.ref || '';
+  document.getElementById('complement-cc-poids').value       = s.poids || 0;
+  document.getElementById('complement-cc-local').value       = s.local || 0;
+  document.getElementById('complement-cc-importe').value     = s.importe || 0;
+  document.getElementById('complement-cc-nb-articles').value = s.nbArticles || 0;
   document.getElementById('complement-cc-id').value      = cc.id;
   document.getElementById('complement-cc-montant').value = montantVente;
   document.getElementById('complement-cc-date').value    = date;
@@ -3316,6 +3329,12 @@ function validerComplementCC() {
   var typeBijou   = document.getElementById('complement-cc-type').value;
   var montantComp = parseInt(document.getElementById('complement-cc-montant-comp').value)||0;
   var paiementComp= document.getElementById('complement-cc-paiement').value;
+  // L'article et son poids, transmis depuis le formulaire de vente.
+  var cpRef     = document.getElementById('complement-cc-stock-ref').value || '';
+  var cpPoids   = parseFloat(document.getElementById('complement-cc-poids').value)||0;
+  var cpLocal   = parseFloat(document.getElementById('complement-cc-local').value)||0;
+  var cpImporte = parseFloat(document.getElementById('complement-cc-importe').value)||0;
+  var cpNb      = parseInt(document.getElementById('complement-cc-nb-articles').value)||0;
   var cc = STATE.comptesClients.find(function(c){ return c.id===ccId; });
   if(!cc) return;
   // Le complément peut être partiel : le reste devient un restant dû et la
@@ -3339,12 +3358,17 @@ function validerComplementCC() {
       montant: montant, montantCompte: soldeUtilise, espece: montantComp,
       paiement: 'compte+'+paiementComp, carat: carat, typeBijou: typeBijou,
       numFacture: num.numFacture,
+      poids: cpPoids, local: cpLocal, importe: cpImporte,
       noteComplement: 'Compte: '+fmt(soldeUtilise)+' + '+paiementComp+': '+fmt(montantComp)
                     + (resteDu > 0 ? ' — restant dû : '+fmt(resteDu) : '')
     });
   })
-  .then(function(res){
+  .then(async function(res){
     if(!res || res.ok===false){ showToast('⛔ '+((res&&res.erreur)||'Vente refusée.')); return; }
+    // Le stock n'était pas déduit sur ce chemin : le bijou sortait du magasin
+    // et l'inventaire le comptait toujours. Après la vente, comme sur le
+    // chemin ordinaire — jamais avant, sinon un refus laisserait un trou.
+    if (cpRef && (cpPoids > 0 || cpNb > 0)) await deduireStock(cpRef, cpPoids, cpNb);
     // On relit depuis le serveur plutôt que de reconstituer l'état à la main.
     return chargerDonnees().then(function(){
       closeModal('modal-complement-cc'); closeModal('modal-nouvelle-vente');

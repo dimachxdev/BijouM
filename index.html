@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>KAYOR — Brillez sans effort</title>
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml" />
-  <link rel="stylesheet" href="css/style.css?v=2026-10-23a" />
+  <link rel="stylesheet" href="css/style.css?v=2026-10-23b" />
 </head>
 <body>
 
@@ -1487,6 +1487,14 @@
     <input type="hidden" id="complement-cc-desc" />
     <input type="hidden" id="complement-cc-carat" />
     <input type="hidden" id="complement-cc-type" />
+    <!-- L'article et son poids traversent la fenêtre de complément. Sans eux,
+         une vente payée pour partie sur l'épargne sortait le bijou du
+         magasin sans jamais décrémenter le stock. -->
+    <input type="hidden" id="complement-cc-stock-ref" />
+    <input type="hidden" id="complement-cc-poids" />
+    <input type="hidden" id="complement-cc-local" />
+    <input type="hidden" id="complement-cc-importe" />
+    <input type="hidden" id="complement-cc-nb-articles" />
     <!-- Résumé -->
     <div style="background:var(--bg-secondary);border-radius:var(--radius-md);padding:14px;margin-bottom:16px">
       <div style="font-size:14px;font-weight:700;margin-bottom:10px" id="complement-cc-client">—</div>
@@ -1541,11 +1549,11 @@
 
 <div class="toast" id="toast"></div>
   <!-- Supabase SDK -->
-  <script src="js/security.js?v=2026-10-23a"></script>
-  <script src="js/auth.js?v=2026-10-23a"></script>
-  <script src="js/data.js?v=2026-10-23a"></script>
-  <script src="js/supabase.js?v=2026-10-23a"></script>
-  <script src="js/app.js?v=2026-10-23a"></script>
+  <script src="js/security.js?v=2026-10-23b"></script>
+  <script src="js/auth.js?v=2026-10-23b"></script>
+  <script src="js/data.js?v=2026-10-23b"></script>
+  <script src="js/supabase.js?v=2026-10-23b"></script>
+  <script src="js/app.js?v=2026-10-23b"></script>
 
 <!-- MODAL AJUSTER STOCK -->
 <div class="modal-backdrop" id="modal-ajust-stock">
