@@ -332,6 +332,28 @@ La colonne du détail est **Description · Carat · Poids · Montant** (décidé
 2026-10-21). Le poids est le total : la distinction or local / or importé
 reste au journal, elle regarde la gestion du stock, pas la cliente.
 
+Le **titre en millièmes** (`750/1000`) a été retiré de la colonne Carat le
+2026-10-23 : il alourdissait sans parler à la cliente. Il reste dans
+`CARATS_LIST`, pour les écrans de gestion.
+
+Le **moyen de paiement** figure dans le bloc des totaux. Il passe par
+`libellePaiement()`, jamais par `PAIEMENT_LABELS` en direct : une vente
+réglée pour partie sur l'épargne porte un code composé (`compte+wave`) que
+la table des libellés ne connaît pas, et la facture afficherait le code brut.
+
+**Ce qui est imprimé est lu par une cliente** : accents compris. « Especes »
+et « Importe » ont traîné des mois dans `PAIEMENT_LABELS` et `CARATS_LIST`.
+
+**Chaque information n'est écrite qu'une fois** (réorganisation du
+2026-10-23). La facture tenait sur deux pages pour une seule ligne de
+marchandise : l'identité de la boutique figurait en en-tête **et** dans un
+bloc « VENDEUR » juste dessous, sa ligne de contact dans ce bloc **et** en
+pied, le numéro de facture en en-tête **et** en pied.
+
+Aujourd'hui : l'en-tête porte la boutique et son contact, une bande porte la
+cliente, le pied porte conditions et référence. Ne pas réintroduire de bloc
+« VENDEUR » — il répète l'en-tête.
+
 ### Aucune identité de boutique en dur
 
 Jamais « KAYOR », « Dakar », ni un logo écrit dans le code. Tout document

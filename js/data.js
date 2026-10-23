@@ -47,11 +47,11 @@ const CARATS_LIST = [
   { code:'21k-local',   label:'21 carats - Local',   purete:'875/1000', couleur:'#FFC800', origine:'local'   },
   { code:'22k-local',   label:'22 carats - Local',   purete:'916/1000', couleur:'#FFD000', origine:'local'   },
   { code:'24k-local',   label:'24 carats - Local',   purete:'999/1000', couleur:'#FFD700', origine:'local'   },
-  { code:'14k-importe', label:'14 carats - Importe',  purete:'585/1000', couleur:'#E8943A', origine:'importe' },
-  { code:'18k-importe', label:'18 carats - Importe',  purete:'750/1000', couleur:'#FFA500', origine:'importe' },
-  { code:'21k-importe', label:'21 carats - Importe',  purete:'875/1000', couleur:'#FFC000', origine:'importe' },
-  { code:'22k-importe', label:'22 carats - Importe',  purete:'916/1000', couleur:'#FFCA00', origine:'importe' },
-  { code:'24k-importe', label:'24 carats - Importe',  purete:'999/1000', couleur:'#FFD700', origine:'importe' },
+  { code:'14k-importe', label:'14 carats - Importé',  purete:'585/1000', couleur:'#E8943A', origine:'importe' },
+  { code:'18k-importe', label:'18 carats - Importé',  purete:'750/1000', couleur:'#FFA500', origine:'importe' },
+  { code:'21k-importe', label:'21 carats - Importé',  purete:'875/1000', couleur:'#FFC000', origine:'importe' },
+  { code:'22k-importe', label:'22 carats - Importé',  purete:'916/1000', couleur:'#FFCA00', origine:'importe' },
+  { code:'24k-importe', label:'24 carats - Importé',  purete:'999/1000', couleur:'#FFD700', origine:'importe' },
 ];
 
 // ============================================

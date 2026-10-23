@@ -20,7 +20,7 @@
  * qui « peut tout faire » alors que les droits sont restreints, c'est presque
  * toujours ça.
  */
-const APP_VERSION = '2026-10-23-epargne-etanche';
+const APP_VERSION = '2026-10-23-facture-compacte';
 
 function loadLS(k, fb) { try { const s=localStorage.getItem(k); return s?JSON.parse(s):fb; } catch { return fb; } }
 
@@ -39,9 +39,27 @@ const STATE = {
 };
 
 const PAIEMENT_LABELS = {
-  'especes':'Especes', 'wave':'Wave', 'orange-money':'Orange Money',
+  'especes':'Espèces', 'wave':'Wave', 'orange-money':'Orange Money',
   'carte':'Carte', 'livraison':'Livraison', 'compte':'Compte'
 };
+
+/**
+ * Libellé lisible d'un moyen de paiement, formes composées comprises.
+ *
+ * Une vente réglée pour partie sur l'épargne porte `compte+wave` : une part
+ * prise sur le compte, le reste en Wave. `PAIEMENT_LABELS` ne connaît que
+ * les formes simples — sans ce traitement, la facture remise à la cliente
+ * afficherait le code brut.
+ */
+function libellePaiement(code) {
+  var c = code || 'especes';
+  if (c.indexOf('compte+') === 0) {
+    var reste = c.slice('compte+'.length);
+    return 'Compte épargne + ' + (PAIEMENT_LABELS[reste] || reste);
+  }
+  if (c === 'compte') return 'Compte épargne';
+  return PAIEMENT_LABELS[c] || c;
+}
 
 // save() : localStorage + flag Supabase
 function save() {
@@ -4201,8 +4219,8 @@ function genNumFacture(ventId){
  * l'application ne peut rien déborder ailleurs.
  */
 const FACTURE_CSS = `
-.facture{max-width:720px;margin:0 auto;font-family:'Segoe UI',Arial,sans-serif;font-size:13px;color:#111;background:#fff;padding:20px}
-.facture-header{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;margin-bottom:24px}
+.facture{max-width:720px;margin:0 auto;font-family:'Segoe UI',Arial,sans-serif;font-size:13px;color:#111;background:#fff;padding:16px}
+.facture-header{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;margin-bottom:14px;padding-bottom:12px;border-bottom:1.5px solid #e0e0e0}
 .facture-logo-zone{display:flex;align-items:center;gap:14px;min-width:0}
 .facture-logo-icon{font-size:40px;line-height:1}
 .facture-shop-name{font-size:20px;font-weight:700;letter-spacing:1px}
@@ -4211,12 +4229,17 @@ const FACTURE_CSS = `
 .facture-num-label{font-size:10px;font-weight:700;letter-spacing:2px;color:#888;text-transform:uppercase}
 .facture-num{font-size:22px;font-weight:700;margin:4px 0}
 .facture-num-date{font-size:11px;color:#666}
+.facture-client{display:flex;align-items:baseline;flex-wrap:wrap;gap:4px 10px;
+                 background:#f7f6f3;border-radius:6px;padding:8px 12px;margin-bottom:12px}
+.facture-client-label{font-size:9.5px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#888}
+.facture-client-nom{font-size:14px;font-weight:700}
+.facture-client-info{font-size:11.5px;color:#555;overflow-wrap:anywhere}
 .facture-parties{display:flex;gap:16px;margin:20px 0}
 .facture-partie{flex:1;min-width:0;background:#f7f6f3;border-radius:8px;padding:14px}
 .facture-partie-label{font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#888;margin-bottom:6px}
 .facture-partie-nom{font-size:15px;font-weight:700;margin-bottom:4px;overflow-wrap:anywhere}
 .facture-partie-info{font-size:12px;color:#555;margin-top:2px;overflow-wrap:anywhere}
-.facture-sep{border-top:1.5px solid #e0e0e0;margin:18px 0}
+.facture-sep{border-top:1.5px solid #e0e0e0;margin:12px 0}
 .facture-section-title{font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#888;margin-bottom:10px}
 /* min-width:0 est indispensable dans l'aperçu : la feuille de l'application
    impose min-width:520px à TOUTE table, pour le défilement horizontal des
@@ -4237,15 +4260,15 @@ const FACTURE_CSS = `
    ATTENTION : aucun accent grave dans ce bloc — il est lui-même un littéral
    de gabarit, un seul le refermerait et casserait tout le fichier. */
 .facture-table .fa-nowrap{white-space:nowrap;overflow-wrap:normal}
-.facture-totaux{display:flex;flex-direction:column;align-items:flex-end;gap:6px;margin:12px 0}
-.facture-total-row{display:flex;justify-content:space-between;gap:12px;width:300px;max-width:100%;font-size:14px;padding:5px 0;border-bottom:1px solid #f0f0f0}
-.facture-total-final{font-size:16px;font-weight:700;padding:8px 0;border-top:2px solid #1a1916;border-bottom:none}
+.facture-totaux{display:flex;flex-direction:column;align-items:flex-end;gap:3px;margin:10px 0}
+.facture-total-row{display:flex;justify-content:space-between;gap:12px;width:300px;max-width:100%;font-size:13.5px;padding:3px 0;border-bottom:1px solid #f0f0f0}
+.facture-total-final{font-size:16px;font-weight:700;padding:6px 0;border-top:2px solid #1a1916;border-bottom:none}
 .facture .restant-due{color:#a32d2d}
 .facture .solde-ok{color:#3b6d11}
-.facture-footer{margin-top:24px;text-align:center}
-.facture-merci{font-size:15px;font-weight:600;margin-bottom:10px}
-.facture-conditions{font-size:11px;color:#888;line-height:1.6;margin-bottom:8px}
-.facture-footer-ref{font-size:11px;color:#aaa;margin-top:6px}
+.facture-footer{margin-top:14px;padding-top:12px;border-top:1.5px solid #e0e0e0;text-align:center}
+.facture-merci{font-size:14px;font-weight:600;margin-bottom:6px}
+.facture-conditions{font-size:10.5px;color:#888;line-height:1.5;margin-bottom:5px}
+.facture-footer-ref{font-size:10.5px;color:#aaa;margin-top:4px}
 
 /* Téléphone : les deux bandeaux en vis-à-vis s'empilent, sinon le numéro de
    facture et l'adresse de la cliente se écrasent sur trois caractères. */
@@ -4295,7 +4318,9 @@ function afficherFacture(id) {
   const v=STATE.ventes.find(x=>x.id===id); if(!v)return;
   const c=getCarat(v.carat);
   const numFac=genNumFacture(v.id);
-  const caratLabel=c?`${c.label} (${c.purete})`:v.carat?.toUpperCase()||'—';
+  // Le titre en millièmes (750/1000) a été retiré de la facture le
+  // 2026-10-23 : il alourdissait la colonne sans parler à la cliente.
+  const caratLabel=c?c.label:v.carat?.toUpperCase()||'—';
   const cl=STATE.clients.find(x=>x.nom===v.client)||{};
   // Un seul poids sur la facture : c'est le total qui engage la boutique,
   // avec le carat. La distinction local / importé reste au journal, elle
@@ -4307,47 +4332,39 @@ function afficherFacture(id) {
     ? parseFloat(v.poids)
     : (parseFloat(v.local)||0) + (parseFloat(v.importe)||0);
   const restant=v.restant||0;
-  const now=new Date();
   // Identité de la boutique connectée, plus celle codée en dur : en SaaS,
   // chaque bijouterie imprime la sienne.
   const _b = boutiqueInfos();
   document.getElementById('facture-content').innerHTML=`
 <div class="facture" id="facture-print-zone" data-numfac="${esc(numFac)}" data-client="${esc(v.client)}" data-date="${fmtDate(v.date)}">
+  <!-- L'identité de la boutique figurait DEUX fois : ici et dans un bloc
+       « VENDEUR » juste en dessous, sa ligne de contact aussi, et le numéro
+       de facture une troisième fois en pied. La facture tenait sur deux
+       pages pour une seule ligne de marchandise. Chaque information n'est
+       plus écrite qu'une fois, à l'endroit où on la cherche. -->
   <div class="facture-header">
     <div class="facture-logo-zone">
-      ${_logoFacture()}
+      ${_logoFacture(44)}
       <div>
         <div class="facture-shop-name">${esc(_b.nom)}</div>
         ${_b.slogan?`<div class="facture-shop-info">${esc(_b.slogan)}</div>`:""}
-        ${_b.adresse?`<div class="facture-shop-info">${esc(_b.adresse)}</div>`:""}
+        ${boutiqueLigneContact()?`<div class="facture-shop-info">${esc(boutiqueLigneContact())}</div>`:""}
       </div>
     </div>
     <div class="facture-num-zone">
       <div class="facture-num-label">FACTURE</div>
       <div class="facture-num">${numFac}</div>
-      <div class="facture-num-date">Date : ${fmtDate(v.date)}</div>
-      <div class="facture-num-date">Imprimée : ${now.toLocaleDateString('fr-FR')} ${now.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})}</div>
+      <div class="facture-num-date">${fmtDate(v.date)}</div>
     </div>
   </div>
-  <div class="facture-parties">
-    <div class="facture-partie">
-      <div class="facture-partie-label">VENDEUR</div>
-      <div class="facture-partie-nom">${esc(_b.nom)}</div>
-      ${_b.slogan?`<div class="facture-partie-info">${esc(_b.slogan)}</div>`:""}
-      ${_b.adresse?`<div class="facture-partie-info">${esc(_b.adresse)}</div>`:""}
-      ${boutiqueLigneContact()?`<div class="facture-partie-info">${esc(boutiqueLigneContact())}</div>`:""}
-      <div class="facture-partie-info">Gérant : ${esc(STATE.currentUser?.nom||'—')}</div>
-    </div>
-    <div class="facture-partie">
-      <div class="facture-partie-label">CLIENT</div>
-      <div class="facture-partie-nom">${esc(v.client)}</div>
-      ${cl.tel?`<div class="facture-partie-info">Tél : ${esc(cl.tel)}</div>`:''}
-      ${cl.email?`<div class="facture-partie-info">Email : ${esc(cl.email)}</div>`:''}
-      ${cl.adresse?`<div class="facture-partie-info">Adresse : ${esc(cl.adresse)}</div>`:''}
-    </div>
+  <!-- La cliente sur une bande, plus dans un encadré de quatre lignes. -->
+  <div class="facture-client">
+    <span class="facture-client-label">Client</span>
+    <span class="facture-client-nom">${esc(v.client)}</span>
+    ${[cl.tel, cl.email, cl.adresse].filter(Boolean).length
+      ? `<span class="facture-client-info">${esc([cl.tel, cl.email, cl.adresse].filter(Boolean).join(' · '))}</span>`
+      : ''}
   </div>
-  <div class="facture-sep"></div>
-  <div class="facture-section-title">DÉTAIL DE LA PRESTATION</div>
   <table class="facture-table">
     <thead><tr><th>Description</th><th>Carat</th><th style="text-align:center">Poids</th><th style="text-align:right">Montant</th></tr></thead>
     <tbody>
@@ -4362,6 +4379,7 @@ function afficherFacture(id) {
   <div class="facture-sep"></div>
   <div class="facture-totaux">
     <div class="facture-total-row"><span>Montant total</span><strong>${fmt(v.montant)}</strong></div>
+    <div class="facture-total-row"><span>Moyen de paiement</span><span>${esc(libellePaiement(v.paiement))}</span></div>
     ${(v.acompte||0)>0 && (v.acompte||0)<v.montant ? `<div class="facture-total-row"><span>Acompte versé</span><span>${fmt(v.acompte)}</span></div>` : ''}
     ${v.noteComplement ? `<div class="facture-total-row" style="font-size:11px;color:#666"><span>Détail paiement</span><span>${esc(v.noteComplement)}</span></div>` : ''}
     <div class="facture-total-row facture-total-final ${restant>0?'restant-due':'solde-ok'}">
@@ -4369,12 +4387,10 @@ function afficherFacture(id) {
       <strong>${restant>0?fmt(restant):'✓ SOLDÉ'}</strong>
     </div>
   </div>
-  <div class="facture-sep"></div>
   <div class="facture-footer">
     <div class="facture-merci">Merci pour votre confiance</div>
     <div class="facture-conditions">${_b.pied ? esc(_b.pied) : 'Cette facture fait foi de paiement. Les bijoux vendus ne sont ni repris ni échangés sauf défaut de fabrication. Poids et titres garantis.'}</div>
-    ${boutiqueLigneContact() ? `<div class="facture-conditions">${esc(boutiqueLigneContact())}</div>` : ''}
-    <div class="facture-footer-ref">Réf. : ${numFac} — ${fmtDate(v.date)}</div>
+    <div class="facture-footer-ref">${esc(numFac)} · ${fmtDate(v.date)} · Vendu par ${esc(STATE.currentUser?.nom||'—')}</div>
   </div>
 </div>`;
   document.getElementById('modal-facture').classList.add('show');
