@@ -64,6 +64,51 @@ entièrement sur RLS : chaque policy porte `organisation_id = app.current_org()`
 Toute table métier naît avec `organisation_id` et sa policy, dans la même
 migration.
 
+### Une fonction `SECURITY DEFINER` contourne RLS : elle filtre elle-même
+
+C'est le corollaire qu'on oublie. La policy ne protège **pas** le corps d'une
+fonction `SECURITY DEFINER` — elle s'exécute avec les droits de son
+propriétaire. Chaque lecture et chaque écriture y porte donc
+`and organisation_id = v_org`, avec `v_org := app.current_org()` en tête de
+fonction. `vider_compte_epargne()` (migration 013) est le modèle.
+
+**Et les clés primaires sont composées `(organisation_id, id)` : `id` seul
+n'est pas unique.** `CC-0001` existe dans chaque boutique qui en a ouvert un.
+
+Vécu le 2026-10-23 : `vente_sur_compte_epargne()` cherchait un compte par son
+seul identifiant. Avec une boutique, cela marchait. À la seconde, toute vente
+sur épargne est tombée sur
+« *more than one row returned by a subquery used as an expression* ».
+
+**L'erreur était le bon scénario.** Une sous-requête scalaire proteste ; un
+`limit 1`, un `select ... into` ou un agrégat auraient pris en silence la
+ligne d'une **autre boutique** — et crédité, débité ou vendu chez la voisine.
+Un bogue mono-boutique est une fuite multi-boutiques qui attend son deuxième
+tenant.
+
+Toute fonction qui reçoit un identifiant métier du navigateur se relit sous
+cet angle avant d'être considérée comme correcte.
+
+**`SELECT ... INTO` ne proteste pas.** Avec plusieurs lignes, PL/pgSQL prend
+la première en silence. Une sous-requête scalaire, elle, lève une erreur.
+Donc les fonctions qui ne cassent pas sont plus dangereuses que celle qui a
+cassé — c'est ainsi que `portail_donnees()` fusionne aujourd'hui les
+mouvements d'épargne des deux boutiques sans que rien ne le signale.
+
+### Le multi-boutiques ne se teste qu'avec deux boutiques
+
+Tout a été construit et vérifié sur une seule. Avec un seul tenant, aucun
+identifiant ne se recoupe : l'absence de filtre est **invisible par
+construction**, et le reste jusqu'au jour du deuxième client.
+
+Le jeu d'essai doit comporter **deux boutiques portant les mêmes
+identifiants** (`CC-0001`, `CL-0001`, `V-0001`). Les six gestes à rejouer
+dans chacune, en vérifiant à chaque fois que l'autre n'a pas bougé, sont
+listés en fin de `migrations/021_audit_filtre_organisation.sql`.
+
+Tant qu'ils n'ont pas été faits dans les deux, le multi-boutiques n'est pas
+testé : il est supposé.
+
 ### La clé de service ne touche jamais le navigateur
 
 Créer un compte ou remplacer un mot de passe exige l'API Admin de Supabase,
@@ -659,6 +704,23 @@ reviendrait à constituer un fichier qu'on n'a aucune raison de détenir.
          **Supprimer les lignes, pas les mettre à zéro** : le trigger
          `compteurs_monotone` annule silencieusement tout UPDATE qui baisse
          une valeur. Vérifier avec une vente d'essai, puis la supprimer.
+- [ ] **URGENT — le multi-boutiques n'est pas étanche.** Trois défauts
+      confirmés le 2026-10-23, tous invisibles tant qu'il n'y avait qu'une
+      boutique. Détail et marche à suivre :
+      `migrations/021_audit_filtre_organisation.sql`.
+
+      - **Fuite active** : `portail_donnees()` lit les mouvements d'épargne
+        par `compte_id` sans filtre de boutique. Le relevé affiché à une
+        cliente **fusionne les dépôts des deux boutiques**. Aucune collision
+        de nom n'est requise — deux `CC-0001` suffisent.
+      - `portail_donnees()` et `portail_depot()` lisent le nom de la cliente
+        par `clients.id` sans filtre : une cliente peut voir l'épargne d'une
+        homonyme, ou déposer sur son compte.
+      - `vente_sur_compte_epargne()` casse franchement (c'est la chance) et
+        porte aussi le poids manquant (migration 020) : un seul
+        `create or replace` pour les deux.
+
+      Puis rejouer les **six gestes dans les deux boutiques** (fin de 021).
 - [ ] **Le poids manque sur les ventes réglées sur l'épargne.**
       `vente_sur_compte_epargne()` n'a aucun paramètre de poids : le stock
       baisse, la vente n'enregistre rien. Journal, facture et totaux or
