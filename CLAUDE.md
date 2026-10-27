@@ -726,23 +726,20 @@ reviendrait à constituer un fichier qu'on n'a aucune raison de détenir.
          **Supprimer les lignes, pas les mettre à zéro** : le trigger
          `compteurs_monotone` annule silencieusement tout UPDATE qui baisse
          une valeur. Vérifier avec une vente d'essai, puis la supprimer.
-- [ ] **URGENT — le multi-boutiques n'est pas étanche.** Trois défauts
-      confirmés le 2026-10-23, tous invisibles tant qu'il n'y avait qu'une
-      boutique. Détail et marche à suivre :
-      `migrations/021_audit_filtre_organisation.sql`.
-
-      - **Fuite active** : `portail_donnees()` lit les mouvements d'épargne
-        par `compte_id` sans filtre de boutique. Le relevé affiché à une
-        cliente **fusionne les dépôts des deux boutiques**. Aucune collision
-        de nom n'est requise — deux `CC-0001` suffisent.
-      - `portail_donnees()` et `portail_depot()` lisent le nom de la cliente
-        par `clients.id` sans filtre : une cliente peut voir l'épargne d'une
-        homonyme, ou déposer sur son compte.
-      - `vente_sur_compte_epargne()` casse franchement (c'est la chance) et
-        porte aussi le poids manquant (migration 020) : un seul
-        `create or replace` pour les deux.
-
-      Puis rejouer les **six gestes dans les deux boutiques** (fin de 021).
+- [ ] **Appliquer `migrations/023_portail_etanche.sql`** — corrige les cinq
+      filtres manquants du portail cliente : le relevé qui fusionnait les
+      mouvements de deux boutiques, la lecture du nom sans filtre, et le
+      dépôt qui écrasait le solde du compte homonyme des autres boutiques
+      (défaut jumeau de la 022). Passe aussi les lectures en `into strict`.
+      **Recalculer les soldes ensuite**, requête en fin de fichier.
+- [ ] **Rejouer les six gestes dans deux boutiques** (fin de
+      `migrations/021_audit_filtre_organisation.sql`), et relire les autres
+      fonctions `SECURITY DEFINER` listées par l'audit — 022 et 023 ne
+      couvrent que celles déjà examinées.
+- [ ] **Décider de l'identité d'une cliente.** `comptes_clients.client` et
+      `ventes.client` portent un **nom**, pas un identifiant : deux clientes
+      homonymes d'une même boutique partagent épargne et commandes. Antérieur
+      au multi-boutiques, non corrigé par 023.
 - [ ] **Appliquer `migrations/022_vente_epargne_etanche.sql`** — écrite à
       partir du corps réel, corrige quatre défauts d'un coup : le plantage,
       le contrôle de solde qui additionnait les deux boutiques, l'`UPDATE`
