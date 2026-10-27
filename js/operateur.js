@@ -64,7 +64,20 @@
       deconnexion('Session expirée. Reconnectez-vous.');
       throw new Error('Session expirée.');
     }
-    if (!r.ok) throw new Error('Appel refusé (' + r.status + ').');
+    // Le corps de l'erreur porte la cause ; le code HTTP seul ne dit rien.
+    // « Appel refusé (404) » a coûté une recherche entière le 2026-10-27,
+    // alors que PostgreSQL écrivait « function … does not exist » juste
+    // à côté — la migration n'était simplement pas appliquée.
+    // Même règle que `_erreurRpc()` dans js/supabase.js.
+    if (!r.ok) {
+      var e = {};
+      try { e = await r.json(); } catch (_) { /* corps vide ou illisible */ }
+      var msg = e.message || e.erreur || e.msg || '';
+      if (r.status === 404 && /does not exist|not find/i.test(msg)) {
+        msg = 'Cette fonction n\'existe pas en base : la migration n\'a pas été appliquée.';
+      }
+      throw new Error(msg ? 'Appel refusé : ' + msg : 'Appel refusé (' + r.status + ').');
+    }
     var d = await r.json();
     if (d && d.ok === false) throw new Error(d.erreur || 'Opération refusée.');
     return d;
