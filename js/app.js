@@ -20,7 +20,21 @@
  * qui « peut tout faire » alors que les droits sont restreints, c'est presque
  * toujours ça.
  */
-const APP_VERSION = '2026-10-31-vitrine';
+const APP_VERSION = '2026-10-31-vitrine-qr';
+
+/**
+ * Domaine de la vitrine publique, pour le QR imprime sur les factures.
+ *
+ * Volontairement ecrit en dur, et NON `location.origin` : une facture
+ * imprimee depuis une adresse de recette porterait sinon un code qui mene a
+ * la recette. La cliente qui scanne, elle, doit toujours arriver sur le site
+ * reel — et la facture, une fois imprimee, ne se corrige plus.
+ *
+ * Ce n'est pas une entorse a la regle « aucune identite de boutique en
+ * dur » : c'est le domaine du LOGICIEL, pas celui d'une bijouterie. Le nom,
+ * le logo et les coordonnees affiches sur la page viennent tous de la base.
+ */
+const DOMAINE_VITRINE = 'https://www.kayor.net';
 
 function loadLS(k, fb) { try { const s=localStorage.getItem(k); return s?JSON.parse(s):fb; } catch { return fb; } }
 
@@ -307,6 +321,26 @@ function _slugFichier() {
     .normalize('NFD').replace(/[̀-ͯ]/g, '')
     .toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
   return n || 'boutique';
+}
+
+/**
+ * Le QR de la vitrine, en SVG, pour le pied de facture.
+ *
+ * Rend une chaine vide si la boutique n'a pas de code : mieux vaut un pied
+ * de page sans QR qu'un code qui mene nulle part. Et si l'encodeur venait a
+ * lever une exception, elle ne doit pas emporter l'impression de la facture
+ * — une vente se termine, une vitrine est accessoire.
+ */
+function _qrVitrine(taille) {
+  try {
+    var slug = (typeof Auth !== 'undefined' && Auth.connecte()) ? (Auth.boutique().slug || '') : '';
+    if (!slug || typeof QR === 'undefined') return '';
+    return QR.svg(DOMAINE_VITRINE + '/boutique.html?b=' + encodeURIComponent(slug),
+                  { taille: taille || 64, marge: 2 });
+  } catch (e) {
+    console.warn('QR vitrine indisponible :', e.message);
+    return '';
+  }
 }
 
 /** Ligne d'identité pour un document : « Adresse · Tél · NINEA ». */
@@ -4308,6 +4342,13 @@ const FACTURE_CSS = `
 .facture{max-width:720px;margin:0 auto;font-family:'Segoe UI',Arial,sans-serif;font-size:13px;color:#111;background:#fff;padding:16px}
 .facture-header{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;margin-bottom:14px;padding-bottom:12px;border-bottom:1.5px solid #e0e0e0}
 .facture-logo-zone{display:flex;align-items:center;gap:14px;min-width:0}
+.facture-shop-texte{min-width:0}
+/* Le QR vit du cote des coordonnees de la boutique, pas en pied : c'est ici
+   qu'on cherche comment la joindre. Il ne rajoute aucune hauteur — l'en-tete
+   fait deja 56 px avec le logo et les trois lignes d'identite. */
+.facture-qr{flex-shrink:0;width:56px;text-align:center}
+.facture-qr svg{display:block;width:56px;height:56px}
+.facture-qr-txt{font-size:7px;color:#999;line-height:1.25;margin-top:2px}
 .facture-logo-icon{font-size:40px;line-height:1}
 .facture-shop-name{font-size:20px;font-weight:700;letter-spacing:1px}
 .facture-shop-info{font-size:12px;color:#666;margin-top:2px}
@@ -4361,6 +4402,11 @@ const FACTURE_CSS = `
 @media (max-width:640px){
   .facture{padding:14px;font-size:12.5px}
   .facture-header{flex-direction:column;gap:12px;margin-bottom:18px}
+  /* A 330 px, le QR coince le nom de la boutique sur trois lignes. On le
+     laisse passer a la ligne : c'est l'APERCU qui s'allonge un peu, pas la
+     feuille imprimee — le bloc @media print juste dessous remet la rangee. */
+  .facture-logo-zone{flex-wrap:wrap}
+  .facture-qr{margin-left:auto}
   .facture-num-zone{text-align:left}
   .facture-num{font-size:19px}
   .facture-parties{flex-direction:column;gap:10px}
@@ -4382,6 +4428,8 @@ const FACTURE_CSS = `
 @media print{
   .facture{max-width:100%;padding:0}
   .facture-header{flex-direction:row}
+  .facture-logo-zone{flex-wrap:nowrap}
+  .facture-qr{margin-left:0}
   .facture-num-zone{text-align:right}
   .facture-parties{flex-direction:row}
   .facture-totaux{align-items:flex-end}
@@ -4421,6 +4469,9 @@ function afficherFacture(id) {
   // Identité de la boutique connectée, plus celle codée en dur : en SaaS,
   // chaque bijouterie imprime la sienne.
   const _b = boutiqueInfos();
+  // Le QR de la vitrine. Calcule une seule fois : l'encodage coute quelques
+  // millisecondes et le gabarit est relu a chaque ouverture de la facture.
+  const _qrFac = _qrVitrine(64);
   document.getElementById('facture-content').innerHTML=`
 <div class="facture" id="facture-print-zone" data-numfac="${esc(numFac)}" data-client="${esc(v.client)}" data-date="${fmtDate(v.date)}">
   <!-- L'identité de la boutique figurait DEUX fois : ici et dans un bloc
@@ -4431,11 +4482,12 @@ function afficherFacture(id) {
   <div class="facture-header">
     <div class="facture-logo-zone">
       ${_logoFacture(44)}
-      <div>
+      <div class="facture-shop-texte">
         <div class="facture-shop-name">${esc(_b.nom)}</div>
         ${_b.slogan?`<div class="facture-shop-info">${esc(_b.slogan)}</div>`:""}
         ${boutiqueLigneContact()?`<div class="facture-shop-info">${esc(boutiqueLigneContact())}</div>`:""}
       </div>
+      ${_qrFac ? `<div class="facture-qr">${_qrFac}<div class="facture-qr-txt">Horaires<br/>et contacts</div></div>` : ''}
     </div>
     <div class="facture-num-zone">
       <div class="facture-num-label">FACTURE</div>

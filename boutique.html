@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<!-- Titre neutre : il est remplace par le nom de la boutique des que la
+     fiche est chargee. Aucune marque du logiciel ici — c'est la vitrine de
+     la bijouterie, pas la notre. -->
+<title>Boutique</title>
+<meta name="description" content="" />
+<meta name="theme-color" content="#0f0e0c" />
+<style>
+:root{
+  --or:#C9A84C; --or-clair:#e8c96a; --or-fonce:#a8872e;
+  --bg:#0f0e0c; --carte:#1e1c19; --carte2:#252320;
+  --texte:#f0ead8; --doux:#a09070;
+  --bord:rgba(201,168,76,0.18);
+  --radius:16px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{
+  background:var(--bg); color:var(--texte); min-height:100vh;
+  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+  line-height:1.55; -webkit-font-smoothing:antialiased;
+}
+.enveloppe{max-width:560px;margin:0 auto;padding:28px 16px 48px}
+
+/* ── En-tete ─────────────────────────────────────────────── */
+.hero{text-align:center;padding:12px 0 26px}
+.hero img{
+  width:112px;height:112px;object-fit:contain;border-radius:20px;
+  background:#fff;padding:10px;margin-bottom:18px;
+}
+.hero h1{font-size:27px;font-weight:600;letter-spacing:-0.3px;line-height:1.25}
+.hero .slogan{color:var(--or);font-size:14.5px;margin-top:8px;font-style:italic}
+
+/* ── Cartes ──────────────────────────────────────────────── */
+.carte{
+  background:var(--carte); border:1px solid var(--bord);
+  border-radius:var(--radius); padding:20px; margin-top:16px;
+}
+.carte h2{
+  font-size:11.5px; font-weight:700; letter-spacing:1.3px;
+  text-transform:uppercase; color:var(--or); margin-bottom:12px;
+}
+.carte p{font-size:14.5px;color:var(--texte)}
+
+/* Les horaires arrivent en texte libre, une ligne par jour. On preserve les
+   retours a la ligne plutot que d'essayer de les analyser. */
+.horaires{white-space:pre-line;font-size:14.5px}
+
+.adresse{font-size:15px;margin-bottom:4px}
+.repere{color:var(--doux);font-size:13.5px}
+
+/* ── Boutons d'action ────────────────────────────────────── */
+.actions{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:20px}
+.actions a:only-child{grid-column:1/-1}
+.bouton{
+  display:flex;align-items:center;justify-content:center;gap:8px;
+  padding:14px 12px;border-radius:12px;text-decoration:none;
+  font-size:14.5px;font-weight:600;border:1px solid var(--bord);
+  background:var(--carte2);color:var(--texte);
+  transition:border-color .15s,background .15s;
+}
+.bouton:active{background:#2d2a26}
+/* L'or est plat et porte des lettres NOIRES : du blanc sur cet or tombe a
+   1,17:1, invisible sur un telephone en plein jour. Regle du projet. */
+.bouton.or{background:var(--or);color:#1A1916;border-color:var(--or)}
+.bouton.or:active{background:var(--or-fonce)}
+
+/* ── Reseaux ─────────────────────────────────────────────── */
+.reseaux{display:flex;gap:10px;flex-wrap:wrap;margin-top:4px}
+.reseaux a{
+  display:inline-flex;align-items:center;gap:7px;
+  padding:9px 14px;border-radius:999px;text-decoration:none;
+  background:var(--carte2);border:1px solid var(--bord);
+  color:var(--texte);font-size:13.5px;
+}
+.reseaux svg{width:16px;height:16px;fill:var(--or);flex-shrink:0}
+
+/* ── Etats ───────────────────────────────────────────────── */
+#chargement,#erreur{text-align:center;padding:72px 20px;color:var(--doux)}
+#erreur h1{color:var(--texte);font-size:20px;margin-bottom:10px}
+.pied{text-align:center;color:var(--doux);font-size:12px;margin-top:30px}
+
+@media(min-width:560px){ .enveloppe{padding-top:40px} }
+</style>
+</head>
+<body>
+
+<div id="chargement">Chargement…</div>
+
+<div id="erreur" hidden>
+  <h1>Boutique introuvable</h1>
+  <p>Ce lien ne correspond à aucune boutique. Vérifiez le code ou rapprochez-vous du commerçant.</p>
+</div>
+
+<div class="enveloppe" id="vitrine" hidden>
+  <div class="hero">
+    <img id="v-logo" alt="" hidden />
+    <h1 id="v-nom"></h1>
+    <div class="slogan" id="v-slogan" hidden></div>
+  </div>
+
+  <div class="actions" id="v-actions"></div>
+
+  <div class="carte" id="c-presentation" hidden>
+    <h2>À propos</h2>
+    <p id="v-presentation"></p>
+  </div>
+
+  <div class="carte" id="c-horaires" hidden>
+    <h2>Horaires</h2>
+    <div class="horaires" id="v-horaires"></div>
+  </div>
+
+  <div class="carte" id="c-adresse" hidden>
+    <h2>Nous trouver</h2>
+    <div class="adresse" id="v-adresse"></div>
+    <div class="repere" id="v-repere" hidden></div>
+  </div>
+
+  <div class="carte" id="c-reseaux" hidden>
+    <h2>Nous suivre</h2>
+    <div class="reseaux" id="v-reseaux"></div>
+  </div>
+
+  <div class="pied" id="v-pied"></div>
+</div>
+
+<!-- Pas de security.js ici : cette page n'ecrit jamais dans innerHTML ce qui
+     vient de la base, elle passe par textContent. Un fichier de moins a
+     charger sur un telephone en donnees mobiles. -->
+<script src="js/boutique.js?v=2026-10-31b"></script>
+</body>
+</html>

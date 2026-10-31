@@ -449,6 +449,59 @@ Aujourd'hui : l'en-tête porte la boutique et son contact, une bande porte la
 cliente, le pied porte conditions et référence. Ne pas réintroduire de bloc
 « VENDEUR » — il répète l'en-tête.
 
+### La vitrine publique et son QR
+
+`boutique.html?b=MBSS` est la page qu'une cliente ouvre en scannant le code
+imprimé sur sa facture. **C'est la seule page du projet qu'ouvrent des
+inconnus**, et la première lecture sans authentification côté boutique.
+
+- **Une seule porte : `boutique_publique(p_slug)`**, qui énumère ses champs
+  à la main. Ouvrir une policy à `anon` aurait été plus court et aurait
+  publié `plan`, `expire_le` et `actif` — une policy dit quelles *lignes*,
+  jamais quelles *colonnes*. NINEA et RCCM n'y figurent pas non plus
+  (décidé le 2026-10-31) : ils restent sur les documents.
+- **Une boutique suspendue garde sa vitrine.** Y afficher « expiré »
+  révélerait à ses clientes qu'elle nous doit de l'argent. Le levier reste
+  l'écriture, déjà coupée par `app.org_active()`.
+- **Les réseaux sont des pseudos, jamais des URL.** `esc()` échappe le HTML
+  mais laisse passer `javascript:` dans un `href`. Avec un pseudo, la
+  boutique ne tient jamais le schéma de l'adresse. `maps_url` est la seule
+  exception et porte une contrainte `https` **en base**.
+- **`boutique.js` n'écrit jamais dans `innerHTML`** ce qui vient de la base :
+  tout passe par `textContent`, qu'on ne peut pas oublier d'appeler.
+- **Le domaine du QR est écrit en dur** (`DOMAINE_VITRINE`), pas
+  `location.origin` : une facture imprimée depuis une recette porterait
+  sinon un code menant à la recette, et une facture imprimée ne se corrige
+  plus. C'est le domaine du *logiciel*, pas d'une bijouterie — la règle
+  ci-dessous reste intacte.
+- Le QR vit **dans l'en-tête, du côté des coordonnées** : c'est là qu'on
+  cherche comment joindre la boutique. 56 px, il n'ajoute aucune hauteur au
+  papier. Sur téléphone il passe à la ligne ; `@media print` remet la rangée.
+
+### Un encodeur QR maison, et pourquoi il est testé ainsi
+
+`js/qr.js` encode sans dépendance — la règle 6 interdit un `qrcode.js` de
+CDN dans la page où vit le jeton de session. Mode octet, correction **M**
+(le code est imprimé, sur du papier qui se plie), versions 1 à 10.
+
+**Un encodeur QR faux produit une image parfaitement plausible.** Deux
+bogues l'ont prouvé le 2026-10-31, et chacun enseigne la même chose :
+
+1. Le polynôme générateur était construit à l'envers — décalage et
+   multiplication inversés, donc le polynôme réciproque. Vingt tests
+   passaient : ils relisaient les données et **ignoraient la correction**.
+   Trouvé en vérifiant la propriété qui *définit* Reed-Solomon — tous les
+   syndromes d'un mot valide sont nuls.
+2. Les quinze bits de format étaient **transposés** : la norme les désigne
+   en (x, y), la matrice s'indexe `m[ligne][colonne]`. Le décodeur de test
+   les relisait aux mêmes positions fausses. Aucun téléphone ne lisait rien,
+   puisque le format est la première chose qu'un lecteur décode.
+
+**Une vérification qui partage l'hypothèse de ce qu'elle vérifie ne vérifie
+rien.** Les contrôles qui ont servi sont ceux adossés à une autorité
+extérieure : la table des mots de format de l'ISO/IEC 18004, la nullité des
+syndromes — et, seul verdict final, un vrai téléphone.
+
 ### Aucune identité de boutique en dur
 
 Jamais « KAYOR », « Dakar », ni un logo écrit dans le code. Tout document
@@ -912,6 +965,11 @@ reviendrait à constituer un fichier qu'on n'a aucune raison de détenir.
       d'écriture encore sans cette condition, laissée exprès hors de la 027 :
       la conditionner risque un verrouillage dont personne ne pourrait
       sortir. Écrire d'abord le scénario de sortie, décider ensuite.
+- [ ] **Déployer la vitrine publique** — migration 028 appliquée, mais
+      `boutique.html`, `js/boutique.js`, `js/qr.js`, l'écran « Vitrine
+      publique » et le QR sur la facture ne sont pas encore en ligne.
+      Ensuite : imprimer une facture, **scanner le code avec un téléphone**,
+      et vérifier que la page ouvre bien la bonne boutique.
 - [ ] Activer la **MFA** (TOTP) et l'exiger des rôles `proprietaire` et `admin`.
 - [x] ~~Freiner le bourrage sur la connexion d'équipe~~ — fait le 2026-10-22
       par la limite native de Supabase Auth (30 → 10 / 5 min / IP). Un frein

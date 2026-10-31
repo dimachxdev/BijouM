@@ -231,14 +231,24 @@ var QR = (function () {
     var bits = ((donnees << 10) | bch(donnees << 10, 0x537, 10)) ^ 0x5412;
     var n = m.length, i;
 
-    for (i = 0; i <= 5; i++)  m[8][i] = (bits >> i) & 1;
-    m[8][7] = (bits >> 6) & 1;
+    // ATTENTION A L'ORIENTATION. La norme designe ces positions en (x, y) —
+    // colonne puis ligne — alors que la matrice s'indexe m[ligne][colonne].
+    // Les avoir transposees produisait un code d'apparence parfaite qu'aucun
+    // telephone ne lisait : le mot de format est la PREMIERE chose qu'un
+    // lecteur decode, il y prend le niveau de correction et le masque.
+    // Constate le 2026-10-31, au scan — les tests ne l'avaient pas vu,
+    // puisqu'ils relisaient aux memes positions fausses.
+    //
+    // Premiere copie : colonne 8 du haut, puis ligne 8 vers la gauche.
+    for (i = 0; i <= 5; i++)  m[i][8] = (bits >> i) & 1;
+    m[7][8] = (bits >> 6) & 1;
     m[8][8] = (bits >> 7) & 1;
-    m[7][8] = (bits >> 8) & 1;
-    for (i = 9; i <= 14; i++) m[14 - i][8] = (bits >> i) & 1;
+    m[8][7] = (bits >> 8) & 1;
+    for (i = 9; i <= 14; i++) m[8][14 - i] = (bits >> i) & 1;
 
-    for (i = 0; i <= 7; i++)  m[n - 1 - i][8] = (bits >> i) & 1;
-    for (i = 8; i <= 14; i++) m[8][n - 15 + i] = (bits >> i) & 1;
+    // Seconde copie : ligne 8 depuis la droite, puis colonne 8 vers le bas.
+    for (i = 0; i <= 7; i++)  m[8][n - 1 - i] = (bits >> i) & 1;
+    for (i = 8; i <= 14; i++) m[n - 15 + i][8] = (bits >> i) & 1;
 
     m[n - 8][8] = 1;   // module sombre, toujours
   }
