@@ -76,18 +76,32 @@ body{
    de laisser un demi-trou a cote d'elle. `:nth-child(odd)` sur le dernier
    enfant ne vaut que si le compte est impair — c'est exactement le cas. */
 .actions a:last-child:nth-child(odd){grid-column:1/-1}
+/* Chaque lien porte la couleur de son service — c'est ce qui le rend
+   reconnaissable avant d'etre lu. Mais la couleur de la MARQUE n'est pas
+   une couleur de TEXTE : la regle du projet exige 4,5:1, ou 3:1 au-dela de
+   18 px ou en gras >= 14 px. D'ou le 15 px / 700 ci-dessous, qui fait
+   basculer tous ces boutons dans le seuil des gros caracteres.
+   Contrastes MESURES dans le navigateur, texte sur fond :
+     or #C9A84C / #17150f        8,0:1
+     WhatsApp #25D366 / #09240f  8,3:1
+     Maps #1A73E8 / blanc        4,5:1
+     neutre #272420 / --texte   13,1:1
+   Du blanc sur le vert WhatsApp tomberait a 1,98:1 : invisible sur un
+   telephone en plein jour. La couleur d'une marque n'est pas une couleur
+   de texte. */
 .bouton{
   display:flex;align-items:center;justify-content:center;
   padding:14px 12px;border-radius:13px;text-decoration:none;
-  font-size:14.5px;font-weight:600;border:1px solid var(--bord);
+  font-size:15px;font-weight:700;border:1px solid var(--bord);
   background:var(--carte2);color:var(--texte);
-  transition:border-color .15s,background .15s,transform .08s;
+  transition:filter .15s,background .15s,transform .08s;
 }
 .bouton:active{background:#322e28;transform:scale(0.985)}
-/* L'or est plat et porte des lettres NOIRES : du blanc sur cet or tombe a
-   1,17:1, invisible sur un telephone en plein jour. Regle du projet. */
+.bouton.teinte:active{filter:brightness(0.9);transform:scale(0.985)}
+
 .bouton.or{background:var(--or);color:#17150f;border-color:var(--or)}
-.bouton.or:active{background:var(--or-fonce)}
+.bouton.whatsapp{background:#25D366;color:#09240f;border-color:#25D366}
+.bouton.maps{background:#1A73E8;color:#fff;border-color:#1A73E8}
 
 /* ── Cartes ──────────────────────────────────────────────── */
 .carte{
@@ -106,15 +120,26 @@ body{
 .repere{color:var(--doux);font-size:13.5px}
 
 /* ── Reseaux ─────────────────────────────────────────────── */
+/* Memes regles pour les pastilles : chacune sa marque, et 14 px en gras
+   pour rester au seuil des gros caracteres. Contrastes MESURES, blanc sur
+   fond : Instagram 4,34:1 — Facebook 4,23:1 — TikTok 3,68:1. Les trois
+   tiennent le 3:1 exige a cette taille ; AUCUNE ne tiendrait 4,5:1 en
+   caracteres ordinaires. Reduire la taille ou le gras les ferait toutes
+   basculer sous le seuil — TikTok en premier. */
 .reseaux{display:flex;gap:9px;flex-wrap:wrap}
 .reseaux a{
   display:inline-flex;align-items:center;gap:7px;
-  padding:9px 15px;border-radius:999px;text-decoration:none;
-  background:var(--carte2);border:1px solid var(--bord);
-  color:var(--texte);font-size:13.5px;
+  padding:10px 16px;border-radius:999px;text-decoration:none;
+  color:#fff;font-size:14px;font-weight:700;border:1px solid transparent;
+  transition:filter .15s;
 }
-.reseaux a:active{background:#322e28}
-.reseaux svg{width:16px;height:16px;fill:var(--or);flex-shrink:0}
+.reseaux a:active{filter:brightness(0.9)}
+.reseaux svg{width:16px;height:16px;fill:currentColor;flex-shrink:0}
+.reseaux .instagram{
+  background:linear-gradient(45deg,#F77737 0%,#E1306C 50%,#833AB4 100%);
+}
+.reseaux .facebook{background:#1877F2}
+.reseaux .tiktok{background:#FE2C55}
 
 /* ── Etats ───────────────────────────────────────────────── */
 #chargement,#erreur{text-align:center;padding:84px 24px;color:var(--doux)}

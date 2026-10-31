@@ -86,19 +86,24 @@ function construire(b) {
   }
 
   // ── Actions. Chaque lien est fabrique ici, jamais recopie d'une saisie. ──
+  // Chaque lien porte la couleur de son service. Ceux qui n'en ont pas —
+  // appeler, ecrire, le site de la boutique — prennent l'or de la boutique
+  // ou restent neutres : inventer une couleur pour eux ferait de la page un
+  // nuancier, et plus rien ne se distinguerait.
   var actions = [];
   if (b.whatsapp) {
     actions.push({ href: 'https://wa.me/' + encodeURIComponent(b.whatsapp),
-                   texte: 'WhatsApp', or: true });
+                   texte: 'WhatsApp', classe: 'whatsapp teinte' });
   }
   if (b.telephone) {
     // Le numero affichable peut contenir des espaces ; le lien tel: n'en veut pas.
     actions.push({ href: 'tel:' + String(b.telephone).replace(/[^0-9+]/g, ''),
-                   texte: 'Appeler', or: !b.whatsapp });
+                   texte: 'Appeler', classe: 'or teinte' });
   }
   if (b.maps_url) {
     // Seule URL recopiee : la base garantit le schema https (migration 028).
-    actions.push({ href: b.maps_url, texte: 'Itinéraire', externe: true });
+    actions.push({ href: b.maps_url, texte: 'Itinéraire',
+                   classe: 'maps teinte', externe: true });
   }
   if (b.email) actions.push({ href: 'mailto:' + b.email, texte: 'Écrire' });
   if (b.site_web) {
@@ -110,7 +115,7 @@ function construire(b) {
   var zone = $('v-actions');
   actions.forEach(function (a) {
     var el = document.createElement('a');
-    el.className = 'bouton' + (a.or ? ' or' : '');
+    el.className = 'bouton' + (a.classe ? ' ' + a.classe : '');
     el.href = a.href;
     el.textContent = a.texte;
     if (a.externe) { el.target = '_blank'; el.rel = 'noopener noreferrer'; }
@@ -134,6 +139,7 @@ function construire(b) {
     if (!pseudo) return;
     var r = RESEAUX[cle];
     var a = document.createElement('a');
+    a.className = cle;          // instagram | facebook | tiktok — la couleur
     a.href = r.base + encodeURIComponent(pseudo);
     a.target = '_blank';
     a.rel = 'noopener noreferrer';

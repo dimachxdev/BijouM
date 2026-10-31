@@ -480,6 +480,38 @@ inconnus**, et la première lecture sans authentification côté boutique.
   Jamais la marque du logiciel, par la même règle que `_logoFacture()` : un
   repli vers notre identité est pire qu'un champ vide, parce qu'il se
   confond avec un choix de la boutique.
+- **Chaque lien porte la couleur de son service** (décidé le 2026-10-31) :
+  WhatsApp vert, Itinéraire bleu Maps, Instagram en dégradé, Facebook bleu,
+  TikTok rose. Appeler prend l'or de la boutique ; Écrire et Site internet
+  restent neutres — leur inventer une couleur ferait de la page un nuancier.
+
+  **La palette sémantique du § 3 ne s'applique pas ici.** Dans
+  l'application, vert = argent qui entre et rouge = argent qui sort ; sur la
+  vitrine, vert = WhatsApp et rose = TikTok. Ce n'est pas une entorse : ce
+  sont deux surfaces différentes, l'une pour la vendeuse, l'autre pour une
+  inconnue qui reconnaît une marque avant de lire un mot. Ne pas « corriger ».
+
+  **Mais la couleur d'une marque n'est pas une couleur de texte.** Du blanc
+  sur le vert WhatsApp tombe à **1,98:1** — invisible sur un téléphone en
+  plein jour, exactement comme le blanc sur l'or. D'où du texte presque noir
+  sur le vert et sur l'or, et **15 px / 700** sur les boutons, **14 px /
+  700** sur les pastilles : c'est ce qui les fait basculer dans le seuil des
+  gros caractères (3:1 au lieu de 4,5:1).
+
+  Contrastes **mesurés dans le navigateur**, pas estimés :
+
+  | | |
+  |---|---|
+  | Écrire · Site internet | 13,1:1 |
+  | WhatsApp | 8,3:1 |
+  | Appeler (or) | 8,0:1 |
+  | Itinéraire | 4,5:1 |
+  | Instagram | 4,34:1 |
+  | Facebook | 4,23:1 |
+  | TikTok | **3,68:1** |
+
+  TikTok est le plus juste du lot : **réduire la taille ou retirer le gras
+  ferait basculer les trois pastilles sous le seuil, celle-là en premier.**
 - **Aucune mention « Créé avec KAYOR » sur la vitrine** — posé en question
   le 2026-10-31, tranché non. La page est celle de la boutique, affichée à
   sa clientèle, au même titre que la facture. La croissance par signature
