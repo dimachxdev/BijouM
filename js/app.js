@@ -20,7 +20,7 @@
  * qui « peut tout faire » alors que les droits sont restreints, c'est presque
  * toujours ça.
  */
-const APP_VERSION = '2026-10-23-facture-compacte';
+const APP_VERSION = '2026-10-27-identite-cliente';
 
 function loadLS(k, fb) { try { const s=localStorage.getItem(k); return s?JSON.parse(s):fb; } catch { return fb; } }
 
@@ -1005,13 +1005,16 @@ function initClientPicker(fieldId, selected='') {
     // Fallback : select classique
     const sel = document.getElementById(fieldId); if(!sel)return;
     sel.innerHTML='<option value="">— Sélectionner —</option>';
-    STATE.clients.forEach(c=>{const o=document.createElement('option');o.value=c.nom;o.textContent=c.nom;if(c.nom===selected)o.selected=true;sel.appendChild(o);});
+    STATE.clients.forEach(c=>{const o=document.createElement('option');o.value=c.id;o.textContent=c.nom+(c.tel?' — '+c.tel:'');if(c.id===selected)o.selected=true;sel.appendChild(o);});
     return;
   }
   hiddenEl.value = selected || '';
   if (selected) {
-    const cl = STATE.clients.find(c=>c.nom===selected);
-    searchEl.value = cl ? cl.nom + (cl.tel ? ' — ' + cl.tel : '') : selected;
+    // `selected` est un IDENTIFIANT de cliente, plus un nom (migration 025).
+    // Deux clientes peuvent porter le meme nom dans une boutique ; une seule
+    // porte CL-0012.
+    const cl = STATE.clients.find(c=>c.id===selected);
+    searchEl.value = cl ? cl.nom + (cl.tel ? ' — ' + cl.tel : '') : '';
     document.getElementById('picker-'+fieldId)?.classList.add('client-picker-selected');
   } else {
     searchEl.value = '';
@@ -1052,34 +1055,54 @@ function renderClientPickerDrop(fieldId, q='') {
   if (filtres.length === 0) {
     drop.innerHTML = '<div class="client-picker-empty">Aucun client trouvé</div>';
   } else {
+    // L'identifiant part dans le onmousedown, plus le nom : c'est lui qui
+    // designe la cliente. Il passe quand meme par escJs(), et tout ce qui
+    // s'affiche par esc() — l'ancien `.replace(/'/g,"\'")` ne remplacait
+    // l'apostrophe que par elle-meme, et nom/tel entraient bruts.
     drop.innerHTML = filtres.map(c => `
-      <div class="client-picker-item" onmousedown="selectionnerClientPicker('${fieldId}','${c.nom.replace(/'/g,"\'")}')">
-        <div class="client-picker-avatar">${ini(c.nom)}</div>
+      <div class="client-picker-item" onmousedown="selectionnerClientPicker('${escJs(fieldId)}','${escJs(c.id)}')">
+        <div class="client-picker-avatar">${esc(ini(c.nom))}</div>
         <div>
-          <div class="client-picker-nom">${c.nom}</div>
-          <div class="client-picker-tel">${c.tel||''}</div>
+          <div class="client-picker-nom">${esc(c.nom)}</div>
+          <div class="client-picker-tel">${esc(c.tel||'')}</div>
         </div>
       </div>`).join('');
   }
   drop.style.display = 'block';
 }
 
-function selectionnerClientPicker(fieldId, nom) {
+function selectionnerClientPicker(fieldId, clientId) {
   // Annuler le timer de fermeture
   clearTimeout(_pickerTimers[fieldId]);
-  const cl = STATE.clients.find(c=>c.nom===nom);
+  const cl = STATE.clients.find(c=>c.id===clientId);
   const searchEl = document.getElementById(fieldId+'-search');
   const hiddenEl = document.getElementById(fieldId);
   if (!searchEl || !hiddenEl) return;
-  hiddenEl.value = nom;
-  searchEl.value  = cl ? cl.nom + (cl.tel ? ' — ' + cl.tel : '') : nom;
+  // Le champ cache porte l'identifiant ; la zone de saisie montre le nom et
+  // le telephone, qui sont ce que la vendeuse reconnait.
+  hiddenEl.value = clientId;
+  searchEl.value  = cl ? cl.nom + (cl.tel ? ' — ' + cl.tel : '') : '';
   document.getElementById('picker-'+fieldId)?.classList.add('client-picker-selected');
   document.getElementById('picker-drop-'+fieldId).style.display = 'none';
 }
 
 function valeurClientPicker(fieldId) {
-  // Retourne la valeur sélectionnée (depuis hidden input)
+  // Retourne l'IDENTIFIANT de cliente selectionne (depuis hidden input)
   return document.getElementById(fieldId)?.value || '';
+}
+
+// ── Identifiant ↔ nom ──────────────────────────────────────────────────────
+// Depuis la migration 025, une ligne designe sa cliente par `client_id`.
+// La colonne `client` garde le nom tel qu'il a ete imprime sur la facture
+// ce jour-la : une cliente qui se marie change de nom, la facture d'hier
+// non. Ces deux fonctions sont le seul pont entre les deux — ne pas
+// recalculer un nom a partir d'un identifiant ailleurs.
+function clientParId(id) {
+  return id ? (STATE.clients.find(c => c.id === id) || null) : null;
+}
+function nomClientParId(id) {
+  const cl = clientParId(id);
+  return cl ? cl.nom : '';
 }
 
 function peuplerArticleSelect(id) {
@@ -1213,7 +1236,7 @@ function renderJournal(){
   const ft=document.getElementById('filtre-type')?.value||'';
   const fr=document.getElementById('filtre-restant')?.value||'';
   const ventes=[...STATE.ventes].sort((a,b)=>b.date.localeCompare(a.date)).filter(v=>{
-    const clV=STATE.clients.find(c=>c.nom===v.client);
+    const clV=clientParId(v.clientId);
     const qn=normalizeStr(q);
     if(q&&!v.client.toLowerCase().includes(q)&&!v.description.toLowerCase().includes(q)&&!normalizeStr(clV?.tel||'').includes(qn))return false;
     if(fc&&v.carat!==fc)return false;
@@ -1366,7 +1389,10 @@ function prepNouvelleVente(){
 
 async function enregistrerVente(){
   const date    = document.getElementById('v-date').value;
-  const client  = document.getElementById('v-client').value;
+  // Le selecteur rend un IDENTIFIANT ; le nom en est derive et part dans la
+  // colonne `client`, qui est ce qui s'imprime sur la facture.
+  const clientId= document.getElementById('v-client').value;
+  const client  = nomClientParId(clientId);
   const desc    = document.getElementById('v-description').value.trim();
   const paiement= (document.getElementById('v-paiement')&&document.getElementById('v-paiement').value)||'especes';
   const montant = parseInt(document.getElementById('v-montant').value)||0;
@@ -1385,7 +1411,7 @@ async function enregistrerVente(){
   const importe   = stockItem && stockItem.provenance==='importe'? poids : 0;
 
   // Validations
-  if(!date||!client||!stockRef||montant<=0){showToast('Date, client, article en stock et montant sont obligatoires.');return;}
+  if(!date||!clientId||!stockRef||montant<=0){showToast('Date, client, article en stock et montant sont obligatoires.');return;}
   if(poids<=0 && nbArticlesV<=0){showToast('Saisissez le poids vendu et/ou le nombre d\'articles.');return;}
   if(acompte>montant){showToast('Acompte ne peut pas depasser le montant.');return;}
   if(stockItem){
@@ -1396,7 +1422,7 @@ async function enregistrerVente(){
   let compteClientId=null;
   let payeParCompte=0;   // part réglée avec le solde épargne, hors caisse
   if(paiement==='compte'){
-    const cc=STATE.comptesClients.find(c=>c.client===client&&c.actif!==false);
+    const cc=STATE.comptesClients.find(c=>c.clientId===clientId&&c.actif!==false);
     if(!cc){showToast('Aucun compte epargne actif pour ce client.');return;}
     if(montant>cc.solde){
       // Solde insuffisant ou vide → ouvrir modal complément
@@ -1444,7 +1470,7 @@ async function enregistrerVente(){
     var ok = await deduireStock(stockRef, poidsVente, nbArticlesV);
     if(!ok) return;
   }
-  const venteObj={id,date,client,description:desc,local,importe,poids:poidsVente,carat,typeBijou,paiement,montant,acompte,restant:montant-acompte,compteClientId,numFacture,payeParCompte};
+  const venteObj={id,date,client,clientId,description:desc,local,importe,poids:poidsVente,carat,typeBijou,paiement,montant,acompte,restant:montant-acompte,compteClientId,numFacture,payeParCompte};
   STATE.ventes.unshift(venteObj);
   saveAndSyncVente(venteObj);
   closeModal('modal-nouvelle-vente');renderJournal();renderDashboard();renderStocks();
@@ -1461,7 +1487,7 @@ function ouvrirEditVente(id){
   if(!admin){
     showToast('⛔ Modification réservée à l\'administrateur.');return;
   }
-  peuplerSelect('edit-v-carat',v.carat);peuplerTypeBijou('edit-v-type-bijou',v.typeBijou||'');peuplerClientSelect('edit-v-client',v.client);
+  peuplerSelect('edit-v-carat',v.carat);peuplerTypeBijou('edit-v-type-bijou',v.typeBijou||'');peuplerClientSelect('edit-v-client',v.clientId||'');
   document.getElementById('edit-v-id').value=id;
   document.getElementById('edit-v-id-label').textContent='#'+id;
   document.getElementById('edit-v-date').value=v.date;
@@ -1496,7 +1522,8 @@ function sauvegarderVente(){
   const montant = admin ? (parseInt(document.getElementById('edit-v-montant').value)||0) : v.montant;
   const acompte = parseInt(document.getElementById('edit-v-acompte').value)||0;
   const desc    = document.getElementById('edit-v-description').value.trim();
-  const client  = admin ? document.getElementById('edit-v-client').value : v.client;
+  const clientId= admin ? document.getElementById('edit-v-client').value : (v.clientId||'');
+  const client  = admin ? nomClientParId(clientId) : v.client;
   const date    = admin ? document.getElementById('edit-v-date').value : v.date;
   const local   = admin ? (parseFloat(document.getElementById('edit-v-local').value)||0) : v.local;
   const importe = admin ? (parseFloat(document.getElementById('edit-v-importe').value)||0) : v.importe;
@@ -1512,7 +1539,7 @@ function sauvegarderVente(){
   });
   document.getElementById('edit-v-carat').disabled=false;
 
-  Object.assign(v,{date,client,description:desc,local,importe,carat,typeBijou,montant,acompte,restant:montant-acompte});
+  Object.assign(v,{date,client,clientId,description:desc,local,importe,carat,typeBijou,montant,acompte,restant:montant-acompte});
   save();
   saveVente(v); // App → Supabase → App
   closeModal('modal-edit-vente');
@@ -2199,7 +2226,7 @@ function modifierPinClient(clientId){
 function renderComptesClients(filtre=''){
   const q = filtre ? filtre.toLowerCase() : '';
   document.getElementById('cc-count-label').textContent=`${STATE.comptesClients.length} compte${STATE.comptesClients.length>1?'s':''} — épargne bijoux`;
-  const qn3=normalizeStr(q);const ccFiltres = STATE.comptesClients.filter(cc => { if(!q) return true; const clCC=STATE.clients.find(c=>c.nom===cc.client); return cc.client.toLowerCase().includes(q)||normalizeStr(clCC?.tel||'').includes(qn3); });
+  const qn3=normalizeStr(q);const ccFiltres = STATE.comptesClients.filter(cc => { if(!q) return true; const clCC=clientParId(cc.clientId); return cc.client.toLowerCase().includes(q)||normalizeStr(clCC?.tel||'').includes(qn3); });
   document.getElementById('cc-list').innerHTML = ccFiltres.length===0
     ? '<div style="padding:24px;text-align:center;color:var(--text-secondary);font-size:13px">Aucun compte ouvert</div>'
     : ccFiltres.map(cc=>{
@@ -2222,7 +2249,7 @@ function renderComptesClients(filtre=''){
         <div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.4px;color:var(--text-tertiary);margin-bottom:6px">Mouvements</div>
         ${mvts.slice().reverse().slice(0,8).map(m=>`<div style="display:flex;justify-content:space-between;font-size:12px;padding:4px 0;border-bottom:0.5px solid var(--border-light)"><span style="color:var(--text-secondary)">${fmtDate(m.date)} — ${m.note||''}</span><span style="font-weight:600;color:${m.type==='retrait'?'var(--danger-text)':'var(--success-text)'}">${m.type==='retrait'?'- ':'+'}${fmt(m.montant)}</span></div>`).join('')}
         ${(()=>{
-          const vcc=STATE.ventes.filter(v=>v.client===cc.client&&v.compteClientId===cc.id);
+          const vcc=STATE.ventes.filter(v=>v.clientId===cc.clientId&&v.compteClientId===cc.id);
           if(!vcc.length) return '';
           return '<div style="margin-top:8px;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.4px;color:var(--text-tertiary);margin-bottom:4px">Ventes sur ce compte</div>'
             +vcc.map(v=>'<div style="display:flex;justify-content:space-between;font-size:12px;padding:4px 0;border-bottom:0.5px solid var(--border-light)">'
@@ -2309,15 +2336,16 @@ async function confirmerViderCompte() {
 }
 
 function creerCompteClient(){
-  const client=document.getElementById('cc-client').value,date=document.getElementById('cc-date').value,depot=parseInt(document.getElementById('cc-depot-init').value)||0;
-  if(!client||!date||depot<=0){showToast('⚠ Client, date et dépôt initial sont obligatoires.');return;}
+  const clientId=document.getElementById('cc-client').value,date=document.getElementById('cc-date').value,depot=parseInt(document.getElementById('cc-depot-init').value)||0;
+  const client=nomClientParId(clientId);
+  if(!clientId||!date||depot<=0){showToast('⚠ Client, date et dépôt initial sont obligatoires.');return;}
   // Le compte et son dépôt d'ouverture dans une seule transaction serveur :
   // séparés, un compte pouvait exister avec un solde sans mouvement en face.
   var id;
   prochainId('cc','CC',4)
     .then(function(nouvelId){
       id = nouvelId;
-      return ouvrirCompteEpargne(id, client, date, depot);
+      return ouvrirCompteEpargne(id, client, date, depot, clientId);
     })
     .then(function(res){
       if(!res || res.ok===false){ showToast('⛔ '+((res&&res.erreur)||'Création refusée.')); return; }
@@ -2738,7 +2766,8 @@ function creerDecaissementReprise(repriseId){
 
 function enregistrerAchatClient(){
   var date   = document.getElementById('ac-date').value;
-  var client = document.getElementById('ac-client').value;
+  var clientId = document.getElementById('ac-client').value;
+  var client = nomClientParId(clientId);
   var desc   = document.getElementById('ac-description').value.trim();
   var typeBijou = (document.getElementById('ac-type-bijou')&&document.getElementById('ac-type-bijou').value)||'';
   var hasOrAC = TYPES_AVEC_OR_CODES.indexOf(typeBijou)>=0;
@@ -2749,7 +2778,7 @@ function enregistrerAchatClient(){
   var importeAC= (hasOrAC&&prov==='importe')?poids:0;
   var prix   = parseInt(document.getElementById('ac-prix').value)||0;
   var note   = document.getElementById('ac-note').value.trim();
-  if(!date||!client||!desc||!typeBijou||prix<=0){
+  if(!date||!clientId||!desc||!typeBijou||prix<=0){
     showToast('Tous les champs obligatoires doivent etre remplis.');return;
   }
   const fileEl = document.getElementById('ac-photo');
@@ -2760,21 +2789,21 @@ function enregistrerAchatClient(){
     reader.onload = function(e) {
       // La fonction est asynchrone depuis que le numéro vient du serveur :
       // sans ce .catch, un échec resterait invisible.
-      _sauvegarderReprise(date,client,desc,carat,typeBijou,poids,localAC,importeAC,prix,note,e.target.result)
+      _sauvegarderReprise(date,client,desc,carat,typeBijou,poids,localAC,importeAC,prix,note,e.target.result,clientId)
         .catch(function(err){ showToast('⚠ '+err.message); });
     };
     reader.readAsDataURL(file);
   } else {
-    _sauvegarderReprise(date,client,desc,carat,typeBijou,poids,localAC,importeAC,prix,note,null)
+    _sauvegarderReprise(date,client,desc,carat,typeBijou,poids,localAC,importeAC,prix,note,null,clientId)
       .catch(function(err){ showToast('⚠ '+err.message); });
   }
 }
 
-async function _sauvegarderReprise(date,client,desc,carat,typeBijou,poids,localVal,importeVal,prix,note,photo){
+async function _sauvegarderReprise(date,client,desc,carat,typeBijou,poids,localVal,importeVal,prix,note,photo,clientId){
   // Numéro attribué par le serveur, comme pour les autres pièces.
   const id = await prochainId('ac','AC',4);
   const reprise={
-    id, date, client, description:desc, carat, typeBijou, poids,
+    id, date, client, clientId, description:desc, carat, typeBijou, poids,
     local:localVal||0, importe:importeVal||0,
     prixPropose:prix, note, photo: photo||null,
     saisiPar:STATE.currentUser?.role||'admin'
@@ -3024,15 +3053,17 @@ function enregistrerMiniClient() {
     const searchEl = document.getElementById(selId+'-search');
     const hiddenEl = document.getElementById(selId);
     if (searchEl && hiddenEl) {
-      if (selId === targetId) { selectionnerClientPicker(selId, nom); }
+      // On selectionne par l'identifiant de la fiche qui vient d'etre creee,
+      // pas par son nom : un homonyme existe peut-etre deja.
+      if (selId === targetId) { selectionnerClientPicker(selId, newClient.id); }
       return;
     }
     // Fallback select classique
     const sel = document.getElementById(selId); if(!sel)return;
     const opt = document.createElement('option');
-    opt.value=nom; opt.textContent=nom;
+    opt.value=newClient.id; opt.textContent=nom+(tel?' — '+tel:'');
     sel.insertBefore(opt, sel.options[1]||null);
-    if (selId===targetId) sel.value=nom;
+    if (selId===targetId) sel.value=newClient.id;
   });
 
   closeMiniClient();
@@ -3122,7 +3153,7 @@ function validerAjustCC(){
 }
 function imprimerCompteClient(id){
   var cc=STATE.comptesClients.find(function(c){return c.id===id;});if(!cc)return;
-  var ventesCC=STATE.ventes.filter(function(v){return v.client===cc.client&&v.compteClientId===cc.id;});
+  var ventesCC=STATE.ventes.filter(function(v){return v.clientId===cc.clientId&&v.compteClientId===cc.id;});
   var totalDepots=cc.mouvements.filter(function(m){return m.type!=='retrait';}).reduce(function(s,m){return s+m.montant;},0);
   var totalRetraits=cc.mouvements.filter(function(m){return m.type==='retrait';}).reduce(function(s,m){return s+m.montant;},0);
   var now=new Date();
@@ -3160,9 +3191,10 @@ function onChangePaiementVente(){
   var bloc=document.getElementById('v-compte-bloc');
   if(!bloc)return;
   if(paiement!=='compte'){bloc.style.display='none';return;}
-  var clientNom=document.getElementById('v-client')&&document.getElementById('v-client').value;
-  if(!clientNom){bloc.style.display='none';showToast('Selectionnez d\'abord un client.');document.getElementById('v-paiement').value='especes';return;}
-  var cc=STATE.comptesClients.find(function(c){return c.client===clientNom&&c.actif!==false;});
+  var clientId=document.getElementById('v-client')&&document.getElementById('v-client').value;
+  if(!clientId){bloc.style.display='none';showToast('Selectionnez d\'abord un client.');document.getElementById('v-paiement').value='especes';return;}
+  var clientNom=nomClientParId(clientId);
+  var cc=STATE.comptesClients.find(function(c){return c.clientId===clientId&&c.actif!==false;});
   if(!cc){bloc.style.display='none';showToast(clientNom+' n\'a pas de compte epargne actif.');document.getElementById('v-paiement').value='especes';return;}
   document.getElementById('v-compte-nom').textContent=cc.client+' — '+cc.id;
   document.getElementById('v-compte-solde').textContent=fmt(cc.solde);
@@ -4321,7 +4353,7 @@ function afficherFacture(id) {
   // Le titre en millièmes (750/1000) a été retiré de la facture le
   // 2026-10-23 : il alourdissait la colonne sans parler à la cliente.
   const caratLabel=c?c.label:v.carat?.toUpperCase()||'—';
-  const cl=STATE.clients.find(x=>x.nom===v.client)||{};
+  const cl=clientParId(v.clientId)||{};
   // Un seul poids sur la facture : c'est le total qui engage la boutique,
   // avec le carat. La distinction local / importé reste au journal, elle
   // regarde la gestion du stock, pas la cliente.

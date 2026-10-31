@@ -109,6 +109,45 @@ listés en fin de `migrations/021_audit_filtre_organisation.sql`.
 Tant qu'ils n'ont pas été faits dans les deux, le multi-boutiques n'est pas
 testé : il est supposé.
 
+### Une cliente se désigne par son identifiant, jamais par son nom
+
+`ventes`, `comptes_clients`, `reprises` et `bijoux_arrhes` portaient un **nom**
+dans leur colonne `client`. Deux clientes homonymes d'une même boutique
+partageaient donc épargne, commandes et reprises — et `portail_donnees()` les
+rapprochait par ce nom.
+
+Ce n'était pas un filtre oublié : c'était le modèle, antérieur au
+multi-boutiques. Les migrations 022 à 024 n'y touchaient pas.
+
+Vécu le 2026-10-27 : **quatre fiches « astou »** à Saint-Louis, quatre
+numéros de téléphone différents, et chacune « voyait » les sept mêmes ventes
+et le même compte `CC-0001`. Aucune n'avait encore de code PIN — la première
+à en recevoir un aurait ouvert au portail les commandes des quatre.
+
+Depuis les migrations 025 et 026 :
+
+- **`client_id`** porte l'identité, avec une clé étrangère **composée**
+  `(organisation_id, client_id)` → `clients (organisation_id, id)`. Sur la
+  seule colonne `client_id`, une vente pourrait pointer la cliente d'une
+  autre boutique : `CL-0001` existe partout.
+- **`client` (le nom) est conservée** : c'est ce qui a été imprimé sur la
+  facture ce jour-là. Une cliente qui se marie change de nom, la facture
+  d'hier non. Ne pas la resynchroniser depuis `clients`.
+- **`client_id` à NULL veut dire « on ne sait pas »**, et le portail ne
+  montre alors la ligne à personne. L'ancien comportement la montrait à
+  toutes les homonymes. En gestion elle reste visible : c'est un humain qui
+  tranche.
+- `on delete restrict` : une cliente qui a un historique ne peut plus être
+  effacée. L'ordre des `delete` de `supprimer_boutique()` (migration 019)
+  devient donc porteur de sens — les enfants avant `clients`. Ne plus le
+  réarranger.
+- Côté navigateur, le champ caché de `initClientPicker()` porte
+  l'**identifiant**. `clientParId()` et `nomClientParId()` sont le seul pont
+  vers le nom — ne pas en recalculer un ailleurs.
+- `vente_sur_compte_epargne()` ne reçoit pas d'identifiant : elle le prend
+  **sur le compte**. La vente appartient à celle à qui appartient l'épargne
+  qui la paie. Une identité qui se propage ne se re-saisit pas.
+
 ### La clé de service ne touche jamais le navigateur
 
 Créer un compte ou remplacer un mot de passe exige l'API Admin de Supabase,
@@ -163,6 +202,18 @@ serveur. `creer_boutique()` et `app.normaliser_tel()` sont les modèles à suivr
 
 - Numérotées, dans `migrations/`, **jamais modifiées une fois appliquées**.
 - Chaque fichier commence par ce qu'il corrige et pourquoi.
+- **Un fichier écrit n'est pas une migration appliquée.** Vérifié le
+  2026-10-27 : la 023 était rédigée, relue, annoncée comme passée — et
+  absente de la base. La fuite qu'elle ferme (le relevé d'épargne du portail,
+  qui fusionnait deux boutiques) est restée ouverte quatre jours de plus.
+  Après chaque application, relire le **corps réel** de chaque fonction
+  touchée :
+  ```sql
+  select proname, array_to_string(proconfig,' | ') as search_path,
+         pg_get_functiondef(oid)
+    from pg_proc where proname = 'ma_fonction';
+  ```
+  Le « succès » d'une migration ne prouve que l'absence d'erreur de syntaxe.
 - Toujours tester la policy en **se mettant à la place d'un rôle** :
   `set local role authenticated` + `request.jwt.claims`, puis compter les lignes.
 - Après toute migration, passer le linter Supabase (*Advisors → Security*) et
@@ -179,6 +230,50 @@ les douze compteurs remettables à zéro par n'importe qui (migration 011).
 rôles exigés × `current_org` × `org_active` — et chercher les cases vides.
 Le linter ne voit pas ces trous : les policies existent, elles sont seulement
 trop larges.
+
+**Dressée pour la première fois le 2026-10-31.** Résultat : les 46 policies
+des 20 tables portent toutes `current_org`, et les données le confirment —
+zéro croisement entre boutiques sur les cinq relations dépourvues de clé
+étrangère (`mouvements_cc.compte_id`, `ventes.compte_client_id`,
+`decaissements.origine_id`, `mouvements_arrhes.arrhes_id`,
+`portail_sessions.client_id`). L'étanchéité des tenants est **acquise et
+mesurée**, pas supposée.
+
+Les deux trous qu'elle a révélés n'étaient pas des fuites entre boutiques
+(migration 027) :
+
+### Une policy RLS ne filtre pas les colonnes
+
+C'est le piège que la matrice seule ne montre pas. `org_update` autorisait
+à juste titre une `proprietaire` à modifier **sa ligne** d'`organisations` —
+mais une policy dit *quelles lignes*, jamais *quelles colonnes*. Seul un
+`grant update (col, col, …)` le fait, et `authenticated` les avait toutes.
+
+Donc `plan`, `expire_le` et `actif` étaient réglables depuis la console du
+navigateur : abonnement illimité gratuit, et **une boutique suspendue
+pouvait annuler sa propre suspension**. Or `app.org_active()` lit exactement
+`actif` et `expire_le` — la clé qui conditionne toutes les écritures était
+aux mains de la personne qu'elle contraint.
+
+**Toute colonne sensible se protège par un `grant` nommé, pas par une
+policy.** Les huit colonnes ouvertes sont celles que
+`enregistrerProfilBoutique()` écrit vraiment. En ajouter une à l'écran des
+paramètres impose de l'ajouter au `grant` — jamais un `grant update` nu.
+
+### `org_active()` manquait sur les `DELETE`
+
+Les huit policies `DELETE` avaient `current_org` et le contrôle de rôle, pas
+`app.org_active()` — contrairement à leurs voisines `INSERT` et `UPDATE`.
+Vérifié sur la boutique réellement suspendue : l'`INSERT` d'une vente était
+refusé, le `DELETE` de ses sept ventes passait.
+
+Le § 5 promet une lecture seule. Le seul geste resté possible était donc le
+**destructeur**, épargne des clientes comprise — de l'argent qui ne
+appartient pas à la boutique. Une case vide dans une seule colonne de la
+matrice peut inverser le sens d'une garantie.
+
+`supprimer_boutique()` n'en souffre pas : elle est `SECURITY DEFINER`, donc
+hors policies — et elle exige que la boutique soit déjà suspendue.
 
 ### Alertes du linter qui sont normales ici
 
@@ -598,6 +693,13 @@ côté base, pas côté interface.
 - Seul l'opérateur du service change un plan ou une échéance
   (`creer_boutique()`, `modifier_boutique()`, `basculer_boutique()`, toutes
   derrière `app.est_operateur()`). Il n'y a qu'un opérateur — voir § 4 bis.
+
+  **Ce n'était vrai que sur le papier jusqu'au 2026-10-31.** `authenticated`
+  avait l'`UPDATE` sur toutes les colonnes d'`organisations` : une
+  propriétaire s'octroyait `plan`, `expire_le` et `actif` depuis la console.
+  La migration 027 limite l'`UPDATE` à huit colonnes d'identité. Voir « Une
+  policy RLS ne filtre pas les colonnes » au § 1 — une restriction qui
+  n'existe que dans une fonction non appelée n'existe pas.
 - Le jour où un paiement en ligne existera : signature des webhooks vérifiée,
   traitement idempotent, et **déblocage uniquement sur confirmation du
   prestataire** — jamais sur un appel venu du navigateur.
@@ -726,27 +828,47 @@ reviendrait à constituer un fichier qu'on n'a aucune raison de détenir.
          **Supprimer les lignes, pas les mettre à zéro** : le trigger
          `compteurs_monotone` annule silencieusement tout UPDATE qui baisse
          une valeur. Vérifier avec une vente d'essai, puis la supprimer.
-- [ ] **Appliquer `migrations/023_portail_etanche.sql`** — corrige les cinq
-      filtres manquants du portail cliente : le relevé qui fusionnait les
-      mouvements de deux boutiques, la lecture du nom sans filtre, et le
-      dépôt qui écrasait le solde du compte homonyme des autres boutiques
-      (défaut jumeau de la 022). Passe aussi les lectures en `into strict`.
-      **Recalculer les soldes ensuite**, requête en fin de fichier.
+- [x] ~~**L'audit des fonctions `SECURITY DEFINER`**~~ — terminé le
+      2026-10-27. Sept défauts de filtre, corrigés par les migrations 022,
+      023 et 024, **toutes trois vérifiées présentes en base** sur le corps
+      réel des fonctions. Soldes recalés : aucun n'était faux.
+      Vérifiées correctes et à ne pas rouvrir « par symétrie » :
+      `prochain_id`, `ouvrir_compte_epargne`, `enregistrer_paiement_vente`,
+      `vider_compte_epargne`.
 - [ ] **Rejouer les six gestes dans deux boutiques** (fin de
-      `migrations/021_audit_filtre_organisation.sql`), et relire les autres
-      fonctions `SECURITY DEFINER` listées par l'audit — 022 et 023 ne
-      couvrent que celles déjà examinées.
-- [ ] **Décider de l'identité d'une cliente.** `comptes_clients.client` et
-      `ventes.client` portent un **nom**, pas un identifiant : deux clientes
-      homonymes d'une même boutique partagent épargne et commandes. Antérieur
-      au multi-boutiques, non corrigé par 023.
-- [ ] **Appliquer `migrations/022_vente_epargne_etanche.sql`** — écrite à
-      partir du corps réel, corrige quatre défauts d'un coup : le plantage,
-      le contrôle de solde qui additionnait les deux boutiques, l'`UPDATE`
-      qui écrasait le solde de la voisine, et le poids jamais enregistré.
-      Elle remplace les ébauches 020 et 021-A. **Recalculer ensuite les
-      soldes** (requête en fin de fichier) : le troisième défaut a pu les
-      fausser dans les deux boutiques.
+      `migrations/021_audit_filtre_organisation.sql`). Le jeu d'essai existe
+      déjà : `CC-0001` est ouvert à Dakar (Djily) et à Saint-Louis (astou),
+      `CL-010` et `V-0001`..`V-0006` existent dans les deux. Le code est
+      corrigé, **il n'est pas testé**.
+- [ ] **Appeler `definir_pin_client` une fois depuis l'application.** La
+      migration 024 l'a réécrite ; `crypt()` se résout bien sous son
+      `search_path`, mais seule la route prouve qu'elle répond. C'est le
+      défaut qui a mis le portail hors service deux fois.
+- [ ] **Trancher `prochain_id` et `app.org_active()`.** Elle ne l'appelle
+      pas : une boutique suspendue peut consommer des numéros, la vente qui
+      suit étant refusée par la policy. Seul effet, un trou dans la
+      numérotation — entorse au § 5, pas une fuite. Laissée hors de la 024
+      parce qu'elle est la fonction la plus appelée de l'application.
+- [x] ~~**Décider de l'identité d'une cliente**~~ — fait le 2026-10-27,
+      migrations 025 et 026 appliquées et vérifiées. `client_id` posé sur
+      les quatre tables, rempli à 100 % (29 lignes), clé étrangère composée,
+      et les quatre fonctions serveur rapprochent par l'identifiant. Voir
+      « Une cliente se désigne par son identifiant » au § 1.
+- [ ] **Le test qui compte pour l'identité cliente** : créer deux clientes
+      **homonymes** dans une boutique, une vente et un compte épargne pour
+      chacune, puis ouvrir le portail de l'une. Elle ne doit voir que les
+      siens. C'est le défaut que 025 et 026 ferment, et il ne se voit pas
+      autrement.
+- [x] ~~**Dresser la matrice `pg_policy`**~~ — fait le 2026-10-31. Les 46
+      policies portent `current_org`, aucun croisement de données entre
+      boutiques. Deux trous d'une autre nature trouvés et fermés par la
+      migration 027, appliquée et vérifiée par cinq contre-épreuves sous
+      l'identité des rôles : l'abonnement auto-attribué et le `DELETE` sur
+      boutique suspendue. Voir § 1 et § 5.
+- [ ] **Trancher `membres_write` et `app.org_active()`.** Seule policy
+      d'écriture encore sans cette condition, laissée exprès hors de la 027 :
+      la conditionner risque un verrouillage dont personne ne pourrait
+      sortir. Écrire d'abord le scénario de sortie, décider ensuite.
 - [ ] Activer la **MFA** (TOTP) et l'exiger des rôles `proprietaire` et `admin`.
 - [x] ~~Freiner le bourrage sur la connexion d'équipe~~ — fait le 2026-10-22
       par la limite native de Supabase Auth (30 → 10 / 5 min / IP). Un frein

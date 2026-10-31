@@ -182,7 +182,7 @@ async function chargerDonnees() {
 // ============================================
 async function dbSaveVente(v) {
   var row = {
-    id:v.id, date:v.date, client:v.client||null,
+    id:v.id, date:v.date, client:v.client||null, client_id:v.clientId||v.client_id||null,
     description:v.description||null, type_bijou:v.typeBijou||null,
     carat:v.carat||null, poids:v.poids||0,
     local:v.local||0, importe:v.importe||0,
@@ -224,7 +224,7 @@ async function dbSaveClient(c) {
 
 async function dbSaveCompteClient(cc) {
   await _supa.upsert('comptes_clients', {
-    id:cc.id, client:cc.client,
+    id:cc.id, client:cc.client, client_id:cc.clientId||cc.client_id||null,
     date_ouverture:cc.dateOuverture||null,
     solde:cc.solde||0, actif:cc.actif!==false
   });
@@ -277,7 +277,7 @@ async function dbSaveDecaissement(d) {
 
 async function dbSaveReprise(r) {
   await _supa.upsert('reprises', {
-    id:r.id, date:r.date, client:r.client||null,
+    id:r.id, date:r.date, client:r.client||null, client_id:r.clientId||r.client_id||null,
     description:r.description||null, type_bijou:r.typeBijou||null,
     carat:r.carat||null, poids:r.poids||0,
     local:r.local||0, importe:r.importe||0,
@@ -288,7 +288,7 @@ async function dbSaveReprise(r) {
 
 async function dbSaveBijouArr(ba) {
   await _supa.upsert('bijoux_arrhes', {
-    id:ba.id, date:ba.date, client:ba.client||null,
+    id:ba.id, date:ba.date, client:ba.client||null, client_id:ba.clientId||ba.client_id||null,
     article:ba.article||null, description:ba.description||null,
     prix_total:ba.prixTotal||0, arrhes_verse:ba.arrhesVerse||0,
     restant_du:ba.restantDu||0, date_echeance:ba.dateEcheance||null,
@@ -524,7 +524,7 @@ function applyChange(arr, event, item, oldId, key) {
 // FONCTIONS DE MAPPING snake_case → camelCase
 // ============================================
 function mapVente(v) {
-  return { id:v.id, date:v.date, client:v.client, description:v.description,
+  return { id:v.id, date:v.date, client:v.client, description:v.description, clientId:v.client_id||null,
     typeBijou:v.type_bijou, carat:v.carat, poids:v.poids||0,
     local:v.local||0, importe:v.importe||0, paiement:v.paiement,
     montant:v.montant||0, acompte:v.acompte||0, restant:v.restant||0,
@@ -549,12 +549,12 @@ function mapDecaiss(d) {
     origineType:d.origine_type||null, origineId:d.origine_id||null };
 }
 function mapCompte(cc) {
-  return { id:cc.id, client:cc.client,
+  return { id:cc.id, client:cc.client, clientId:cc.client_id||null,
     dateOuverture:cc.date_ouverture||cc.dateOuverture||null,
     solde:cc.solde||0, actif:cc.actif!==false, mouvements:cc.mouvements||[] };
 }
 function mapReprise(r) {
-  return { id:r.id, date:r.date, client:r.client, description:r.description,
+  return { id:r.id, date:r.date, client:r.client, description:r.description, clientId:r.client_id||null,
     typeBijou:r.type_bijou||r.typeBijou, carat:r.carat, poids:r.poids||0,
     local:r.local||0, importe:r.importe||0, prixPropose:r.prix||r.prixPropose||0,
     note:r.note, photo:r.photo, creePar:r.created_by||null };
@@ -663,7 +663,7 @@ async function supaDeleteReadRender(table, id, stateKey, renderFn, idField) {
 
 async function syncVente(v) {
   var row = {
-    id:v.id, date:v.date, client:v.client||null, description:v.description||null,
+    id:v.id, date:v.date, client:v.client||null, description:v.description||null, client_id:v.clientId||v.client_id||null,
     type_bijou:v.typeBijou||null, carat:v.carat||null, poids:v.poids||0,
     local:v.local||0, importe:v.importe||0, paiement:v.paiement||null,
     montant:v.montant||0, acompte:v.acompte||0, restant:v.restant||0
@@ -723,7 +723,7 @@ async function syncCompteClient(cc) {
   await _db('syncCompteClient', async function() {
     // Écrire le compte
     await _supa.upsert('comptes_clients', {
-      id:cc.id, client:cc.client, date_ouverture:cc.dateOuverture||null,
+      id:cc.id, client:cc.client, date_ouverture:cc.dateOuverture||null, client_id:cc.clientId||cc.client_id||null,
       solde:cc.solde||0, actif:cc.actif!==false
     });
     // Écrire les mouvements (delete + insert)
@@ -761,7 +761,7 @@ async function syncDecaissement(d) {
 }
 
 async function syncReprise(r) {
-  var row = { id:r.id, date:r.date, client:r.client||null, description:r.description||null,
+  var row = { id:r.id, date:r.date, client:r.client||null, description:r.description||null, client_id:r.clientId||r.client_id||null,
     type_bijou:r.typeBijou||null, carat:r.carat||null, poids:r.poids||0,
     local:r.local||0, importe:r.importe||0, prix:r.prixPropose||0,
     note:r.note||null, photo:r.photo||null };
@@ -772,7 +772,7 @@ async function syncReprise(r) {
 async function syncBijouArr(ba) {
   await _db('syncBijouArr', async function() {
     await _supa.upsert('bijoux_arrhes', {
-      id:ba.id, date:ba.date, client:ba.client||null,
+      id:ba.id, date:ba.date, client:ba.client||null, client_id:ba.clientId||ba.client_id||null,
       article:ba.article||null, description:ba.description||null,
       prix_total:ba.prixTotal||0, arrhes_verse:ba.arrhesVerse||0,
       restant_du:ba.restantDu||0, date_echeance:ba.dateEcheance||null,
@@ -879,7 +879,7 @@ async function saveVente(v) {
   // créait bien le décaissement, mais la vente restait comptée au chiffre
   // d'affaires.
   await _writeAndRefresh('ventes', {
-    id:v.id, date:v.date, client:v.client||null,
+    id:v.id, date:v.date, client:v.client||null, client_id:v.clientId||v.client_id||null,
     description:v.description||null, type_bijou:v.typeBijou||null,
     carat:v.carat||null, poids:v.poids||0,
     local:v.local||0, importe:v.importe||0, paiement:v.paiement||null,
@@ -946,11 +946,15 @@ async function prochainsIdsVente() {
 }
 
 /** Ouvre un compte épargne avec son dépôt initial — une seule transaction. */
-async function ouvrirCompteEpargne(compteId, client, date, depotInitial) {
+async function ouvrirCompteEpargne(compteId, client, date, depotInitial, clientId) {
   var r = await fetch(SUPABASE_URL + '/rest/v1/rpc/ouvrir_compte_epargne', {
     method: 'POST', headers: H(),
+    // `p_client` reste le nom affiche ; `p_client_id` est ce qui designe la
+    // cliente depuis la migration 025. Le serveur verifie que l'identifiant
+    // appartient bien a la boutique.
     body: JSON.stringify({ p_compte_id: compteId, p_client: client,
-                           p_date: date, p_depot_initial: depotInitial })
+                           p_date: date, p_depot_initial: depotInitial,
+                           p_client_id: clientId || null })
   });
   if (!r.ok) throw await _erreurRpc(r, 'Création refusée');
   return r.json();
@@ -1141,7 +1145,7 @@ async function saveClient(c) {
 
 async function saveCompteClient(cc) {
   await _writeAndRefresh('comptes_clients', {
-    id:cc.id, client:cc.client,
+    id:cc.id, client:cc.client, client_id:cc.clientId||cc.client_id||null,
     date_ouverture:cc.dateOuverture||null,
     solde:cc.solde||0, actif:cc.actif!==false
   }, null);
@@ -1187,7 +1191,7 @@ async function saveDecaissement(d) {
 
 async function saveReprise(r) {
   await _writeAndRefresh('reprises', {
-    id:r.id, date:r.date, client:r.client||null,
+    id:r.id, date:r.date, client:r.client||null, client_id:r.clientId||r.client_id||null,
     description:r.description||null, type_bijou:r.typeBijou||null,
     carat:r.carat||null, poids:r.poids||0,
     local:r.local||0, importe:r.importe||0,
@@ -1200,7 +1204,7 @@ async function saveReprise(r) {
 
 async function saveBijouArr(ba) {
   await _writeAndRefresh('bijoux_arrhes', {
-    id:ba.id, date:ba.date, client:ba.client||null,
+    id:ba.id, date:ba.date, client:ba.client||null, client_id:ba.clientId||ba.client_id||null,
     article:ba.article||null, description:ba.description||null,
     prix_total:ba.prixTotal||0, arrhes_verse:ba.arrhesVerse||0,
     restant_du:ba.restantDu||0, date_echeance:ba.dateEcheance||null,
@@ -1269,8 +1273,25 @@ async function deleteDecaissement(id) {
   await _supa.deleteRow('decaissements', id);
   await reloadDecaissements();
 }
+/**
+ * Supprime une fiche cliente.
+ *
+ * Non branchee dans l'interface a ce jour. Depuis la migration 025, ses
+ * ventes, comptes epargne, reprises et bijoux en arrhes la referencent par
+ * `client_id` avec `on delete restrict` : la base refuse d'effacer une
+ * cliente qui a un historique, et c'est voulu — sinon ces lignes pointeraient
+ * un nom ne designant plus personne.
+ */
 async function deleteClient(id) {
-  await _supa.deleteRow('clients', id);
+  try {
+    await _supa.deleteRow('clients', id);
+  } catch (e) {
+    if (/23503|foreign key|violates/i.test(e.message || '')) {
+      throw new Error('Cette cliente a un historique (ventes, compte epargne '
+        + 'ou reprise) : sa fiche ne peut pas etre supprimee.');
+    }
+    throw e;
+  }
   await reloadClients();
 }
 async function deleteCompteClient(id) {
