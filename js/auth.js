@@ -280,8 +280,13 @@ console.log('KAYOR · auth.js', '2026-10-21b');
     // chacun se retrouvait affiché avec son nom et ses droits.
     var url = URL_BASE + '/rest/v1/membres'
             + '?select=user_id,organisation_id,nom,role,actif,doit_changer_mdp,'
+            // Toute colonne ajoutee a `organisations` doit etre listee ICI,
+            // sinon elle s'enregistre en base et n'apparait jamais a l'ecran.
+            // Les neuf dernieres viennent de la migration 028 (vitrine).
             + 'organisations(slug,nom,plan,actif,expire_le,devise,'
-            + 'slogan,adresse,telephone,ninea,rccm,pied_facture,logo)'
+            + 'slogan,adresse,telephone,ninea,rccm,pied_facture,logo,'
+            + 'presentation,repere,maps_url,horaires,whatsapp,email,'
+            + 'instagram,facebook,tiktok)'
             + '&user_id=eq.' + encodeURIComponent(uid)
             + '&actif=eq.true&limit=1';
 

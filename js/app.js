@@ -20,7 +20,7 @@
  * qui « peut tout faire » alors que les droits sont restreints, c'est presque
  * toujours ça.
  */
-const APP_VERSION = '2026-10-27-identite-cliente';
+const APP_VERSION = '2026-10-31-vitrine';
 
 function loadLS(k, fb) { try { const s=localStorage.getItem(k); return s?JSON.parse(s):fb; } catch { return fb; } }
 
@@ -329,6 +329,19 @@ function renderProfilBoutique() {
   document.getElementById('b-ninea').value     = b.ninea || '';
   document.getElementById('b-rccm').value      = b.rccm || '';
   document.getElementById('b-pied').value      = b.pied_facture || '';
+
+  // Vitrine publique (migration 028). Ces champs ne vont sur aucun document
+  // imprime : ils ne servent que la page que la cliente ouvre en scannant.
+  document.getElementById('b-presentation').value = b.presentation || '';
+  document.getElementById('b-repere').value       = b.repere || '';
+  document.getElementById('b-maps').value         = b.maps_url || '';
+  document.getElementById('b-horaires').value     = b.horaires || '';
+  document.getElementById('b-whatsapp').value     = b.whatsapp || '';
+  document.getElementById('b-email').value        = b.email || '';
+  document.getElementById('b-instagram').value    = b.instagram || '';
+  document.getElementById('b-facebook').value     = b.facebook || '';
+  document.getElementById('b-tiktok').value       = b.tiktok || '';
+
   LOGO_BOUTIQUE_TEMP = null;
   afficherApercuLogo(b.logo || '');
   messageBoutique('');
@@ -376,6 +389,29 @@ function retirerLogoBoutique() {
   messageBoutique('Logo retiré — cliquez sur Enregistrer pour appliquer.');
 }
 
+/**
+ * Nom d'utilisateur d'un reseau social, depuis ce que la boutique a tape.
+ *
+ * On ne stocke JAMAIS une URL complete : elle finirait dans un `href`, et
+ * `esc()` echappe le HTML mais laisse passer `javascript:...`, qui
+ * s'executerait chez la visiteuse de la vitrine. La page reconstruit
+ * l'adresse a partir du pseudo.
+ *
+ * Mais personne ne tape « marjanbijouterie » : on colle l'adresse de son
+ * profil. On en extrait donc le dernier segment, plutot que de laisser la
+ * contrainte en base refuser la saisie avec un message incomprehensible.
+ */
+function _pseudoReseau(champId) {
+  var v = (document.getElementById(champId)?.value || '').trim();
+  if (!v) return null;
+  if (/^https?:\/\//i.test(v)) {
+    v = v.split(/[?#]/)[0].replace(/\/+$/, '');
+    v = v.substring(v.lastIndexOf('/') + 1);
+  }
+  v = v.replace(/^@+/, '').trim();
+  return v || null;
+}
+
 async function enregistrerProfilBoutique() {
   if (STATE.currentUser?.role !== 'proprietaire') {
     showToast('⛔ Réservé au propriétaire.'); return;
@@ -390,7 +426,21 @@ async function enregistrerProfilBoutique() {
     telephone:    document.getElementById('b-telephone').value.trim() || null,
     ninea:        document.getElementById('b-ninea').value.trim()     || null,
     rccm:         document.getElementById('b-rccm').value.trim()      || null,
-    pied_facture: document.getElementById('b-pied').value.trim()      || null
+    pied_facture: document.getElementById('b-pied').value.trim()      || null,
+
+    // Vitrine publique. L'arobase de tete est retiree ici aussi : la base
+    // l'accepte, mais autant stocker propre. Et surtout, pour les trois
+    // reseaux, on ne garde QUE le pseudo — une URL saisie par la boutique
+    // finirait dans un href, ou `esc()` ne protege pas de `javascript:`.
+    presentation: document.getElementById('b-presentation').value.trim() || null,
+    repere:       document.getElementById('b-repere').value.trim()       || null,
+    maps_url:     document.getElementById('b-maps').value.trim()         || null,
+    horaires:     document.getElementById('b-horaires').value.trim()     || null,
+    whatsapp:     document.getElementById('b-whatsapp').value.trim()     || null,
+    email:        document.getElementById('b-email').value.trim()        || null,
+    instagram:    _pseudoReseau('b-instagram'),
+    facebook:     _pseudoReseau('b-facebook'),
+    tiktok:       _pseudoReseau('b-tiktok')
   };
   if (LOGO_BOUTIQUE_TEMP !== null) maj.logo = LOGO_BOUTIQUE_TEMP || null;
 
@@ -400,7 +450,11 @@ async function enregistrerProfilBoutique() {
     var r = await fetch(SUPABASE_URL + '/rest/v1/organisations?id=eq.' + encodeURIComponent(Auth.orgId()), {
       method: 'PATCH', headers: H(), body: JSON.stringify(maj)
     });
-    if (!r.ok) throw new Error('Enregistrement refusé (' + r.status + ').');
+    // Ne jamais jeter le corps d'une erreur PostgREST : depuis la migration
+    // 028, un refus vient presque toujours d'une contrainte (lien de carte
+    // sans https, email mal forme, pseudo avec un caractere interdit) et la
+    // base dit laquelle. « Enregistrement refuse (400) » ne disait rien.
+    if (!r.ok) throw await _erreurRpc(r, 'Enregistrement refusé');
 
     await Auth.chargerProfil();     // relire l'identité pour les impressions
     LOGO_BOUTIQUE_TEMP = null;

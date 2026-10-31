@@ -392,6 +392,19 @@
             body: JSON.stringify({ action: 'supprimer_comptes', user_ids: d.comptes })
           });
           var j = await r.json().catch(function () { return {}; });
+          // Un refus serveur renvoie un corps JSON avec un statut d'erreur.
+          // Se contenter de `j.retires || 0` affichait « 0 compte(s) retiré(s) »
+          // sur un echec franc — une panne deguisee en succes. Vecu le
+          // 2026-10-31 : la fonction deployee ne connaissait pas encore
+          // l'action, la boutique est partie, les comptes sont restes, et
+          // l'ecran a dit que tout allait bien.
+          if (!r.ok || j.ok === false) {
+            await rafraichir();
+            message('Boutique supprimee, mais ses comptes de connexion subsistent : '
+                  + (j.erreur || ('refus du serveur, code ' + r.status)) + ' '
+                  + 'Retirez-les depuis Authentication -> Users.', true);
+            return;
+          }
           retires = j.retires || 0;
         } catch (e) {
           await rafraichir();

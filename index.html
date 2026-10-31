@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>KAYOR — Brillez sans effort</title>
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml" />
-  <link rel="stylesheet" href="css/style.css?v=2026-10-27a" />
+  <link rel="stylesheet" href="css/style.css?v=2026-10-31a" />
 </head>
 <body>
 
@@ -529,6 +529,72 @@
         </div>
 
         <div id="b-message" style="display:none;margin-top:16px;padding:10px 14px;border-radius:var(--radius-md);font-size:12.5px"></div>
+      </div>
+
+      <div class="card" style="padding:18px;margin-top:18px">
+        <h2 class="card-title" style="margin-bottom:4px">Vitrine publique</h2>
+        <p class="page-sub" style="margin-bottom:16px">
+          Ce que vos clientes voient en scannant le code sur leur facture.
+          NINEA et RCCM n'y figurent pas — ils restent sur vos documents.
+        </p>
+
+        <div class="form-group">
+          <label class="form-label">Présentation</label>
+          <textarea class="form-input form-textarea" id="b-presentation"
+                    placeholder="Quelques phrases sur votre bijouterie : ce que vous faites, depuis quand, ce qui vous distingue."></textarea>
+        </div>
+
+        <div class="form-row" style="margin-top:12px">
+          <div class="form-group">
+            <label class="form-label">Point de repère</label>
+            <input class="form-input" id="b-repere" placeholder="En face de la pharmacie" />
+            <div class="form-hint">Ici, une adresse se dit souvent ainsi. C'est ce qui aide vraiment à vous trouver.</div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Lien de carte</label>
+            <input class="form-input" id="b-maps" placeholder="https://maps.app.goo.gl/…" />
+            <div class="form-hint">Doit commencer par https://</div>
+          </div>
+        </div>
+
+        <div class="form-group" style="margin-top:12px">
+          <label class="form-label">Horaires</label>
+          <textarea class="form-input form-textarea" id="b-horaires"
+                    placeholder="Lundi – Samedi : 9h – 20h&#10;Dimanche : fermé"></textarea>
+          <div class="form-hint">Une ligne par jour. Elles s'affichent telles quelles sur la page.</div>
+        </div>
+
+        <div class="form-row" style="margin-top:12px">
+          <div class="form-group">
+            <label class="form-label">WhatsApp</label>
+            <input class="form-input" id="b-whatsapp" placeholder="77 000 00 00" />
+            <div class="form-hint">Le bouton « Écrire sur WhatsApp » de la page.</div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Email</label>
+            <input class="form-input" id="b-email" placeholder="contact@exemple.sn" />
+          </div>
+        </div>
+
+        <div class="form-row" style="margin-top:12px">
+          <div class="form-group">
+            <label class="form-label">Instagram</label>
+            <input class="form-input" id="b-instagram" placeholder="votreboutique" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Facebook</label>
+            <input class="form-input" id="b-facebook" placeholder="votreboutique" />
+          </div>
+        </div>
+
+        <div class="form-group" style="margin-top:12px">
+          <label class="form-label">TikTok</label>
+          <input class="form-input" id="b-tiktok" placeholder="votreboutique" />
+          <div class="form-hint">
+            Pour les trois réseaux : seulement votre nom d'utilisateur, pas l'adresse complète.
+            La page construit le lien elle-même.
+          </div>
+        </div>
       </div>
     </section>
 
@@ -1549,11 +1615,11 @@
 
 <div class="toast" id="toast"></div>
   <!-- Supabase SDK -->
-  <script src="js/security.js?v=2026-10-27a"></script>
-  <script src="js/auth.js?v=2026-10-27a"></script>
-  <script src="js/data.js?v=2026-10-27a"></script>
-  <script src="js/supabase.js?v=2026-10-27a"></script>
-  <script src="js/app.js?v=2026-10-27a"></script>
+  <script src="js/security.js?v=2026-10-31a"></script>
+  <script src="js/auth.js?v=2026-10-31a"></script>
+  <script src="js/data.js?v=2026-10-31a"></script>
+  <script src="js/supabase.js?v=2026-10-31a"></script>
+  <script src="js/app.js?v=2026-10-31a"></script>
 
 <!-- MODAL AJUSTER STOCK -->
 <div class="modal-backdrop" id="modal-ajust-stock">

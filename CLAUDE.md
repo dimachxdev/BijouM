@@ -828,15 +828,31 @@ reviendrait à constituer un fichier qu'on n'a aucune raison de détenir.
          service sur un garde-fou qu'on ne peut pas vérifier : retirer
          l'appartenance d'abord.
 
-      2. Déployer `membres-admin` — elle porte trois ajouts dont le
-         déploiement n'est pas confirmé : `creer_proprietaire`,
-         `supprimer_comptes`, et le garde-fou qui épargne les comptes du plan
-         service.
-      3. Recharger la console opérateur (empreinte `2026-10-22a`).
-      4. Suspendre puis supprimer les boutiques d'essai **avec le bouton 🗑**.
-         Restent `KAY` (suspendue, sans membre propriétaire — prête),
-         `MBD` et `BJS`. **Garder `MBSS`** (Saint-Louis), qui porte les
-         données réelles.
+      2. ~~Déployer `membres-admin`~~ — fait le 2026-10-31 (version 13,
+         `verify_jwt: false`, vérifiée vivante : elle répond son propre
+         « Non authentifié. » et non une erreur de la passerelle). Elle
+         portait bien `creer_proprietaire`, `supprimer_comptes` et le
+         garde-fou du plan service, qui **n'étaient pas déployés** malgré
+         le souvenir d'un déploiement — la preuve est venue d'un échec réel,
+         pas d'une vérification : impossible de **relire** une Edge Function,
+         l'outil ne sait que la déployer.
+
+         **Avant de redéployer celle-ci, toujours `verify_jwt: false`.**
+         À `true`, le préflight CORS échoue et le comptoir lit
+         « Failed to fetch ». Et relire le source avant : c'est le seul
+         fichier qui détient la clé de service.
+      3. Recharger la console opérateur (empreinte `2026-10-31a`).
+      4. ~~`KAY` supprimée~~ le 2026-10-31 par le bouton 🗑 — 7 ventes
+         effacées. **Ses deux comptes vendeurs subsistent** dans
+         l'authentification (`amina@kay.kayor.app`,
+         `djilybgueye+vendeuse@gmail.com`) : le second temps avait échoué,
+         `membres-admin` n'étant pas encore déployée. Ils sont inertes —
+         aucune ligne dans `membres`, donc `app.current_org()` ne leur rend
+         rien et RLS ne leur montre rien — mais à retirer depuis
+         *Authentication → Users*.
+
+         Restent `MBD` et `BJS` à suspendre puis supprimer.
+         **Garder `MBSS`** (Saint-Louis), qui porte les données réelles.
       6. `017_detacher_le_compte_de_service.sql` et
          `018_nettoyage_boutiques_de_test.sql` n'ont jamais été appliquées et
          sont devenues sans objet. À supprimer.

@@ -609,6 +609,10 @@ tbody tr:hover td { background: #f3eedf; }
   width: 100%; min-height: 40px;
 }
 .form-input:focus { outline: none; border-color: var(--border-strong); background: var(--bg-primary); }
+/* Premier textarea du projet : la vitrine publique a besoin de plusieurs
+   lignes (presentation, horaires). Il reprend .form-input et n'ajoute que la
+   hauteur et le sens d'etirement — jamais horizontal, qui casserait la grille. */
+.form-textarea { min-height: 92px; resize: vertical; line-height: 1.5; }
 .restant-display { background: var(--bg-secondary) !important; font-weight: 500; }
 
 /* ============================================================
