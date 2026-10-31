@@ -372,6 +372,7 @@ function renderProfilBoutique() {
   document.getElementById('b-horaires').value     = b.horaires || '';
   document.getElementById('b-whatsapp').value     = b.whatsapp || '';
   document.getElementById('b-email').value        = b.email || '';
+  document.getElementById('b-site').value         = b.site_web || '';
   document.getElementById('b-instagram').value    = b.instagram || '';
   document.getElementById('b-facebook').value     = b.facebook || '';
   document.getElementById('b-tiktok').value       = b.tiktok || '';
@@ -435,6 +436,26 @@ function retirerLogoBoutique() {
  * profil. On en extrait donc le dernier segment, plutot que de laisser la
  * contrainte en base refuser la saisie avec un message incomprehensible.
  */
+/**
+ * L'adresse du site de la boutique, telle qu'on peut l'ecrire sans y penser.
+ *
+ * Personne ne tape « https:// » : on ecrit « www.maboutique.sn ». La base
+ * exige pourtant le schema — un lien sans schema devient relatif et mene
+ * nulle part, et surtout `http://` laisserait la visiteuse en clair. On
+ * complete donc ici, et la contrainte en base reste le vrai verrou.
+ *
+ * Un `http://` saisi explicitement est releve en `https://` : aucun site
+ * serieux ne sert plus qu'en clair, et la contrainte le refuserait de toute
+ * facon avec un message obscur.
+ */
+function _urlSite(champId) {
+  var v = (document.getElementById(champId)?.value || '').trim();
+  if (!v) return null;
+  v = v.replace(/^http:\/\//i, 'https://');
+  if (!/^https:\/\//i.test(v)) v = 'https://' + v.replace(/^\/+/, '');
+  return v;
+}
+
 function _pseudoReseau(champId) {
   var v = (document.getElementById(champId)?.value || '').trim();
   if (!v) return null;
@@ -472,6 +493,7 @@ async function enregistrerProfilBoutique() {
     horaires:     document.getElementById('b-horaires').value.trim()     || null,
     whatsapp:     document.getElementById('b-whatsapp').value.trim()     || null,
     email:        document.getElementById('b-email').value.trim()        || null,
+    site_web:     _urlSite('b-site'),
     instagram:    _pseudoReseau('b-instagram'),
     facebook:     _pseudoReseau('b-facebook'),
     tiktok:       _pseudoReseau('b-tiktok')
@@ -4344,11 +4366,12 @@ const FACTURE_CSS = `
 .facture-logo-zone{display:flex;align-items:center;gap:14px;min-width:0}
 .facture-shop-texte{min-width:0}
 /* Le QR vit du cote des coordonnees de la boutique, pas en pied : c'est ici
-   qu'on cherche comment la joindre. Il ne rajoute aucune hauteur — l'en-tete
-   fait deja 56 px avec le logo et les trois lignes d'identite. */
-.facture-qr{flex-shrink:0;width:56px;text-align:center}
-.facture-qr svg{display:block;width:56px;height:56px}
-.facture-qr-txt{font-size:7px;color:#999;line-height:1.25;margin-top:2px}
+   qu'on cherche comment la joindre. Sans legende sous le code — la place
+   gagnee va au code lui-meme, qui se scanne d'autant mieux qu'il est grand.
+   70 px sur un en-tete qui fait deja 60 px de texte : douze pixels de plus,
+   invisibles sur la feuille. */
+.facture-qr{flex-shrink:0;width:70px}
+.facture-qr svg{display:block;width:70px;height:70px}
 .facture-logo-icon{font-size:40px;line-height:1}
 .facture-shop-name{font-size:20px;font-weight:700;letter-spacing:1px}
 .facture-shop-info{font-size:12px;color:#666;margin-top:2px}
@@ -4471,7 +4494,7 @@ function afficherFacture(id) {
   const _b = boutiqueInfos();
   // Le QR de la vitrine. Calcule une seule fois : l'encodage coute quelques
   // millisecondes et le gabarit est relu a chaque ouverture de la facture.
-  const _qrFac = _qrVitrine(64);
+  const _qrFac = _qrVitrine(70);
   document.getElementById('facture-content').innerHTML=`
 <div class="facture" id="facture-print-zone" data-numfac="${esc(numFac)}" data-client="${esc(v.client)}" data-date="${fmtDate(v.date)}">
   <!-- L'identité de la boutique figurait DEUX fois : ici et dans un bloc
@@ -4487,7 +4510,7 @@ function afficherFacture(id) {
         ${_b.slogan?`<div class="facture-shop-info">${esc(_b.slogan)}</div>`:""}
         ${boutiqueLigneContact()?`<div class="facture-shop-info">${esc(boutiqueLigneContact())}</div>`:""}
       </div>
-      ${_qrFac ? `<div class="facture-qr">${_qrFac}<div class="facture-qr-txt">Horaires<br/>et contacts</div></div>` : ''}
+      ${_qrFac ? `<div class="facture-qr">${_qrFac}</div>` : ''}
     </div>
     <div class="facture-num-zone">
       <div class="facture-num-label">FACTURE</div>

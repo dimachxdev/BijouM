@@ -85,6 +85,11 @@ function construire(b) {
     actions.push({ href: b.maps_url, texte: 'Itinéraire', externe: true });
   }
   if (b.email) actions.push({ href: 'mailto:' + b.email, texte: 'Écrire' });
+  if (b.site_web) {
+    // Seconde URL recopiee telle quelle, comme maps_url : la base garantit
+    // le schema https (migration 029).
+    actions.push({ href: b.site_web, texte: 'Site internet', externe: true });
+  }
 
   var zone = $('v-actions');
   actions.forEach(function (a) {

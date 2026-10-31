@@ -475,8 +475,11 @@ inconnus**, et la première lecture sans authentification côté boutique.
   plus. C'est le domaine du *logiciel*, pas d'une bijouterie — la règle
   ci-dessous reste intacte.
 - Le QR vit **dans l'en-tête, du côté des coordonnées** : c'est là qu'on
-  cherche comment joindre la boutique. 56 px, il n'ajoute aucune hauteur au
-  papier. Sur téléphone il passe à la ligne ; `@media print` remet la rangée.
+  cherche comment joindre la boutique. **Pas de légende sous le code** — la
+  place va au code lui-même, qui se scanne d'autant mieux qu'il est grand.
+  70 px contre 63 px de texte à côté : sept pixels, invisibles sur la
+  feuille. Sur téléphone il passe à la ligne ; `@media print` remet la
+  rangée quelle que soit la machine qui imprime.
 
 ### Un encodeur QR maison, et pourquoi il est testé ainsi
 
