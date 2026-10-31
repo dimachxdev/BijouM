@@ -811,19 +811,35 @@ reviendrait à constituer un fichier qu'on n'a aucune raison de détenir.
 - [ ] **Mise en ordre des comptes et des boutiques d'essai.** Tout est écrit,
       **rien n'est appliqué ni testé** (2026-10-22). Dans cet ordre :
 
-      1. Appliquer `migrations/019_supprimer_boutique.sql`.
-      2. Déployer `membres-admin` — elle porte trois ajouts non déployés :
-         `creer_proprietaire`, `supprimer_comptes`, et le garde-fou qui
-         épargne les comptes du plan service.
+      1. ~~Appliquer `migrations/019_supprimer_boutique.sql`~~ — fait le
+         2026-10-31, et les **quatre verrous vérifiés** en se mettant à la
+         place des rôles : une propriétaire est refusée, un code qui ne
+         correspond pas est refusé, une boutique active est refusée, une
+         boutique suspendue au code juste passe.
+      5. ~~Compte de service détaché~~ — fait le 2026-10-31. `membres` = 0,
+         `operateurs` = 1. **Ne pas le rerattacher.**
+
+         Fait **avant** d'utiliser le bouton 🗑, et c'est l'ordre qui compte :
+         tant que le compte opérateur était `proprietaire` de la boutique
+         d'essai, `supprimer_boutique()` renvoyait son `user_id` parmi les
+         comptes à effacer. Seuls les garde-fous de `membres-admin`
+         l'épargnaient — or on ne peut pas **relire** une Edge Function
+         déployée, seulement la déployer. Ne jamais miser la console de
+         service sur un garde-fou qu'on ne peut pas vérifier : retirer
+         l'appartenance d'abord.
+
+      2. Déployer `membres-admin` — elle porte trois ajouts dont le
+         déploiement n'est pas confirmé : `creer_proprietaire`,
+         `supprimer_comptes`, et le garde-fou qui épargne les comptes du plan
+         service.
       3. Recharger la console opérateur (empreinte `2026-10-22a`).
-      4. Suspendre puis supprimer les boutiques d'essai **avec le bouton 🗑**,
-         en commençant par la plus inutile — ce code n'a jamais tourné.
-      5. Compter : `membres` et `operateurs` pour `djilybgueye@gmail.com`.
-         Attendu **0** et **1**. Si c'est le cas,
-         `migrations/017_detacher_le_compte_de_service.sql` est devenue
-         inutile — la suppression a fait le détachement — et
-         `migrations/018_nettoyage_boutiques_de_test.sql` aussi, remplacée
-         par le bouton. Supprimer les deux fichiers.
+      4. Suspendre puis supprimer les boutiques d'essai **avec le bouton 🗑**.
+         Restent `KAY` (suspendue, sans membre propriétaire — prête),
+         `MBD` et `BJS`. **Garder `MBSS`** (Saint-Louis), qui porte les
+         données réelles.
+      6. `017_detacher_le_compte_de_service.sql` et
+         `018_nettoyage_boutiques_de_test.sql` n'ont jamais été appliquées et
+         sont devenues sans objet. À supprimer.
       6. Vider `compteurs` de la boutique gardée pour repartir à `V-0001`.
          **Supprimer les lignes, pas les mettre à zéro** : le trigger
          `compteurs_monotone` annule silencieusement tout UPDATE qui baisse
@@ -840,10 +856,21 @@ reviendrait à constituer un fichier qu'on n'a aucune raison de détenir.
       déjà : `CC-0001` est ouvert à Dakar (Djily) et à Saint-Louis (astou),
       `CL-010` et `V-0001`..`V-0006` existent dans les deux. Le code est
       corrigé, **il n'est pas testé**.
-- [ ] **Appeler `definir_pin_client` une fois depuis l'application.** La
-      migration 024 l'a réécrite ; `crypt()` se résout bien sous son
-      `search_path`, mais seule la route prouve qu'elle répond. C'est le
-      défaut qui a mis le portail hors service deux fois.
+- [x] ~~**Éprouver les migrations 022 à 026 par l'usage**~~ — fait le
+      2026-10-31, sur la vraie application après déploiement. Vérifiés en
+      base, pas à l'écran : `client_id` renseigné à l'ouverture d'un compte ;
+      la vente sur épargne hérite du `client_id` du compte sans que le
+      navigateur l'envoie ; le **poids** est enfin écrit sur la vente
+      (4ᵉ défaut de la 022, jamais vérifié avant) ; `definir_pin_client`
+      répond, donc `crypt()` se résout ; le dépôt depuis le portail cliente
+      fonctionne. Et le geste décisif : poser puis retirer un code sur la
+      `CL-010` de Saint-Louis laisse la `CL-010` de **Dakar** intacte
+      (`updated_at` inchangé depuis septembre) — avant la 024, il l'écrasait.
+
+      **Leçon de méthode** : « j'ai fait le geste » ne vaut pas preuve.
+      Le premier essai avait porté sur une autre fiche ; seul
+      `updated_at` l'a révélé. Vérifier qu'une ligne a bougé avant de
+      conclure qu'une autre n'a pas bougé.
 - [ ] **Trancher `prochain_id` et `app.org_active()`.** Elle ne l'appelle
       pas : une boutique suspendue peut consommer des numéros, la vente qui
       suit étant refusée par la policy. Seul effet, un trou dans la
