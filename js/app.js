@@ -278,6 +278,7 @@ function isAdmin() {
 // dans le code : en SaaS, chaque boutique doit imprimer la sienne.
 
 var LOGO_BOUTIQUE_TEMP = null;   // logo choisi, pas encore enregistré
+var COUVERTURE_TEMP    = null;   // couverture choisie, pas encore enregistrée
 
 /** Valeurs de repli tant qu'une boutique n'a pas rempli son profil. */
 function boutiqueInfos() {
@@ -378,7 +379,9 @@ function renderProfilBoutique() {
   document.getElementById('b-tiktok').value       = b.tiktok || '';
 
   LOGO_BOUTIQUE_TEMP = null;
+  COUVERTURE_TEMP    = null;
   afficherApercuLogo(b.logo || '');
+  afficherApercuCouverture(b.couverture || '');
   messageBoutique('');
 }
 
@@ -422,6 +425,46 @@ function retirerLogoBoutique() {
   afficherApercuLogo('');
   document.getElementById('b-logo-fichier').value = '';
   messageBoutique('Logo retiré — cliquez sur Enregistrer pour appliquer.');
+}
+
+/**
+ * Image de couverture de la vitrine.
+ *
+ * Plafond plus haut que le logo (300 Ko contre 200) parce qu'une photo de
+ * devanture en paysage ne descend pas aussi bas — mais plafond quand meme :
+ * elle part en base64 dans le JSON de la vitrine, que des clientes ouvrent
+ * en donnees mobiles. Une photo d'appareil brute fait 4 Mo.
+ */
+function chargerCouverture(input) {
+  var f = input.files && input.files[0];
+  if (!f) return;
+  if (f.size > 300 * 1024) {
+    messageBoutique('Image trop lourde (' + Math.round(f.size/1024)
+      + ' Ko). Maximum 300 Ko — reduisez-la avant de la televerser.', true);
+    input.value = ''; return;
+  }
+  var reader = new FileReader();
+  reader.onload = function (e) {
+    COUVERTURE_TEMP = e.target.result;
+    afficherApercuCouverture(COUVERTURE_TEMP);
+    messageBoutique('Couverture prête — cliquez sur Enregistrer pour l\'appliquer.');
+  };
+  reader.readAsDataURL(f);
+}
+
+function retirerCouverture() {
+  COUVERTURE_TEMP = '';
+  afficherApercuCouverture('');
+  document.getElementById('b-couv-fichier').value = '';
+  messageBoutique('Couverture retirée — cliquez sur Enregistrer pour appliquer.');
+}
+
+function afficherApercuCouverture(dataUri) {
+  var el = document.getElementById('b-couv-apercu');
+  if (!el) return;
+  el.innerHTML = dataUri
+    ? '<img src="' + dataUri + '" alt="Couverture" style="width:100%;height:100%;object-fit:cover" />'
+    : '<span style="font-size:11.5px;color:var(--text-tertiary)">aucune image</span>';
 }
 
 /**
@@ -498,7 +541,10 @@ async function enregistrerProfilBoutique() {
     facebook:     _pseudoReseau('b-facebook'),
     tiktok:       _pseudoReseau('b-tiktok')
   };
+  // `null` veut dire « pas touche », '' veut dire « retiree ». D'ou le test
+  // sur !== null plutot que sur la verite de la valeur.
   if (LOGO_BOUTIQUE_TEMP !== null) maj.logo = LOGO_BOUTIQUE_TEMP || null;
+  if (COUVERTURE_TEMP    !== null) maj.couverture = COUVERTURE_TEMP || null;
 
   var btn = document.getElementById('btn-save-boutique');
   btn.disabled = true; btn.textContent = 'Enregistrement…';
@@ -514,6 +560,7 @@ async function enregistrerProfilBoutique() {
 
     await Auth.chargerProfil();     // relire l'identité pour les impressions
     LOGO_BOUTIQUE_TEMP = null;
+    COUVERTURE_TEMP    = null;
     var orgEl = document.getElementById('org-name');
     if (orgEl) orgEl.textContent = nom;
     appliquerIdentiteBoutique();   // logo, nom et slogan sans recharger la page

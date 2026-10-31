@@ -539,6 +539,21 @@
         </p>
 
         <div class="form-group">
+          <label class="form-label">Image de couverture</label>
+          <div id="b-couv-apercu" style="position:relative;height:118px;border-radius:var(--radius-md);overflow:hidden;background:var(--bg-muted);border:0.5px solid var(--border-light);display:flex;align-items:center;justify-content:center">
+            <span style="font-size:11.5px;color:var(--text-tertiary)">aucune image</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:8px">
+            <input type="file" id="b-couv-fichier" accept="image/*" onchange="chargerCouverture(this)" style="font-size:12px" />
+            <button class="btn small" onclick="retirerCouverture()">Retirer</button>
+          </div>
+          <div class="form-hint">
+            La devanture, une vitrine, une pièce. Format large (paysage), 300 Ko maximum —
+            vos clientes l'ouvrent souvent en données mobiles. Votre logo se pose dessus, en rond.
+          </div>
+        </div>
+
+        <div class="form-group" style="margin-top:16px">
           <label class="form-label">Présentation</label>
           <textarea class="form-input form-textarea" id="b-presentation"
                     placeholder="Quelques phrases sur votre bijouterie : ce que vous faites, depuis quand, ce qui vous distingue."></textarea>

@@ -60,13 +60,29 @@ function construire(b) {
     $('v-slogan').hidden = false;
   }
 
+  // ── Couverture et logo ─────────────────────────────────────────────────
+  // Les deux images sont des data URI deposees par la boutique, pas des URL
+  // distantes : la regle 6 tient, la page ne contacte aucun autre domaine.
+  if (b.couverture) {
+    var couv = $('v-couverture');
+    couv.classList.remove('vide');
+    // `style.backgroundImage` et non innerHTML : une data URI va dans une
+    // propriete CSS, jamais dans du balisage.
+    couv.style.backgroundImage = 'url("' + b.couverture.replace(/"/g, '%22') + '")';
+  }
+
+  var rond = $('v-logo');
   if (b.logo) {
-    var img = $('v-logo');
-    // Le logo est une donnee en base64 deposee par la boutique, pas une URL
-    // distante : la regle 6 tient, la page ne contacte aucun autre domaine.
+    var img = new Image();
     img.src = b.logo;
     img.alt = b.nom || '';
-    img.hidden = false;
+    rond.appendChild(img);
+  } else {
+    // Sans logo, l'initiale — jamais la marque du logiciel. Un repli vers
+    // notre identite est pire qu'un champ vide : le vide se voit et se
+    // remplit, le repli se confond avec un choix de la boutique.
+    rond.classList.add('initiale');
+    rond.textContent = (b.nom || '?').trim().charAt(0).toUpperCase();
   }
 
   // ── Actions. Chaque lien est fabrique ici, jamais recopie d'une saisie. ──

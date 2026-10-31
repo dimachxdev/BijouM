@@ -468,7 +468,24 @@ inconnus**, et la première lecture sans authentification côté boutique.
   boutique ne tient jamais le schéma de l'adresse. `maps_url` est la seule
   exception et porte une contrainte `https` **en base**.
 - **`boutique.js` n'écrit jamais dans `innerHTML`** ce qui vient de la base :
-  tout passe par `textContent`, qu'on ne peut pas oublier d'appeler.
+  tout passe par `textContent`, qu'on ne peut pas oublier d'appeler. La
+  couverture va dans `style.backgroundImage`, jamais dans du balisage.
+- **La couverture et le logo sont en base64 dans la table** (migrations 028
+  et 030), plafonnés à 300 et 200 Ko **par le navigateur** — c'est la seule
+  vraie barrière, une photo d'appareil fait 4 Mo et rendrait la vitrine
+  inutilisable sur un téléphone en données mobiles. Ce n'est pas le bon
+  endroit à terme : le jour où une boutique voudra une galerie, c'est
+  Supabase Storage, pas une troisième colonne.
+- **Sans logo, l'initiale de la boutique ; sans couverture, un dégradé.**
+  Jamais la marque du logiciel, par la même règle que `_logoFacture()` : un
+  repli vers notre identité est pire qu'un champ vide, parce qu'il se
+  confond avec un choix de la boutique.
+- **Aucune mention « Créé avec KAYOR » sur la vitrine** — posé en question
+  le 2026-10-31, tranché non. La page est celle de la boutique, affichée à
+  sa clientèle, au même titre que la facture. La croissance par signature
+  en pied (le modèle Calendly, y compris la variante « retirable au plan
+  payant ») a été examinée et écartée. **Ne pas la reproposer** sans
+  rouvrir franchement la règle du § 3.
 - **Le domaine du QR est écrit en dur** (`DOMAINE_VITRINE`), pas
   `location.origin` : une facture imprimée depuis une recette porterait
   sinon un code menant à la recette, et une facture imprimée ne se corrige
