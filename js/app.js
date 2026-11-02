@@ -1679,6 +1679,11 @@ async function _enregistrerVente(){
     if(nbArticlesV>0 && nbArticlesV>(stockItem.qty||0)){showToast('Nombre d\'articles insuffisant (dispo: '+(stockItem.qty||0)+')');return;}
   }
 
+  // Apres les validations, avant toute ecriture — y compris avant la
+  // reservation du numero, qui est deja une ecriture serveur.
+  if(!Verrou.confirmerRepetition('vente',
+      client+' · '+desc+' · '+fmt(montant)+' · '+libellePaiement(paiement))) return;
+
   let compteClientId=null;
   let payeParCompte=0;   // part réglée avec le solde épargne, hors caisse
   if(paiement==='compte'){
@@ -2136,6 +2141,9 @@ async function _ajouterProduit(){
   // interdit depuis la suppression de `nextId()`. Deux postes qui creaient un
   // article en meme temps fabriquaient le meme STK-0004, et l'upsert ecrasait
   // le premier article par le second.
+  if(!Verrou.confirmerRepetition('article',
+      nom+' · '+typeBijouP+' · '+poids+' g · '+qty+' art')) return;
+
   ref = await prochainId('stk','STK',4);
 
   // Le stock est géré en poids total (g) — qty=poids pour compatibilité déduction
@@ -2325,8 +2333,14 @@ async function _enregistrerSortie(){
   }
 
   // Numéro attribué par le serveur, comme pour les ventes.
-  var id = await prochainId('s','S',4);
   var labelType=(stockItem?stockItem.nom:typeBijou)+(carat?' — '+carat.toUpperCase():'');
+
+  // C'est CE geste qui a produit S-0003 et S-0004 le 2026-11-02, a 940 ms
+  // d'intervalle — et le stock deduit deux fois.
+  if(!Verrou.confirmerRepetition('sortie',
+      labelType+' · '+poidsSort+' g · '+nbArticles+' art · '+motif)) return;
+
+  var id = await prochainId('s','S',4);
   const sortieObj={id,date,stockRef:stockRef||'',typeBijou:labelType,carat:carat||'—',poids:poidsSort,nbArticles:nbArticles||0,motif,commentaire,validePar:STATE.currentUser?.nom||'admin'};
   // L'etat local apres la base, comme pour une vente : l'inverse laissait la
   // sortie a l'ecran meme quand l'ecriture avait echoue.
@@ -2401,6 +2415,9 @@ function _enregistrerDecaissement(){
   if(!date||!cat||!desc||montant<=0){showToast('⚠ Tous les champs sont obligatoires.');return;}
   // Numéro attribué par le serveur : le compteur local peut être en retard et
   // refabriquer un identifiant déjà pris, que l'upsert écraserait alors.
+  if(!Verrou.confirmerRepetition('decaissement',
+      cat+' · '+desc+' · '+fmt(montant))) return;
+
   // La chaine est RENDUE, et son `.catch` a ete retire : l'erreur doit
   // remonter a `geste()`. L'avaler ici ferait croire au verrou que le geste a
   // abouti, il oublierait la cle — et le reessai reecrirait.
@@ -2489,6 +2506,8 @@ function _ajouterClient(){
   // Le code est haché par PostgreSQL et ne transite ni par localStorage ni
   // par la table en clair.
   var id;
+  if(!Verrou.confirmerRepetition('client', nom+' · '+tel)) return;
+
   return prochainId('cl','CL',4)
     .then(function(nouvelId){
       id = nouvelId;
@@ -2651,6 +2670,9 @@ function _creerCompteClient(){
   if(!clientId||!date||depot<=0){showToast('⚠ Client, date et dépôt initial sont obligatoires.');return;}
   // Le compte et son dépôt d'ouverture dans une seule transaction serveur :
   // séparés, un compte pouvait exister avec un solde sans mouvement en face.
+  if(!Verrou.confirmerRepetition('ouvrir-compte',
+      client+' · dépôt d\'ouverture de '+fmt(depot))) return;
+
   var id;
   return prochainId('cc','CC',4)
     .then(function(nouvelId){
@@ -2697,6 +2719,9 @@ function _ajouterDepotCC(){
   // Un dépôt est une saisie de comptoir, ouverte à toute l'équipe — mais c'est
   // techniquement un UPDATE du solde, désormais fermé au vendeur. L'opération
   // serveur écrit le mouvement et recale le solde sur son historique.
+  if(!Verrou.confirmerRepetition('depot',
+      cc.client+' ('+id+') · dépôt de '+fmt(montant)+' · '+note)) return;
+
   return depotCompteEpargne(id, montant, date, note)
     .then(function(res){
       if(!res || res.ok===false){ showToast('⛔ '+((res&&res.erreur)||'Dépôt refusé.')); return; }
@@ -2852,6 +2877,12 @@ function _confirmerFinalisation(){
   if(montant<=0){showToast('⚠ Montant obligatoire.');return;}
   if(montant>(v.restant||0)){showToast(`⚠ Montant supérieur au restant dû (${fmt(v.restant)})`);return;}
 
+  // Le versement est le geste ou un doublon se voit le moins : il ne laisse
+  // aucune ligne en trop, seulement un acompte faux.
+  if(!Verrou.confirmerRepetition('paiement',
+      (v.client||venteId)+' ('+venteId+') · versement de '+fmt(montant)
+      +' · '+libellePaiement(paiement))) return;
+
   // Le `btn.disabled` d'ici a ete retire : le verrou le fait pour tous les
   // boutons de modale, par une regle CSS sur `body[data-occupe]`. Le garder
   // aurait recopie la regle une fois de plus.
@@ -2904,6 +2935,10 @@ function _confirmerRemboursement(){
     showToast(`⚠ Impossible de rembourser plus que le versé (${fmt(v.acompte||0)}).`);
     return;
   }
+
+  if(!Verrou.confirmerRepetition('remboursement',
+      (v.client||venteId)+' ('+venteId+') · remboursement de '+fmt(montant)
+      +' · '+motif)) return;
 
   // L'acompte n'est PAS remis à zéro : cet argent est bien entré en caisse le
   // jour de la vente. Le décaissement le fait ressortir à sa date réelle.
@@ -3114,6 +3149,9 @@ async function _enregistrerAchatClient(){
   if(!date||!clientId||!desc||!typeBijou||prix<=0){
     showToast('Tous les champs obligatoires doivent etre remplis.');return;
   }
+  if(!Verrou.confirmerRepetition('reprise',
+      client+' · '+desc+' · '+poids+' g · '+fmt(prix))) return;
+
   // La photo est lue AVANT l'écriture, et attendue : la lecture passait par
   // un `reader.onload` qui sortait de la chaîne de promesses, donc le verrou
   // se serait relâché avant que l'écriture ne commence.
@@ -3475,6 +3513,10 @@ function _validerAjustCC(){
   if(montant<=0){showToast('Montant obligatoire.');return;}
   if(!desc){showToast('Description obligatoire.');return;}
   if(montant>cc.solde){showToast('Solde insuffisant ('+fmt(cc.solde)+' disponible).');return;}
+
+  if(!Verrou.confirmerRepetition('ajust-cc',
+      cc.client+' ('+cc.id+') · '+desc+' · '+fmt(montant)+' retiré du compte')) return;
+
   // Vente + retrait en une seule transaction serveur, numéros attribués par
   // PostgreSQL : les enchaîner ici laissait passer le retrait quand la vente
   // échouait, et le compteur local pouvait refabriquer un numéro déjà pris.
@@ -3744,6 +3786,10 @@ function _validerComplementCC() {
   }
   var resteDu = montant - soldeUtilise - montantComp;
   var id;
+
+  if(!Verrou.confirmerRepetition('complement',
+      cc.client+' ('+cc.id+') · '+desc+' · '+fmt(montant)
+      +' dont '+fmt(montantComp)+' en '+paiementComp)) return;
 
   // Une seule transaction serveur : la vente et le retrait aboutissent
   // ensemble, ou aucun des deux. L'ancienne version les lançait en parallèle

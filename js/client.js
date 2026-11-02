@@ -324,6 +324,15 @@ async function confirmerDepot(){
 
   var nomGeste = 'depot:' + compteId;
   if(Verrou.enCours()){ showToast('Un dépôt est déjà en cours. Patientez.'); return; }
+
+  // La cliente est celle qui a le moins de moyens de verifier : elle ne voit
+  // ni le journal, ni la caisse. Un dépôt identique refait quelques secondes
+  // plus tard doit donc lui etre signale avant d'etre ecrit.
+  // Rien n'a encore ete affiche ni envoye a ce stade : on peut sortir sans
+  // rien defaire.
+  if(!Verrou.confirmerRepetition('portail-depot',
+      'dépôt de ' + montant.toLocaleString('fr-FR') + ' FCFA sur ' + compteId)) return;
+
   var cle = Verrou.cleDe(nomGeste);
 
   showLoading(true);
@@ -350,8 +359,11 @@ async function confirmerDepot(){
       montant: montant, note: note, date: today(),
       nouveauSolde: res.nouveau_solde
     };
-    // Abouti : le prochain depot sur ce compte portera une cle neuve.
+    // Abouti : le prochain depot sur ce compte portera une cle neuve, et ce
+    // depot-ci est retenu — un depot identique dans les trois minutes fera
+    // apparaitre la fenetre de confirmation.
     Verrou.oublier(nomGeste);
+    Verrou.retenir();
 
     await chargerDonnees();   // on relit le serveur plutôt que de deviner l'état
     renderComptes();

@@ -167,6 +167,26 @@ le même bouton sans fermer la fenêtre.
 > *Prouve* que le serveur reconnaît le réessai : l'acompte doit monter **une
 > seule fois**. S'il monte deux fois, la clé n'a pas été renvoyée — regardez
 > si `js/verrou.js` est bien en ligne.
+>
+> Aucune fenêtre de confirmation ne doit apparaître ici : un geste qui a
+> échoué n'est pas retenu, et c'est voulu.
+
+### c ter. Le troisième cran : la fenêtre de confirmation
+
+Enregistrez une sortie. Attendez qu'elle s'affiche dans la liste. **Puis
+refaites exactement la même**, sans vous presser.
+
+> Attendu : une fenêtre qui rappelle ce qui vient d'être enregistré et depuis
+> combien de temps, et demande s'il s'agit d'un second enregistrement réel.
+> *Annuler* ne doit **rien** écrire.
+>
+> Recommencez en changeant le poids : **aucune fenêtre** — c'est le même geste
+> mais un autre contenu, et faire confirmer deux ventes différentes
+> apprendrait à cliquer sans lire.
+>
+> Enfin, enregistrez une sortie, **rechargez la page avec F5**, et refaites la
+> même : la fenêtre doit encore apparaître. C'est le cas que ni le verrou ni
+> la clé ne couvrent, et il passe par `localStorage` — donc par appareil.
 
 ### d. **Scanner le code avec un vrai téléphone**
 

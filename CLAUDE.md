@@ -436,6 +436,53 @@ Le reste du dispositif, à ne pas défaire :
   mémoire, il ne correspondait à rien et seuls les boutons restaient
   cliquables. Mesuré dans le navigateur, pas relu.
 
+### Trois crans, et chacun ferme ce que le précédent laisse
+
+Demandé le 2026-11-02, après avoir trouvé `S-0003` et `S-0004` à **940 ms
+d'intervalle** dans les sorties de Saint-Louis — une seule sortie réelle,
+enregistrée deux fois, et le stock déduit deux fois.
+
+| | Ce qu'il arrête | Ce qu'il laisse passer |
+|---|---|---|
+| Le verrou | le second clic pendant que le premier est en vol | tout ce qui vient après la réponse |
+| La clé de geste | le **réessai** d'un geste qui n'a pas abouti | un geste neuf, identique au précédent |
+| La fenêtre de confirmation | un geste identique à un geste **abouti** récemment | ce que la personne confirme |
+
+Le deuxième trou est celui qu'on ne voit pas : dès que le premier geste
+aboutit, **sa clé est oubliée** — et il le faut, sinon le geste suivant
+passerait pour son rejeu. Un second geste identique trois secondes plus tard
+est donc, pour le serveur, parfaitement légitime. Si les deux clics de
+`S-0003` avaient été espacés de trois secondes, la clé n'aurait rien vu.
+
+`Verrou.confirmerRepetition(nom, empreinte)` ferme cela. Quatre règles, chacune
+pour une raison :
+
+- **Elle demande, elle ne refuse pas.** Une cliente peut vraiment déposer deux
+  fois 10 000 le même jour. Seul un humain sait si c'est un second bijou ou un
+  clic de trop.
+- **Elle se déclenche sur le même geste ET le même contenu**, jamais sur
+  « deux ventes à la suite » : une bijouterie en fait toute la journée, et une
+  confirmation qui s'affiche sans raison s'apprend à cliquer sans la lire.
+  Elle passerait alors aussi le jour où elle avait raison. **Ne pas
+  l'élargir.**
+- **L'empreinte est lue par un humain** dans la fenêtre — « bracelet · 4 g ·
+  4 articles · Autre », jamais un condensé. C'est elle qui permet de
+  reconnaître, ou non, ce qu'on vient de faire.
+- **Elle s'appelle après les validations, juste avant la première écriture** —
+  exactement là où la fonction serveur réserve sa clé. Au-dessus, on ferait
+  confirmer des gestes qui vont être refusés de toute façon.
+
+La mémoire est dans `localStorage`, et pas dans une variable, pour couvrir le
+seul cas que rien d'autre ne couvre : **enregistrer, recharger la page, refaire
+le même geste** en croyant que le premier n'a pas pris. Après un rechargement
+le verrou est neuf et la clé oubliée ; cette mémoire reste. Elle est par
+appareil : deux postes ne se préviennent pas l'un l'autre.
+
+Un geste **échoué** n'est jamais retenu : son réessai ne doit pas faire
+apparaître de fenêtre, la clé s'en charge déjà. Et un renoncement ne
+ré-horodate pas, sinon la fenêtre se rallongerait pour un geste qui n'a pas eu
+lieu. Treize gestes sont couverts, dont le dépôt du portail cliente.
+
 ### L'écran ne doit pas féliciter avant que la base ait répondu
 
 C'est ce qui faisait recliquer, et c'était le vrai moteur du problème.

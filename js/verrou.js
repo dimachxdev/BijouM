@@ -58,8 +58,15 @@ var Verrou = (function () {
   var seule     = null;
   // Cle du geste en cours : la couche Supabase la lit, les handlers l'ignorent.
   var cleActive = null;
+  // Empreinte du geste en cours, notee seulement s'il aboutit. Voir
+  // `confirmerRepetition()`.
+  var empreinteActive = null;
   // Cles en attente, par nom de geste. Voir `cleDe()`.
   var CLES      = {};
+
+  // Memoire des gestes ABOUTIS recemment, pour la fenetre de confirmation.
+  var MEMOIRE   = 'kayor_gestes_recents';
+  var FENETRE   = 180000;   // 3 minutes
   // Chien de garde : voir `armer()`.
   var chien     = null;
   var CHIEN_MS  = 60000;
@@ -136,6 +143,41 @@ var Verrou = (function () {
     if (!geste && !seule) document.body.removeAttribute('data-occupe');
   }
 
+  // ── Memoire des gestes aboutis ───────────────────────────────────────────
+  //
+  // Elle passe par `localStorage` et non par une variable, pour couvrir le cas
+  // que rien d'autre ne couvre : enregistrer, RECHARGER la page, et refaire le
+  // meme geste en croyant que le premier n'a pas pris. Apres un rechargement,
+  // le verrou est neuf et la cle oubliee — seule cette memoire reste.
+  //
+  // Elle est par appareil et par navigateur : deux postes ne se previennent
+  // pas l'un l'autre. C'est du confort d'affichage, comme tout ce fichier.
+
+  function lire() {
+    try {
+      var o = JSON.parse(localStorage.getItem(MEMOIRE) || '{}');
+      var limite = Date.now() - FENETRE, propre = {}, k;
+      for (k in o) if (o[k] > limite) propre[k] = o[k];
+      return propre;
+    } catch (e) { return {}; }   // navigation privee, stockage bloque, JSON casse
+  }
+
+  function ecrire(o) {
+    try { localStorage.setItem(MEMOIRE, JSON.stringify(o)); } catch (e) {}
+  }
+
+  function noter(signature) {
+    var o = lire();
+    o[signature] = Date.now();
+    ecrire(o);
+  }
+
+  function ilYA(ms) {
+    var s = Math.round(ms / 1000);
+    if (s < 90) return s + ' secondes';
+    return Math.round(s / 60) + ' minutes';
+  }
+
   return {
     Occupe: Occupe,
 
@@ -180,8 +222,84 @@ var Verrou = (function () {
      */
     oublier: function (nom) { delete CLES[nom]; },
 
+    /**
+     * LE TROISIEME CRAN : demander confirmation quand le MEME geste, avec le
+     * MEME contenu, vient d'aboutir.
+     *
+     * Les deux premiers crans ne couvrent pas ce cas, et c'est important de
+     * voir pourquoi :
+     *
+     *   — le verrou arrete le second clic d'une rafale, pendant que le
+     *     premier est en vol ;
+     *   — la cle de geste fait reconnaitre au serveur un REESSAI du meme
+     *     geste, tant qu'il n'a pas abouti.
+     *
+     * Mais des que le premier aboutit, sa cle est oubliee — c'est voulu,
+     * sinon le geste suivant passerait pour son rejeu. Un second geste
+     * identique trois secondes plus tard est donc, pour le serveur, un geste
+     * parfaitement legitime. Et il l'est parfois : une cliente peut vraiment
+     * deposer deux fois 10 000 le meme jour.
+     *
+     * C'est pourquoi on DEMANDE au lieu de refuser. Seul un humain sait si
+     * c'est un vrai second bijou ou un clic de trop.
+     *
+     * CE QUI DECLENCHE : meme geste ET meme contenu. Pas « deux ventes a la
+     * suite » — une bijouterie en fait toute la journee, et une confirmation
+     * qui s'affiche sans raison s'apprend a cliquer sans la lire. Ce serait
+     * pire que rien : elle passerait aussi le jour ou elle avait raison.
+     *
+     * OU L'APPELER : apres toutes les validations, juste avant la premiere
+     * ecriture — exactement la ou la fonction serveur reserve sa cle
+     * (migration 033). Au-dessus, on ferait confirmer des gestes qui vont
+     * etre refuses de toute facon.
+     *
+     * `empreinte` est LUE PAR UN HUMAIN dans la fenetre : elle doit decrire
+     * le geste en clair (« bracelet · 4 g · 4 articles · Autre »), pas porter
+     * un condense. C'est elle qui permet de reconnaitre, ou non, ce qu'on a
+     * deja fait.
+     *
+     * Rend `false` quand la personne renonce : le handler s'arrete, et RIEN
+     * n'est parti.
+     */
+    confirmerRepetition: function (nom, empreinte) {
+      var signature = nom + ' | ' + empreinte;
+      var quand = lire()[signature];
+
+      if (!quand) {                     // rien de semblable recemment
+        empreinteActive = signature;    // sera note si le geste aboutit
+        return true;
+      }
+
+      var accepte = window.confirm(
+        'Vous venez d’enregistrer exactement la même chose il y a '
+        + ilYA(Date.now() - quand) + ' :\n\n'
+        + '     ' + empreinte + '\n\n'
+        + 'S’agit-il d’un SECOND enregistrement, bien réel ?\n\n'
+        + 'OK  =  enregistrer une deuxième fois\n'
+        + 'Annuler  =  ne rien faire');
+
+      // En cas de renoncement, rien n'est ecrit : on n'horodate pas, sinon on
+      // rallongerait la fenetre de confirmation pour un geste qui n'a pas eu
+      // lieu.
+      empreinteActive = accepte ? signature : null;
+      return accepte;
+    },
+
     /** Une cle isolee, pour un geste qui n'a pas de fenetre a lui. */
     cle: uuid,
+
+    /**
+     * Retenir le geste qui vient d'aboutir, pour que le MEME, avec le MEME
+     * contenu, fasse apparaitre la fenetre de confirmation.
+     *
+     * `geste()` l'appelle tout seul. Le portail cliente, lui, n'a pas de
+     * handler enveloppe (`confirmerDepot` orchestre son propre affichage) :
+     * il doit donc l'appeler a la main, et seulement une fois le depot
+     * confirme par le serveur.
+     */
+    retenir: function () {
+      if (empreinteActive) { noter(empreinteActive); empreinteActive = null; }
+    },
 
     /**
      * Enveloppe un geste complet. A utiliser dans les handlers.
@@ -189,15 +307,26 @@ var Verrou = (function () {
      */
     geste: function (nom, fn) {
       if (geste || seule) return Promise.reject(new Occupe(geste || seule));
-      geste     = nom;
-      cleActive = this.cleDe(nom);
+      geste           = nom;
+      cleActive       = this.cleDe(nom);
+      empreinteActive = null;
       armer(nom);
       return Promise.resolve()
         .then(fn)
-        // Abouti : le geste suivant portera une cle neuve. Sur rejet, cette
-        // ligne est sautee et la cle survit — c'est voulu.
-        .then(function (v) { delete CLES[nom]; return v; })
-        .finally(function () { geste = null; cleActive = null; desarmer(); });
+        .then(function (v) {
+          // Abouti : le geste suivant portera une cle neuve. Sur rejet, cette
+          // ligne est sautee et la cle survit — c'est voulu.
+          delete CLES[nom];
+          // Et on retient ce qui vient d'etre enregistre, pour que le MEME
+          // geste, avec le MEME contenu, fasse apparaitre une confirmation.
+          // Retenu seulement ici : un geste qui echoue ne doit pas declencher
+          // de confirmation au reessai, la cle s'en charge deja.
+          if (empreinteActive) { noter(empreinteActive); empreinteActive = null; }
+          return v;
+        })
+        .finally(function () {
+          geste = null; cleActive = null; empreinteActive = null; desarmer();
+        });
     },
 
     /**
