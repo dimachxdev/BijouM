@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>KAYOR — Brillez sans effort</title>
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml" />
-  <link rel="stylesheet" href="css/style.css?v=2026-10-31b" />
+  <link rel="stylesheet" href="css/style.css?v=2026-11-02a" />
 </head>
 <body>
 
@@ -568,7 +568,18 @@
           <div class="form-group">
             <label class="form-label">Lien de carte</label>
             <input class="form-input" id="b-maps" placeholder="https://maps.app.goo.gl/…" />
-            <div class="form-hint">Doit commencer par https://</div>
+            <div class="form-hint">Le bouton « Itinéraire ». Doit commencer par https://</div>
+          </div>
+        </div>
+
+        <div class="form-group" style="margin-top:12px">
+          <label class="form-label">Coordonnées GPS</label>
+          <input class="form-input" id="b-coord" placeholder="16.032631, -16.481839" />
+          <div class="form-hint">
+            Pour la carte affichée en bas de votre vitrine. Dans Google Maps, appuyez
+            longuement sur votre boutique : les coordonnées apparaissent, copiez-les et
+            collez-les ici. Sans elles, la carte ne s'affiche pas — le bouton
+            « Itinéraire » reste, lui.
           </div>
         </div>
 
@@ -1636,14 +1647,14 @@
 
 <div class="toast" id="toast"></div>
   <!-- Supabase SDK -->
-  <script src="js/security.js?v=2026-10-31b"></script>
-  <script src="js/auth.js?v=2026-10-31b"></script>
-  <script src="js/data.js?v=2026-10-31b"></script>
-  <script src="js/supabase.js?v=2026-10-31b"></script>
+  <script src="js/security.js?v=2026-11-02a"></script>
+  <script src="js/auth.js?v=2026-11-02a"></script>
+  <script src="js/data.js?v=2026-11-02a"></script>
+  <script src="js/supabase.js?v=2026-11-02a"></script>
   <!-- Encodeur QR local : la regle 6 interdit un CDN, et ce code est lu par
        la page ou vit le jeton de session. Doit precéder app.js. -->
-  <script src="js/qr.js?v=2026-10-31b"></script>
-  <script src="js/app.js?v=2026-10-31b"></script>
+  <script src="js/qr.js?v=2026-11-02a"></script>
+  <script src="js/app.js?v=2026-11-02a"></script>
 
 <!-- MODAL AJUSTER STOCK -->
 <div class="modal-backdrop" id="modal-ajust-stock">

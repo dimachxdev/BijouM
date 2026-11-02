@@ -286,7 +286,7 @@ console.log('KAYOR · auth.js', '2026-10-21b');
             + 'organisations(slug,nom,plan,actif,expire_le,devise,'
             + 'slogan,adresse,telephone,ninea,rccm,pied_facture,logo,'
             + 'presentation,repere,maps_url,horaires,whatsapp,email,'
-            + 'instagram,facebook,tiktok,site_web,couverture)'
+            + 'instagram,facebook,tiktok,site_web,couverture,lat,lng)'
             + '&user_id=eq.' + encodeURIComponent(uid)
             + '&actif=eq.true&limit=1';
 

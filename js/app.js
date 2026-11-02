@@ -20,7 +20,7 @@
  * qui « peut tout faire » alors que les droits sont restreints, c'est presque
  * toujours ça.
  */
-const APP_VERSION = '2026-10-31-vitrine-qr';
+const APP_VERSION = '2026-11-02-vitrine-cercles';
 
 /**
  * Domaine de la vitrine publique, pour le QR imprime sur les factures.
@@ -374,6 +374,9 @@ function renderProfilBoutique() {
   document.getElementById('b-whatsapp').value     = b.whatsapp || '';
   document.getElementById('b-email').value        = b.email || '';
   document.getElementById('b-site').value         = b.site_web || '';
+  document.getElementById('b-coord').value        =
+    (b.lat !== null && b.lat !== undefined && b.lng !== null && b.lng !== undefined)
+      ? b.lat + ', ' + b.lng : '';
   document.getElementById('b-instagram').value    = b.instagram || '';
   document.getElementById('b-facebook').value     = b.facebook || '';
   document.getElementById('b-tiktok').value       = b.tiktok || '';
@@ -491,6 +494,33 @@ function afficherApercuCouverture(dataUri) {
  * serieux ne sert plus qu'en clair, et la contrainte le refuserait de toute
  * facon avec un message obscur.
  */
+/**
+ * « 16.032631, -16.481839 » → { lat, lng }, ou null si le champ est vide.
+ *
+ * C'est exactement ce que Google Maps met dans le presse-papier quand on
+ * appuie longuement sur un lieu : on accepte donc ce format tel quel, plutot
+ * que deux champs separes que personne ne remplirait correctement.
+ *
+ * Les deux valeurs partent ensemble ou pas du tout — la base l'exige par
+ * contrainte (migration 031) : une latitude orpheline placerait l'epingle
+ * sur le meridien de Greenwich, c'est-a-dire n'importe ou.
+ *
+ * Renvoie `false` si la saisie n'est pas interpretable, pour que l'appelant
+ * refuse l'enregistrement au lieu d'effacer silencieusement une position
+ * deja juste.
+ */
+function _coordonnees(champId) {
+  var v = (document.getElementById(champId)?.value || '').trim();
+  if (!v) return null;
+  var m = v.match(/^\s*(-?\d{1,2}(?:[.,]\d+)?)\s*[,;]\s*(-?\d{1,3}(?:[.,]\d+)?)\s*$/);
+  if (!m) return false;
+  var lat = parseFloat(m[1].replace(',', '.'));
+  var lng = parseFloat(m[2].replace(',', '.'));
+  if (!isFinite(lat) || !isFinite(lng)) return false;
+  if (lat < -90 || lat > 90 || lng < -180 || lng > 180) return false;
+  return { lat: lat, lng: lng };
+}
+
 function _urlSite(champId) {
   var v = (document.getElementById(champId)?.value || '').trim();
   if (!v) return null;
@@ -517,6 +547,14 @@ async function enregistrerProfilBoutique() {
   var nom = document.getElementById('b-nom').value.trim();
   if (!nom) { messageBoutique('Le nom commercial est obligatoire.', true); return; }
 
+  // Refuser plutot qu'effacer : une saisie illisible ne doit pas emporter une
+  // position deja juste.
+  var coord = _coordonnees('b-coord');
+  if (coord === false) {
+    messageBoutique('Coordonnées GPS illisibles. Attendu : 16.032631, -16.481839', true);
+    return;
+  }
+
   var maj = {
     nom:          nom,
     slogan:       document.getElementById('b-slogan').value.trim()    || null,
@@ -537,6 +575,8 @@ async function enregistrerProfilBoutique() {
     whatsapp:     document.getElementById('b-whatsapp').value.trim()     || null,
     email:        document.getElementById('b-email').value.trim()        || null,
     site_web:     _urlSite('b-site'),
+    lat:          coord ? coord.lat : null,
+    lng:          coord ? coord.lng : null,
     instagram:    _pseudoReseau('b-instagram'),
     facebook:     _pseudoReseau('b-facebook'),
     tiktok:       _pseudoReseau('b-tiktok')

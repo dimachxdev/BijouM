@@ -15,7 +15,7 @@ fonctions, pas sur le « succès » de la migration :
 | 023 · 024 | portail cliente et dépôt au comptoir étanches |
 | 025 · 026 | identité cliente par `client_id` |
 | 027 | abonnement non auto-attribuable, `DELETE` conditionné |
-| 028 · 029 · 030 | vitrine publique, site internet, image de couverture |
+| 028 → 031 | vitrine publique, site internet, couverture, coordonnées GPS |
 
 **L'Edge Function `membres-admin`** est déployée (version 13,
 `verify_jwt: false`), avec `creer_proprietaire`, `supprimer_comptes` et le
@@ -56,8 +56,8 @@ déjà `migrations/`, les `*.md`, `config_backup.json` et `.claude/`.
 
 Repères de version, pour vérifier que le déploiement a bien pris :
 
-- empreintes de cache : `?v=2026-10-31b`
-- `APP_VERSION` : `2026-10-31-vitrine-qr`
+- empreintes de cache : `?v=2026-11-02a`
+- `APP_VERSION` : `2026-11-02-vitrine-cercles`
 
 `client.html` n'a pas changé (`?v=2026-10-21d`) — c'est normal, le portail
 cliente ne consomme que le JSON de `portail_donnees()`, dont la forme est
@@ -89,6 +89,12 @@ La couverture est plafonnée à 300 Ko : une photo sortie d'un téléphone fait
 plusieurs méga-octets et sera refusée avec son poids affiché. Réduisez-la
 avant de la téléverser — format paysage, le logo vient se poser dessus en
 rond, centré.
+
+**Les coordonnées GPS sont ce qui fait apparaître la carte.** Dans Google
+Maps, appuyez longuement sur la boutique, copiez les coordonnées, collez-les
+dans le champ. Sans elles, la vitrine n'affiche pas de carte — c'est voulu :
+une adresse approximative poserait l'épingle au mauvais endroit, ce qui est
+pire que rien.
 
 > *Prouve* : les colonnes des migrations 028/029 sont écrivables, et la
 > liste `select` d'`auth.js` les relit. Si le champ se vide après

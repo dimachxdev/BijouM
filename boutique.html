@@ -70,6 +70,29 @@ body{
   max-width:420px; margin-left:auto; margin-right:auto;
 }
 
+/* ── Pastilles rondes : suivre la boutique ────────────────
+   Juste l'icone et la couleur, sous le slogan. Pas de mot : ces marques se
+   reconnaissent a leur rond colore avant d'etre lues, et cinq libelles sous
+   le nom de la boutique noieraient l'identite qu'on vient d'afficher.
+   Le nom reste dans `aria-label`, pour qui n'a pas l'image. */
+.cercles{display:flex;justify-content:center;gap:11px;flex-wrap:wrap;margin-top:22px}
+.cercle{
+  width:50px;height:50px;border-radius:50%;flex-shrink:0;
+  display:flex;align-items:center;justify-content:center;
+  text-decoration:none;border:1px solid rgba(0,0,0,0.12);
+  transition:filter .15s,transform .08s;
+}
+.cercle:active{filter:brightness(0.88);transform:scale(0.94)}
+.cercle svg{width:22px;height:22px;fill:currentColor;display:block}
+/* Glyphe sombre sur les fonds clairs, blanc sur les fonds sombres : un
+   pictogramme est un « objet graphique », il lui faut 3:1 contre son fond
+   comme a un gros caractere. Mesures en commentaire des boutons, plus bas. */
+.cercle.whatsapp{background:#25D366;color:#09240f}
+.cercle.instagram{background:linear-gradient(45deg,#F77737 0%,#E1306C 50%,#833AB4 100%);color:#fff}
+.cercle.facebook{background:#1877F2;color:#fff}
+.cercle.tiktok{background:#FE2C55;color:#fff}
+.cercle.site{background:var(--or);color:#17150f}
+
 /* ── Boutons d'action ────────────────────────────────────── */
 .actions{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:6px}
 /* Nombre impair d'actions : la derniere prend toute la largeur plutot que
@@ -120,26 +143,12 @@ body{
 .repere{color:var(--doux);font-size:13.5px}
 
 /* ── Reseaux ─────────────────────────────────────────────── */
-/* Memes regles pour les pastilles : chacune sa marque, et 14 px en gras
-   pour rester au seuil des gros caracteres. Contrastes MESURES, blanc sur
-   fond : Instagram 4,34:1 — Facebook 4,23:1 — TikTok 3,68:1. Les trois
-   tiennent le 3:1 exige a cette taille ; AUCUNE ne tiendrait 4,5:1 en
-   caracteres ordinaires. Reduire la taille ou le gras les ferait toutes
-   basculer sous le seuil — TikTok en premier. */
-.reseaux{display:flex;gap:9px;flex-wrap:wrap}
-.reseaux a{
-  display:inline-flex;align-items:center;gap:7px;
-  padding:10px 16px;border-radius:999px;text-decoration:none;
-  color:#fff;font-size:14px;font-weight:700;border:1px solid transparent;
-  transition:filter .15s;
-}
-.reseaux a:active{filter:brightness(0.9)}
-.reseaux svg{width:16px;height:16px;fill:currentColor;flex-shrink:0}
-.reseaux .instagram{
-  background:linear-gradient(45deg,#F77737 0%,#E1306C 50%,#833AB4 100%);
-}
-.reseaux .facebook{background:#1877F2}
-.reseaux .tiktok{background:#FE2C55}
+/* ── Carte de localisation ───────────────────────────────── */
+.carte-map{padding:0;overflow:hidden}
+.carte-map h2{padding:20px 20px 11px;margin:0}
+.carte-map .adresse,.carte-map .repere{padding:0 20px}
+.carte-map .repere{padding-bottom:16px}
+.map-cadre{display:block;width:100%;height:230px;border:0;border-top:1px solid var(--bord)}
 
 /* ── Etats ───────────────────────────────────────────────── */
 #chargement,#erreur{text-align:center;padding:84px 24px;color:var(--doux)}
@@ -166,6 +175,7 @@ body{
     <div class="logo-rond" id="v-logo"></div>
     <h1 id="v-nom"></h1>
     <div class="slogan" id="v-slogan" hidden></div>
+    <div class="cercles" id="v-cercles"></div>
   </div>
 
   <div class="enveloppe">
@@ -181,15 +191,11 @@ body{
       <div class="horaires" id="v-horaires"></div>
     </div>
 
-    <div class="carte" id="c-adresse" hidden>
+    <div class="carte carte-map" id="c-adresse" hidden>
       <h2>Nous trouver</h2>
       <div class="adresse" id="v-adresse"></div>
       <div class="repere" id="v-repere" hidden></div>
-    </div>
-
-    <div class="carte" id="c-reseaux" hidden>
-      <h2>Nous suivre</h2>
-      <div class="reseaux" id="v-reseaux"></div>
+      <!-- La carte intégrée vient se greffer ici, si elle est décidée. -->
     </div>
 
     <div class="pied" id="v-pied"></div>
@@ -199,6 +205,6 @@ body{
 <!-- Pas de security.js ici : cette page n'ecrit jamais dans innerHTML ce qui
      vient de la base, elle passe par textContent. Un fichier de moins a
      charger sur un telephone en donnees mobiles. -->
-<script src="js/boutique.js?v=2026-10-31b"></script>
+<script src="js/boutique.js?v=2026-11-02a"></script>
 </body>
 </html>

@@ -852,10 +852,41 @@ signature **est** son authentification.
 
 ## 6. Dépendances tierces
 
-**Ce projet n'a ni `package.json`, ni `node_modules`, ni étape de compilation,
-et plus aucun script tiers depuis le 2026-10-14. Zéro dépendance, au sens
-littéral : aucune page ne charge quoi que ce soit en dehors de son propre
-domaine. C'est un atout de sécurité rare — le conserver est une règle.**
+**Ce projet n'a ni `package.json`, ni `node_modules`, ni étape de
+compilation, et aucune bibliothèque tierce. Zéro dépendance, au sens
+littéral — le conserver est une règle.**
+
+### L'unique exception : la carte de la vitrine
+
+Depuis le 2026-11-02, **`boutique.html` charge un `iframe` Google Maps**.
+C'est la seule page du projet qui contacte un autre domaine. La brèche a été
+ouverte sciemment, après que l'alternative sans tiers — un plan d'accès en
+image téléversée, comme le logo — a été proposée et écartée.
+
+**Ce qui la rend acceptable ici, et nulle part ailleurs** : `boutique.html`
+ne porte **aucun jeton**. Ni session Supabase, ni JWT, ni `localStorage`.
+Le danger que cette règle vise — « un CDN compromis exécute son code dans la
+page, avec accès au jeton de session » — n'a aucune prise sur elle. Le seul
+secret qu'elle transporte est la clé publiable, déjà lisible dans le source.
+
+**`index.html`, `operateur.html` et `client.html` portent des jetons. La
+règle 6 y reste entière.** Ne jamais invoquer cette exception pour en ouvrir
+une autre : c'est précisément le raisonnement qui a fait refuser Turnstile
+(2026-10-22), dont le défi devait s'exécuter *dans la page de connexion*,
+là où le jeton se crée.
+
+Deux atténuations, qui ne sont pas décoratives :
+
+- `loading="lazy"` — l'`iframe` ne part qu'une fois la carte atteinte. La
+  plupart des visiteuses s'arrêtent aux horaires et ne déclenchent donc
+  jamais d'appel à Google.
+- `referrerpolicy="no-referrer"` — Google voit une visite, pas de quelle
+  boutique elle vient.
+
+Et **jamais d'adresse en texte dans la requête** : une adresse approximative
+pose l'épingle au mauvais endroit, ce qui est pire que pas de carte. La
+carte exige `lat` et `lng` (migration 031), posées ou absentes ensemble ;
+sans elles, pas de carte, et le bouton « Itinéraire » reste le chemin.
 
 Ajouter une bibliothèque est une décision, pas une commodité. Si c'est
 inévitable :
