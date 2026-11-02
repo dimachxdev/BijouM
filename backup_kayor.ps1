@@ -1,6 +1,28 @@
 # ============================================================
-# KAYOR — Sauvegarde automatique hebdomadaire
-# Compresse le dossier projet et envoie par email Gmail
+# KAYOR — Sauvegarde hebdomadaire DU CODE
+#
+# ATTENTION, LISEZ CECI AVANT DE VOUS FIER A CE SCRIPT.
+#
+# Il compresse le DOSSIER DU PROJET et l'envoie par email. C'est une
+# sauvegarde du CODE SOURCE. Elle ne contient AUCUNE DONNEE METIER :
+# ni vente, ni cliente, ni compte epargne, ni caisse. Tout cela vit
+# dans PostgreSQL chez Supabase, et ce script ne s'y connecte jamais.
+#
+# Constate le 2026-11-02. Le § 9 de CLAUDE.md soupconnait ce script
+# d'echouer en silence a cause du mot de passe Gmail : c'est exact, et
+# c'est accessoire. Meme en marchant parfaitement, il n'aurait jamais
+# sauvegarde une seule ligne de la base.
+#
+# LA SAUVEGARDE DES DONNEES est ailleurs, depuis les migrations 035 et
+# 036 : un instantane quotidien a 02h15, dans la table `sauvegardes`,
+# consultable depuis la console operateur. Elle vit dans la base
+# qu'elle protege : elle couvre l'erreur humaine, pas la perte du
+# projet. Pour cela il faut le plan Pro de Supabase (§ 9).
+#
+# CE SCRIPT GARDE SON UTILITE : le projet n'est pas sous git — il n'y
+# a pas de .git — donc cette archive est la seule copie du code en
+# dehors du poste et du deploiement Vercel. Ne pas le supprimer sans
+# avoir mis le code dans un depot.
 # ============================================================
 
 $ConfigFile = Join-Path $PSScriptRoot "config_backup.json"

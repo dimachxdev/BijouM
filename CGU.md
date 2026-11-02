@@ -201,10 +201,15 @@ Relevé le 2 novembre 2026. **Chaque point est un engagement à ne pas prendre
 avant correction** — promettre dans des CGU ce que le système ne fait pas est
 pire que de n'avoir aucune CGU.
 
-- **Les sauvegardes ne sont pas vérifiées.** Un script hebdomadaire existe ;
-  son mot de passe d'application n'est pas au format attendu et il échoue
-  probablement en silence. **Aucune restauration n'a jamais été testée.**
-  Tant que ce n'est pas réglé, le § 10 ne peut rien promettre.
+- **Les sauvegardes ne couvrent pas la perte du service.** Relevé le
+  2 novembre 2026 : le script hebdomadaire qui passait pour une sauvegarde
+  compresse le **code source** et ne contient aucune donnée de boutique. Depuis
+  cette date, un instantané des données est pris chaque nuit — mais il est
+  stocké **dans la base de données elle-même**. Il protège d'une erreur de
+  manipulation, pas de la disparition du service. Une sauvegarde hors de la
+  base exigerait le plan payant de l'hébergeur.
+  **Aucune restauration n'a jamais été faite sur un incident réel.** Tant que
+  ce n'est pas le cas, le § 10 ne peut rien promettre.
 - **L'hébergement est sur une offre gratuite** qui met le projet en veille
   après une semaine sans activité. Une bijouterie fermée dix jours
   retrouverait son application endormie.

@@ -2,11 +2,18 @@
 
 Mis à jour le 2026-11-02. À suivre dans l'ordre.
 
-> **Ce déploiement porte deux lots.** La vitrine et les CGU, prêts depuis le
-> 2026-10-31 et jamais mis en ligne, et le verrou des gestes du 2026-11-02.
-> Les migrations **032 et 033 sont appliquées et vérifiées** : la base accepte
-> déjà la clé de geste, et l'ignore tant que le code en ligne ne l'envoie pas
+> **Ce déploiement porte trois lots.** La vitrine et les CGU, prêts depuis le
+> 2026-10-31 et jamais mis en ligne ; le verrou des gestes ; et les sauvegardes
+> avec le garde-fou de suppression.
+>
+> Les migrations **032 à 036 sont appliquées et vérifiées**. La base accepte
+> déjà la clé de geste et l'ignore tant que le code en ligne ne l'envoie pas
 > (`p_cle` a une valeur par défaut). Rien n'est cassé en attendant.
+>
+> **Deux choses tournent déjà côté serveur, sans rien déployer :** le
+> `DROP TABLE` sur `public` est refusé depuis la 034, et l'instantané
+> quotidien est planifié à 02h15 (`cron.job`, travail `kayor-sauvegarde-quotidienne`).
+> Le déploiement n'ajoute que leur affichage dans la console opérateur.
 
 ---
 
@@ -82,15 +89,15 @@ déjà `migrations/`, les `*.md`, `config_backup.json` et `.claude/`.
 
 Repères de version, pour vérifier que le déploiement a bien pris :
 
-- empreintes de cache : `?v=2026-11-02b`
-- `APP_VERSION` : `2026-11-02-verrou-gestes`
+- empreintes de cache : `?v=2026-11-02c`
+- `APP_VERSION` : `2026-11-02-sauvegardes`
 
 ---
 
 ## 3. Juste après le déploiement
 
 **Rechargez avec Ctrl + Maj + R**, puis regardez la version sous l'écran de
-connexion. Tant qu'elle n'affiche pas `2026-11-02-verrou-gestes`, rien de ce
+connexion. Tant qu'elle n'affiche pas `2026-11-02-sauvegardes`, rien de ce
 qui suit n'a de sens : c'est le cache, pas un bug. C'est la première chose à
 vérifier devant tout comportement incohérent.
 

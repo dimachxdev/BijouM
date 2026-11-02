@@ -1072,6 +1072,107 @@ inévitable :
 
 ---
 
+## 6 bis. Sauvegardes et suppression de structure
+
+### Ce qui était sauvegardé : le code, pas les données
+
+Vérifié le 2026-11-02. `backup_kayor.ps1` compresse le **dossier du projet** et
+l'envoie par mail. Le § 9 le soupçonnait d'échouer à cause du mot de passe
+Gmail — c'est vrai, et c'est accessoire : **même en marchant parfaitement, il
+n'aurait jamais sauvegardé une vente.** Les données vivent dans PostgreSQL ; ce
+script ne s'y connecte pas.
+
+Il garde pourtant son utilité : **le projet n'est pas sous git** (aucun `.git`),
+donc cette archive est la seule copie du code hors du poste et de Vercel. Ne
+pas le supprimer sans avoir mis le code dans un dépôt.
+
+### Un `DROP TABLE` sur `public` est refusé, pas signalé
+
+Migration 034. Une notification arrive **après** : quand elle s'affiche,
+l'historique d'une bijouterie est déjà parti.
+
+Et un `DROP TABLE` n'est jamais un geste du produit — `supprimer_boutique()`
+efface des **lignes**. Un DROP ici est donc toujours une erreur de frappe, une
+migration mal relue, ou une main qui n'aurait pas dû. Dans les trois cas on
+refuse.
+
+Le déblocage est volontaire et meurt avec la connexion :
+
+```sql
+begin;
+  set local kayor.drop_autorise = 'oui';   -- `set local`, pas `set`
+  drop table public.ma_table;
+commit;
+```
+
+Deux choses à savoir, et ne pas les « corriger » :
+
+- **Une tentative refusée n'est pas dans `journal_ddl`.** Le `raise exception`
+  annule la transaction, donc l'insertion du journal avec elle. On ne peut pas,
+  dans une seule transaction, journaliser en base *et* refuser. Elle part donc
+  dans le journal PostgreSQL (*Supabase → Logs → Postgres*) par un `raise log`,
+  qui survit au rollback. **La trace vaut moins que la table** : ne pas retirer
+  le refus pour pouvoir tout journaliser.
+- **Un `DROP TABLE` produit trois lignes** dans `journal_ddl` — la table, son
+  type de ligne, son type tableau. La première est la vraie.
+
+`journal_ddl` suit la règle du § 7 : `INSERT` et `SELECT`, jamais `UPDATE` ni
+`DELETE`. Le schéma `restauration` est hors du garde-fou, exprès : ses tables
+d'examen doivent pouvoir se supprimer librement.
+
+### L'instantané quotidien vit dans la base qu'il protège
+
+Migrations 035 et 036. `pg_cron` prend chaque nuit à 02h15 (UTC = heure de
+Dakar) un instantané logique de toutes les tables métier dans
+`public.sauvegardes`, et en garde quatorze.
+
+**C'est la phrase à retenir, et elle n'est pas une formalité :**
+
+- il couvre **l'erreur humaine** — un `DELETE` sans `WHERE`, une table
+  supprimée, un solde mal recalé. C'est de loin ce qui arrive ;
+- il ne couvre **pas la perte du projet**. Si la base disparaît, l'instantané
+  disparaît avec elle.
+
+Seule la sauvegarde de Supabase couvre le second cas, et elle est réservée au
+**plan Pro** (§ 9). De plus, sur l'offre gratuite **un projet en veille
+n'exécute aucun cron** : une semaine sans activité et il n'y a pas d'instantané
+de la nuit. C'est pourquoi la console signale en rouge une sauvegarde de plus
+de 48 h.
+
+**Ne pas promettre dans les CGU ce que cela ne fait pas.** Le § 10 de
+`cgu.html` ne garantit toujours aucune restauration, et il a raison tant qu'une
+restauration n'a pas été rejouée sur un vrai incident.
+
+Trois règles de conception à tenir :
+
+- **La liste des tables est déduite du catalogue**, jamais écrite à la main :
+  une liste figée aurait oublié la première table ajoutée ensuite, et personne
+  ne l'aurait su avant d'en avoir besoin. `compteurs` est **inclus** — restaurer
+  des ventes sans leur numérotation ferait rejouer des identifiants déjà pris.
+- **`sauvegardes` est fermée à tout le monde**, comme `gestes`. Un instantané
+  contient les données de **toutes** les boutiques dans un seul objet,
+  `pin_hash` compris : une policy trop large ici annulerait d'un coup
+  l'étanchéité des migrations 021 à 028.
+- **La restauration n'écrase jamais.** `restaurer_table()` recrée les lignes
+  dans le schéma `restauration`, à côté ; un humain compare puis réinjecte.
+  Une restauration automatique en place serait le geste le plus destructeur du
+  produit après `supprimer_boutique()` : elle remplacerait des données justes
+  par celles d'hier, et personne ne s'en apercevrait avant la fin du mois.
+  **Entre une restauration lente et une restauration qui se trompe, on prend la
+  lente.**
+
+`comparer_sauvegarde()` répond à la question qu'on se pose vraiment après un
+incident — « qu'est-ce qui manque ? » — **sans rien écrire**, et ne rend que
+des comptes, jamais des lignes. C'est ce qui se lit en premier.
+
+Le schéma `restauration` reste fermé à `authenticated`, et doit le rester :
+l'examen ligne à ligne se fait dans l'éditeur SQL de Supabase. Une restauration
+n'est pas un geste de comptoir. Le premier message de `restaurer_table()`
+disait « comparez avec public.ventes » à quelqu'un qui n'avait pas le droit de
+lire la table — corrigé par la 036.
+
+---
+
 ## 7. Journal et détection
 
 `connexions` n'a **que** des policies `INSERT` et `SELECT` : ni `UPDATE`, ni
@@ -1253,8 +1354,25 @@ reviendrait à constituer un fichier qu'on n'a aucune raison de détenir.
 - [ ] Passer le projet Supabase en **Pro** : l'offre gratuite met le projet en
       veille après une semaine d'inactivité, et une boutique fermée dix jours
       retrouverait son application morte.
-- [ ] Vérifier le script de sauvegarde hebdomadaire (son mot de passe
-      d'application n'est pas au format Google, il échoue probablement en silence).
+- [x] ~~Vérifier le script de sauvegarde hebdomadaire~~ — vérifié le
+      2026-11-02, et le constat est pire que le soupçon : **il ne sauvegarde
+      pas la base.** Il compresse le dossier du projet. Le mot de passe Gmail
+      est un problème secondaire. Voir § 6 bis.
+- [ ] **Sauvegarder les données HORS de la base.** Les migrations 035/036
+      posent un instantané quotidien, mais il vit dans la base qu'il protège :
+      il ne survit pas à la perte du projet. Deux chemins, à trancher :
+      le **plan Pro** de Supabase (sauvegarde quotidienne de leur côté,
+      7 jours), ou un `pg_dump` planifié sur une machine toujours allumée —
+      ce qui suppose un dépôt git et le mot de passe de la base dans un coffre.
+      **Ne pas exposer d'export HTTP du contenu complet** sans avoir pesé que
+      le compte opérateur deviendrait alors la clé de tout le jeu de données.
+- [ ] **Mettre le code dans un dépôt git.** Il n'y en a pas (`.git` absent).
+      La seule copie hors du poste est l'archive de `backup_kayor.ps1` — si
+      elle n'est pas partie, il n'y en a aucune.
+- [ ] **Rejouer une restauration pour de vrai.** `restaurer_table()` a été
+      éprouvée sur `ventes` le 2026-11-02 (17 lignes, sommes identiques), mais
+      jamais sur un incident réel. Tant que ce n'est pas fait, le § 10 des CGU
+      ne doit rien garantir.
 - [ ] `README.md` décrit encore une application « sans serveur, dans le
       navigateur » — faux depuis le passage à Supabase.
 

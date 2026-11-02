@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Console opérateur — Gestion Bijouterie</title>
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml" />
-  <link rel="stylesheet" href="css/style.css?v=2026-11-02b" />
+  <link rel="stylesheet" href="css/style.css?v=2026-11-02c" />
   <style>
     /* La console vit hors de l'application boutique : pas de sidebar. */
     .op-wrap { max-width: 1100px; margin: 0 auto; padding: 18px 16px 40px; }
@@ -217,11 +217,31 @@
       </div>
     </div>
 
+    <!-- Sauvegardes et structure.
+         Le bandeau d'alerte n'est pas décoratif : une table supprimée ne se
+         remarque autrement qu'au moment où une boutique appelle. -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">Sauvegardes et structure</div>
+        <span class="page-sub">Instantané quotidien à 02h15. Il vit dans la base
+          qu'il protège : il couvre l'erreur humaine, pas la perte du projet.</span>
+      </div>
+      <div class="card-body">
+        <div id="op-alerte-structure" style="display:none"></div>
+        <div id="op-sauvegardes-resume" class="page-sub">Chargement…</div>
+        <div class="modal-actions" style="justify-content:flex-start;margin-top:12px">
+          <button class="btn small" id="op-btn-sauver">⤓ Sauvegarder maintenant</button>
+          <button class="btn small" id="op-btn-comparer">⚖ Comparer à la base</button>
+        </div>
+        <div id="op-comparaison" style="margin-top:12px"></div>
+      </div>
+    </div>
+
   </div>
 </div>
 
-<script src="js/verrou.js?v=2026-11-02b"></script>
-  <script src="js/supabase.js?v=2026-11-02b"></script>
-<script src="js/operateur.js?v=2026-11-02b"></script>
+<script src="js/verrou.js?v=2026-11-02c"></script>
+  <script src="js/supabase.js?v=2026-11-02c"></script>
+<script src="js/operateur.js?v=2026-11-02c"></script>
 </body>
 </html>

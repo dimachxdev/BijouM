@@ -234,6 +234,9 @@
       boutiques = d.boutiques || [];
       rendre();
       message('');
+      // Apres la liste, pas avant : si les sauvegardes sont illisibles, la
+      // console doit quand meme s'ouvrir.
+      chargerSauvegardes();
     } catch (e) { message(e.message, true); }
   }
 
@@ -557,7 +560,129 @@
     };
   }
 
+  // ------------------------------------------------- sauvegardes et structure
+  /**
+   * Le bandeau qui previent, et le resume qui dit de quand date le filet.
+   *
+   * La question a poser en premier le jour ou quelque chose a disparu n'est pas
+   * « comment restaurer », c'est « de quand date la derniere sauvegarde ».
+   * D'ou cet ordre a l'ecran : l'alerte, puis la date, puis les boutons.
+   */
+  function octets(n) {
+    if (n < 1024) return n + ' o';
+    if (n < 1024 * 1024) return Math.round(n / 1024) + ' Ko';
+    return (n / 1048576).toFixed(1) + ' Mo';
+  }
+
+  function jourHeure(iso) {
+    var d = new Date(iso);
+    if (isNaN(d)) return String(iso);
+    return fmtDate(iso) + ' à ' + ('0' + d.getHours()).slice(-2)
+         + 'h' + ('0' + d.getMinutes()).slice(-2);
+  }
+
+  async function chargerSauvegardes() {
+    var resume  = $('op-sauvegardes-resume');
+    var bandeau = $('op-alerte-structure');
+    if (!resume) return;
+
+    try {
+      var s = await rpc('sauvegardes_recentes', {});
+      var liste = (s && s.sauvegardes) || [];
+
+      if (!liste.length) {
+        resume.innerHTML = '<strong style="color:var(--danger-text)">'
+          + 'Aucune sauvegarde.</strong> Le travail planifié n\'a encore jamais '
+          + 'tourné, ou le projet dormait.';
+      } else {
+        var d = liste[0];
+        // Au-dela de 48 h, l'instantane ne reflete plus la journee de travail :
+        // sur l'offre gratuite, un projet en veille n'execute aucun cron.
+        var heures = (Date.now() - new Date(d.faite_le).getTime()) / 3600000;
+        var vieux  = heures > 48;
+        resume.innerHTML =
+          '<div style="font-size:15px">Dernière sauvegarde : <strong'
+          + (vieux ? ' style="color:var(--danger-text)"' : '') + '>'
+          + esc(jourHeure(d.faite_le)) + '</strong>'
+          + (vieux ? ' — plus de 48 h, le projet a probablement dormi' : '')
+          + '</div>'
+          + '<div class="page-sub">' + d.nb_lignes + ' lignes · '
+          + d.nb_tables + ' tables · ' + octets(d.octets)
+          + ' · ' + liste.length + ' conservée(s) sur 14</div>';
+      }
+    } catch (e) {
+      resume.textContent = 'Sauvegardes illisibles : ' + e.message;
+    }
+
+    // Le journal de structure. Une suppression de TABLE est l'evenement qui
+    // justifie tout ce dispositif : elle passe en rouge, les autres en gris.
+    try {
+      var j = await rpc('journal_structure', { p_limite: 20 });
+      var lignes = (j && j.lignes) || [];
+      var tables = lignes.filter(function (l) { return l.objet_type === 'table'; });
+
+      if (!tables.length) { bandeau.style.display = 'none'; return; }
+
+      var t = tables[0];
+      bandeau.style.display = '';
+      bandeau.innerHTML =
+        '<div style="background:var(--danger-bg);color:var(--danger-text);'
+        + 'border:1px solid currentColor;border-radius:var(--radius-md);'
+        + 'padding:12px 14px;margin-bottom:12px">'
+        + '<div style="font-weight:700;font-size:15px">⚠ '
+        + tables.length + ' suppression(s) de table enregistrée(s)</div>'
+        + '<div style="margin-top:6px">La plus récente : <strong>'
+        + esc(t.objet) + '</strong>, le ' + esc(jourHeure(t.survenu_le))
+        + ', par <strong>' + esc(t.acteur) + '</strong>.</div>'
+        + '<div style="margin-top:6px">Comparez la base à la dernière '
+        + 'sauvegarde avant toute autre action — des lignes ont pu être '
+        + 'supprimées volontairement, et restaurer par-dessus ferait un '
+        + 'deuxième dégât.</div>'
+        + '</div>';
+    } catch (e) {
+      // Le journal n'est pas l'essentiel : son absence ne doit pas masquer le
+      // resume des sauvegardes, qui lui est vital.
+      console.warn('journal_structure :', e.message);
+    }
+  }
+
+  async function sauverMaintenant() {
+    var r = await rpc('sauvegarder_maintenant', {});
+    if (!r || r.ok === false) throw new Error(r && r.erreur ? r.erreur : 'Refus du serveur.');
+    await chargerSauvegardes();
+    message('✓ Sauvegarde prise — ' + r.lignes + ' lignes, ' + octets(r.octets) + '.');
+  }
+
+  async function comparerALaBase() {
+    var cible = $('op-comparaison');
+    var r = await rpc('comparer_sauvegarde', {});
+    if (!r || r.ok === false) throw new Error(r && r.erreur ? r.erreur : 'Refus du serveur.');
+
+    var ecarts = (r.tables || []).filter(function (t) { return t.etat !== 'identique'; });
+    var lignes = ecarts.map(function (t) {
+      var grave = t.etat === 'TABLE DISPARUE' || t.etat === 'des lignes manquent';
+      return '<tr><td>' + esc(t.table) + '</td>'
+           + '<td style="text-align:right">' + t.dans_sauvegarde + '</td>'
+           + '<td style="text-align:right">'
+           + (t.dans_la_base === null ? '—' : t.dans_la_base) + '</td>'
+           + '<td' + (grave ? ' style="color:var(--danger-text);font-weight:600"' : '')
+           + '>' + esc(t.etat) + '</td></tr>';
+    }).join('');
+
+    cible.innerHTML =
+      '<div class="page-sub" style="margin-bottom:8px">Sauvegarde n°' + r.sauvegarde
+      + ' du ' + esc(jourHeure(r.faite_le)) + ' — ' + esc(r.avis) + '</div>'
+      + (ecarts.length
+          ? '<div class="table-wrap"><table><thead><tr><th>Table</th>'
+            + '<th style="text-align:right">Sauvegarde</th>'
+            + '<th style="text-align:right">Base</th><th>Etat</th></tr></thead>'
+            + '<tbody>' + lignes + '</tbody></table></div>'
+          : '');
+  }
+
   document.addEventListener('DOMContentLoaded', function () {
+    $('op-btn-sauver').onclick   = verrouille('sauvegarde', sauverMaintenant);
+    $('op-btn-comparer').onclick = verrouille('comparaison', comparerALaBase);
     $('op-btn-login').onclick     = verrouille('connexion-op', connexion);
     $('op-btn-logout').onclick    = function () { deconnexion(); };
     $('op-btn-refresh').onclick   = rafraichir;
