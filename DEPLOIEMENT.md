@@ -36,6 +36,7 @@ déployé n'appelle pas encore. Rien n'est cassé en production à cet instant.
 
 ```
 boutique.html          ← NOUVEAU
+cgu.html               ← NOUVEAU
 js/boutique.js         ← NOUVEAU
 js/qr.js               ← NOUVEAU
 index.html
@@ -45,6 +46,11 @@ js/app.js
 js/auth.js
 js/operateur.js
 ```
+
+> **`CGU.md` ne se déploie pas** — `.vercelignore` écarte les `*.md`, et
+> c'est voulu : son § 12 énumère les faiblesses du service. La version
+> publique est `cgu.html`, sans ce paragraphe. Toute modification du texte
+> doit être reportée dans les deux.
 
 **Les trois premiers sont des fichiers neufs.** C'est le piège d'un
 déploiement fichier par fichier : on envoie ce qu'on a modifié et on oublie

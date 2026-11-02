@@ -1053,6 +1053,17 @@ reviendrait à constituer un fichier qu'on n'a aucune raison de détenir.
       publique » et le QR sur la facture ne sont pas encore en ligne.
       Ensuite : imprimer une facture, **scanner le code avec un téléphone**,
       et vérifier que la page ouvre bien la bonne boutique.
+- [ ] **Compléter l'éditeur dans les CGU** (`cgu.html` et `CGU.md`) : raison
+      sociale, NINEA ou RCCM, adresse, contact. Une CGU sans éditeur
+      identifiable n'engage personne, donc ne protège personne. Et **faire
+      relire le texte par un avocat sénégalais** avant de l'opposer à une
+      boutique — loi n° 2008-12, déclaration CDP.
+
+      ⚠ **`CGU.md` est interne et ne se publie pas.** Son § 12 liste les
+      faiblesses du service (sauvegardes non vérifiées, pas de MFA, mot de
+      passe de messagerie fuité) : utile comme registre, désastreux en
+      public. `cgu.html` est la version publique, sans ce paragraphe — elle
+      ne promet rien de faux sans dire pourquoi. Modifier les deux ensemble.
 - [ ] Activer la **MFA** (TOTP) et l'exiger des rôles `proprietaire` et `admin`.
 - [x] ~~Freiner le bourrage sur la connexion d'équipe~~ — fait le 2026-10-22
       par la limite native de Supabase Auth (30 → 10 / 5 min / IP). Un frein

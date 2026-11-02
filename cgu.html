@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Conditions d'utilisation</title>
+<meta name="description" content="Conditions générales d'utilisation du service." />
+<meta name="theme-color" content="#f1ede4" />
+<style>
+/* Page autonome, sans JavaScript et sans feuille externe : un document
+   juridique doit s'ouvrir vite et rester lisible meme si tout le reste
+   tombe. Palette reprise de css/style.css — trois plans, ivoire pour la
+   page, blanc pour ce qui porte le texte. */
+:root{
+  --bg-app:#f1ede4; --bg-primary:#ffffff; --bg-muted:#faf7f0;
+  --texte:#1a1916; --texte2:#6b6860; --texte3:#757169;
+  --bord:rgba(74,62,34,0.12); --bord2:rgba(74,62,34,0.22);
+  --or:#C9A84C; --or-fonce:#8a6a1a;
+  --radius:14px;
+  --ombre:0 1px 2px rgba(60,48,20,0.05), 0 2px 5px rgba(60,48,20,0.05);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{
+  background:var(--bg-app); color:var(--texte);
+  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+  line-height:1.62; -webkit-font-smoothing:antialiased;
+  padding:24px 16px 64px;
+}
+.doc{max-width:680px;margin:0 auto}
+
+header{text-align:center;padding:12px 0 26px}
+header h1{font-size:25px;font-weight:600;letter-spacing:-0.3px}
+header .date{color:var(--texte3);font-size:12.5px;margin-top:8px}
+header .filet{width:54px;height:2px;background:var(--or);margin:18px auto 0;border-radius:2px}
+
+section{
+  background:var(--bg-primary); border:0.5px solid var(--bord);
+  border-radius:var(--radius); box-shadow:var(--ombre);
+  padding:22px 22px 24px; margin-bottom:14px;
+}
+h2{
+  font-size:15.5px; font-weight:600; margin-bottom:12px;
+  padding-bottom:10px; border-bottom:0.5px solid var(--bord);
+}
+h2 .num{color:var(--or-fonce);font-variant-numeric:tabular-nums;margin-right:9px}
+p{font-size:14.5px;margin-bottom:11px}
+p:last-child,ul:last-child{margin-bottom:0}
+ul{margin:0 0 11px 0;padding-left:19px}
+li{font-size:14.5px;margin-bottom:7px}
+li:last-child{margin-bottom:0}
+strong{font-weight:600}
+
+/* Les definitions des trois roles : un tableau serait illisible sur un
+   telephone, d'ou une liste de descriptions. */
+dl{margin:0}
+dt{font-weight:600;font-size:14.5px;margin-top:12px}
+dt:first-child{margin-top:0}
+dd{font-size:14.5px;color:var(--texte2);margin:2px 0 0}
+
+.encadre{
+  background:var(--bg-muted); border-left:3px solid var(--or);
+  border-radius:0 var(--radius) var(--radius) 0;
+  padding:14px 16px; margin:14px 0 0; font-size:13.5px; color:var(--texte2);
+}
+.encadre strong{color:var(--texte)}
+
+footer{text-align:center;margin-top:26px;color:var(--texte3);font-size:12.5px}
+footer a{color:var(--or-fonce);font-weight:600}
+.retour{
+  display:inline-block;margin-bottom:22px;color:var(--or-fonce);
+  text-decoration:none;font-size:13.5px;font-weight:600;
+}
+.retour:hover{text-decoration:underline}
+
+@media print{
+  body{background:#fff;padding:0}
+  section{box-shadow:none;border:none;border-bottom:0.5px solid #ddd;border-radius:0;page-break-inside:avoid}
+  .retour{display:none}
+}
+</style>
+</head>
+<body>
+<div class="doc">
+
+  <a class="retour" href="index.html">← Retour à la connexion</a>
+
+  <header>
+    <h1>Conditions générales d'utilisation</h1>
+    <div class="date">Version du 2 novembre 2026</div>
+    <div class="filet"></div>
+  </header>
+
+  <section>
+    <h2><span class="num">1</span>Qui est qui</h2>
+    <p>Trois rôles, à ne pas confondre — c'est ce qui détermine qui répond de quoi.</p>
+    <dl>
+      <dt>L'éditeur</dt>
+      <dd>La personne physique ou morale qui exploite le service et vous y donne accès.</dd>
+      <dt>La boutique</dt>
+      <dd>La bijouterie abonnée. Elle enregistre ses ventes, ses clientes, son stock.
+          C'est elle qui décide des données qu'elle saisit et à quelle fin.</dd>
+      <dt>La cliente finale</dt>
+      <dd>La personne qui achète un bijou dans cette bijouterie, et dont le nom, le
+          téléphone et l'épargne figurent dans l'application. Elle n'est pas cliente
+          de l'éditeur.</dd>
+    </dl>
+    <div class="encadre">
+      <strong>La boutique est responsable des données de ses clientes ; l'éditeur
+      n'en est que le dépositaire technique.</strong> L'éditeur ne consulte pas ces
+      données, ne les exploite pas, ne les revend pas et n'en tire aucun usage
+      statistique. Cette séparation n'est pas une déclaration d'intention : elle est
+      appliquée par la base de données elle-même (§ 5).
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="num">2</span>Ce que fait le service</h2>
+    <p>
+      Une application de gestion de bijouterie accessible par navigateur : ventes,
+      achats à la clientèle, stock, caisse, comptes d'épargne-bijoux, impression de
+      factures.
+    </p>
+    <p>Elle comprend également :</p>
+    <ul>
+      <li>un <strong>portail cliente</strong>, où une cliente consulte son épargne et
+          ses commandes au moyen de son numéro de téléphone et d'un code à quatre
+          chiffres que la boutique lui attribue ;</li>
+      <li>une <strong>vitrine publique</strong>, page accessible à tous, où la boutique
+          publie son nom, ses coordonnées, ses horaires et ses réseaux sociaux.</li>
+    </ul>
+    <p>
+      Le service ne traite <strong>aucun paiement en ligne</strong> et n'est pas un
+      établissement de paiement. Les sommes inscrites reflètent des espèces reçues au
+      comptoir par la boutique ; l'éditeur ne détient jamais d'argent.
+    </p>
+  </section>
+
+  <section>
+    <h2><span class="num">3</span>Abonnement, essai, échéance</h2>
+    <p>
+      L'accès est soumis à un abonnement dont le plan et la date d'échéance sont fixés
+      par l'éditeur. Les plans existants sont : essai, standard, pro et entreprise.
+    </p>
+    <p>
+      À l'échéance, ou en cas de suspension, <strong>la boutique passe en lecture
+      seule</strong> : elle consulte et imprime l'intégralité de son historique, mais
+      ne peut plus rien enregistrer. Cette bascule est appliquée par la base de
+      données à chaque requête, et non par l'interface.
+    </p>
+    <p>
+      Aucune donnée n'est effacée du fait d'une échéance. Elle le reste jusqu'à une
+      suppression demandée (§ 8).
+    </p>
+  </section>
+
+  <section>
+    <h2><span class="num">4</span>Comptes et mots de passe</h2>
+    <p>
+      La propriétaire de la boutique reçoit un identifiant et un mot de passe. Elle
+      crée elle-même les comptes de son équipe et peut les remplacer à tout moment.
+    </p>
+    <ul>
+      <li><strong>Un mot de passe n'est jamais lisible, par personne — éditeur
+          compris.</strong> Il est haché et ne peut être que remplacé.</li>
+      <li>Tout mot de passe est confronté à une base publique de fuites connues avant
+          d'être accepté. Si ce service tiers ne répond pas, le mot de passe est
+          accepté : le nombre minimum de caractères reste le verrou.</li>
+      <li><strong>Chaque compte est personnel.</strong> Le partage d'un identifiant
+          rend toute traçabilité illusoire et engage la boutique.</li>
+      <li>La boutique signale sans délai tout accès qu'elle suspecte compromis.</li>
+    </ul>
+    <p>
+      Les connexions sont consignées. <strong>Ces traces ne peuvent être ni modifiées
+      ni effacées, par personne</strong> — c'est volontaire, et c'est aussi ce qui
+      protège la boutique en cas de litige interne.
+    </p>
+  </section>
+
+  <section>
+    <h2><span class="num">5</span>Étanchéité entre boutiques</h2>
+    <p>
+      Les données d'une boutique ne sont accessibles qu'à ses propres membres. Le
+      cloisonnement est appliqué par la base de données sur chaque lecture et chaque
+      écriture, et non par l'interface.
+    </p>
+    <p>
+      <strong>L'éditeur n'a pas accès aux données commerciales d'une boutique.</strong>
+      Son compte d'administration ne peut lire ni les ventes, ni la caisse, ni les
+      clientes d'une bijouterie. Un dépannage se fait par téléphone avec la
+      propriétaire, qui regarde son écran.
+    </p>
+    <p>
+      L'éditeur conserve un accès technique à l'infrastructure — hébergement, base de
+      données — nécessaire à l'exploitation, aux sauvegardes et à la correction
+      d'anomalies. Cet accès n'est utilisé qu'à ces fins.
+    </p>
+  </section>
+
+  <section>
+    <h2><span class="num">6</span>Portail cliente</h2>
+    <p>
+      La boutique attribue à une cliente, si celle-ci le souhaite, un code à quatre
+      chiffres lui donnant accès à son épargne et à ses commandes.
+    </p>
+    <ul>
+      <li>La boutique informe sa cliente de cet accès et recueille son accord.</li>
+      <li>Le code est haché et <strong>la boutique elle-même ne peut pas le
+          relire</strong> ; elle peut seulement le remplacer.</li>
+      <li>Les tentatives d'accès sont limitées et consignées, pour empêcher qu'un
+          tiers devine le code d'une cliente.</li>
+      <li>Le numéro de téléphone n'est <strong>jamais consigné en clair</strong> dans
+          le journal des tentatives : seules une empreinte et les quatre derniers
+          chiffres le sont, pour qu'un humain reconnaisse sa cliente sans constituer
+          de fichier.</li>
+    </ul>
+    <div class="encadre">
+      Une cliente peut demander le retrait de son accès, la rectification ou la
+      suppression de ses données. <strong>Cette demande s'adresse à la bijouterie,
+      pas à l'éditeur</strong> : c'est elle qui détient la relation.
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="num">7</span>Vitrine publique</h2>
+    <p>
+      La boutique choisit librement ce qu'elle publie. Elle garantit qu'elle dispose
+      des droits sur les images qu'elle dépose, et qu'aucune n'expose une personne
+      sans son accord.
+    </p>
+    <p>
+      Aucune donnée de cliente, aucune vente, aucun montant n'apparaît sur cette page :
+      la fonction qui l'alimente n'expose que les champs d'identité de la boutique,
+      énumérés un à un.
+    </p>
+    <div class="encadre">
+      <strong>Transfert vers un tiers.</strong> Lorsque la boutique renseigne ses
+      coordonnées GPS, la vitrine affiche une carte fournie par <strong>Google
+      Maps</strong>. Ouvrir cette page transmet alors à Google l'adresse IP de la
+      visiteuse. La carte n'est chargée que si la visiteuse fait défiler la page
+      jusqu'à elle, et l'origine de la visite lui est masquée. C'est le seul élément
+      du service hébergé hors de son propre domaine ; la boutique peut le retirer en
+      effaçant ses coordonnées GPS.
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="num">8</span>Suppression d'une boutique</h2>
+    <p>
+      La suppression efface définitivement l'historique commercial de la boutique.
+      Elle est irréversible et ne peut être demandée que par la propriétaire.
+    </p>
+    <p>Elle est <strong>refusée par le service</strong> tant que :</p>
+    <ul>
+      <li>une cliente détient de l'épargne dans la boutique — cet argent ne lui a pas
+          été rendu ;</li>
+      <li>une vente comporte un reste dû — c'est la preuve d'une créance.</li>
+    </ul>
+    <p>
+      Ces deux refus protègent des tiers et ne sont levés par personne, éditeur
+      compris. La boutique solde ces positions avant de demander la suppression.
+    </p>
+  </section>
+
+  <section>
+    <h2><span class="num">9</span>Ce qui n'est pas permis</h2>
+    <ul>
+      <li>Contourner ou tenter de contourner les contrôles d'accès, y compris ceux qui
+          limitent le rôle d'un membre de l'équipe.</li>
+      <li>Utiliser le service pour enregistrer des opérations fictives, ou pour tenir
+          une comptabilité destinée à tromper un tiers ou une administration.</li>
+      <li>Extraire massivement les données d'une autre boutique, ou tenter d'y
+          accéder.</li>
+      <li>Revendre l'accès au service, ou le mettre à disposition d'une bijouterie non
+          abonnée.</li>
+    </ul>
+    <p>
+      L'éditeur peut suspendre sans préavis un accès manifestement utilisé en
+      violation de ce paragraphe.
+    </p>
+  </section>
+
+  <section>
+    <h2><span class="num">10</span>Disponibilité</h2>
+    <p>
+      L'éditeur met en œuvre les moyens raisonnables pour maintenir le service
+      accessible, <strong>sans engagement de disponibilité chiffré</strong>. Le service
+      dépend d'un hébergeur tiers, dont les interruptions ne sont pas de son ressort.
+    </p>
+    <p>
+      L'application fonctionne dans un navigateur, sans installation. Une connexion
+      internet est nécessaire.
+    </p>
+  </section>
+
+  <section>
+    <h2><span class="num">11</span>Responsabilité</h2>
+    <p>
+      Le service est un outil d'enregistrement. <strong>Les écritures sont saisies par
+      la boutique et relèvent de sa seule responsabilité</strong> : exactitude des
+      montants, des poids, des identités, conformité fiscale et comptable.
+    </p>
+    <p>
+      L'éditeur ne répond pas des pertes d'exploitation, du manque à gagner, ni des
+      conséquences d'une saisie erronée, d'une perte de mot de passe ou d'un partage de
+      compte. Il répond des défaillances du service qui lui sont directement
+      imputables, dans la limite des sommes effectivement versées par la boutique au
+      titre des douze derniers mois.
+    </p>
+  </section>
+
+  <section>
+    <h2><span class="num">12</span>Modification et droit applicable</h2>
+    <p>
+      L'éditeur peut modifier ces conditions. Toute modification substantielle est
+      portée à la connaissance des boutiques abonnées avant son entrée en vigueur.
+    </p>
+    <p>
+      Ces conditions sont régies par le droit sénégalais. À défaut d'accord amiable,
+      le litige relève des juridictions compétentes de Dakar.
+    </p>
+  </section>
+
+  <footer>
+    <!-- À COMPLÉTER AVANT MISE EN LIGNE : une CGU sans éditeur identifiable
+         n'engage personne, donc ne protège personne. Raison sociale,
+         NINEA ou RCCM, adresse, email de contact. -->
+    <p>Éditeur : <strong>à compléter</strong> — raison sociale, NINEA/RCCM, adresse, contact.</p>
+    <p style="margin-top:10px"><a href="index.html">Retour à la connexion</a></p>
+  </footer>
+
+</div>
+</body>
+</html>
