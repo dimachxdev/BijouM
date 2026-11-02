@@ -208,14 +208,20 @@
       + ' boutique' + (boutiques.length > 1 ? 's' : '')
       + ' · ' + boutiques.filter(function (b) { return b.actif; }).length + ' active(s)';
 
+    // Ces deux boutons sont recrees a chaque rendu et n'ont pas d'identifiant
+    // a desactiver : c'est le verrou qui les couvre, par la regle CSS sur
+    // `body[data-occupe]`. Les handlers passent donc par `verrouille()`, comme
+    // ceux de l'en-tete.
     Array.prototype.forEach.call(corps.querySelectorAll('button[data-org]'), function (btn) {
-      btn.onclick = function () { basculer(btn.dataset.org, btn.dataset.actif === '1'); };
+      btn.onclick = verrouille('bascule-boutique', function () {
+        return basculer(btn.dataset.org, btn.dataset.actif === '1');
+      });
     });
 
     Array.prototype.forEach.call(corps.querySelectorAll('button[data-suppr]'), function (btn) {
-      btn.onclick = function () {
-        supprimerBoutique(btn.dataset.suppr, btn.dataset.slug, btn.dataset.nom);
-      };
+      btn.onclick = verrouille('supprimer-boutique', function () {
+        return supprimerBoutique(btn.dataset.suppr, btn.dataset.slug, btn.dataset.nom);
+      });
     });
     Array.prototype.forEach.call(corps.querySelectorAll('button[data-edit]'), function (btn) {
       btn.onclick = function () { ouvrirEdition(btn.dataset.edit); };
@@ -525,16 +531,44 @@
   window.majApercuProprio = majApercuProprio;
   window.basculerVisibiliteOp = basculerVisibiliteOp;
 
+  /**
+   * Le verrou, pose a la frontiere des handlers et nulle part ailleurs.
+   *
+   * `rpc()` ci-dessus sert indifferemment aux lectures (la liste des
+   * boutiques) et aux ecritures : le verrouiller figerait `rafraichir()`,
+   * appele juste apres chaque ecriture. On enveloppe donc le GESTE, qui est
+   * aussi la bonne granularite — `creer()` enchaine une Edge Function puis un
+   * rafraichissement, et `Verrou.requete` n'est pas reentrante.
+   *
+   * Pas de cle de geste ici : creer une boutique deux fois echoue sur le code
+   * deja pris, et remplacer un mot de passe par la meme valeur laisse le meme
+   * etat. Le verrou sert a empecher deux creations concurrentes, dont la
+   * seconde laisserait une boutique sans proprietaire.
+   */
+  function verrouille(nom, fn) {
+    return function () {
+      var args = arguments;
+      var ceci = this;
+      return Verrou.geste(nom, function () { return fn.apply(ceci, args); })
+        .catch(function (e) {
+          if (Verrou.estOccupe(e)) return;
+          message(e && e.message ? e.message : 'Operation echouee.', true);
+        });
+    };
+  }
+
   document.addEventListener('DOMContentLoaded', function () {
-    $('op-btn-login').onclick     = connexion;
+    $('op-btn-login').onclick     = verrouille('connexion-op', connexion);
     $('op-btn-logout').onclick    = function () { deconnexion(); };
     $('op-btn-refresh').onclick   = rafraichir;
     $('op-btn-nouvelle').onclick  = basculerFormulaire;
-    $('op-btn-creer').onclick     = creer;
-    $('op-btn-enregistrer').onclick = enregistrerEdition;
-    $('op-btn-mdp-proprio').onclick = remplacerMotDePasseProprio;
+    $('op-btn-creer').onclick     = verrouille('creer-boutique', creer);
+    $('op-btn-enregistrer').onclick = verrouille('editer-boutique', enregistrerEdition);
+    $('op-btn-mdp-proprio').onclick = verrouille('mdp-proprietaire', remplacerMotDePasseProprio);
+    // La touche Entree passe par le MEME chemin verrouille que le bouton.
+    // L'y oublier aurait laisse une porte ouverte a cote de la porte fermee.
     $('op-pass').addEventListener('keydown', function (e) {
-      if (e.key === 'Enter') connexion();
+      if (e.key === 'Enter') $('op-btn-login').onclick();
     });
     reprendreSession();
   });

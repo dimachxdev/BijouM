@@ -47,6 +47,29 @@ function _fetchTimeout(url, opts, ms) {
     .finally(function(){ clearTimeout(tid); });
 }
 
+/**
+ * Les six tables écrites en direct par PostgREST portent `cle_geste` et son
+ * index unique (migration 032). Les autres ne l'ont pas : y envoyer la
+ * colonne ferait échouer l'écriture sur une colonne inconnue.
+ *
+ * Ajouter une table ici impose de lui ajouter la colonne ET l'index, pas
+ * seulement la ligne de cette liste.
+ */
+const _TABLES_CLE_GESTE = ['ventes', 'decaissements', 'sorties',
+                           'reprises', 'clients', 'bijoux_arrhes'];
+
+/**
+ * Traduit le refus de l'index unique en phrase lisible.
+ *
+ * Quand une même clé de geste revient sur une ligne neuve, PostgreSQL lève
+ * 23505. Ce n'est pas une panne : c'est le serveur qui refuse d'enregistrer
+ * deux fois ce que la personne n'a fait qu'une fois. Le dire ainsi, plutôt
+ * que « 409 — duplicate key value violates unique constraint ».
+ */
+function _refusDoublon(txt) {
+  return txt && txt.indexOf('cle_geste') !== -1;
+}
+
 const _supa = {
   // `colonnes` permet de restreindre la projection. Nécessaire pour `clients`,
   // dont la colonne `pin_hash` n'est lisible par personne : un `select=*`
@@ -73,36 +96,57 @@ const _supa = {
       });
     }
 
-    var r = await fetch(SUPABASE_URL + '/rest/v1/' + table, {
-      method:  'POST',
-      headers: H({ 'Prefer': 'resolution=merge-duplicates,return=representation' }),
-      body:    JSON.stringify(rows)
-    });
-    if (!r.ok) {
-      var txt = await r.text();
-      console.error('UPSERT ' + table + ' (' + r.status + '):', txt);
-      throw new Error(table + ': ' + r.status + ' — ' + txt);
+    // La clé du geste en cours, par le même chemin et pour la même raison que
+    // `organisation_id` : centralisée ici plutôt que recopiée dans la
+    // trentaine de fonctions d'écriture. Hors geste elle est nulle, et
+    // l'écriture part sans clé — comme avant la migration 032.
+    var cle = (typeof Verrou !== 'undefined') ? Verrou.cleCourante() : null;
+    if (cle && _TABLES_CLE_GESTE.indexOf(table) !== -1) {
+      rows = rows.map(function (row) {
+        return row.cle_geste ? row : Object.assign({}, row, { cle_geste: cle });
+      });
     }
-    return r.json();
+
+    return Verrou.requete('ecriture ' + table, async function () {
+      var r = await fetch(SUPABASE_URL + '/rest/v1/' + table, {
+        method:  'POST',
+        headers: H({ 'Prefer': 'resolution=merge-duplicates,return=representation' }),
+        body:    JSON.stringify(rows)
+      });
+      if (!r.ok) {
+        var txt = await r.text();
+        if (_refusDoublon(txt)) {
+          throw new Error('Ce geste a déjà été enregistré. '
+                        + 'Rafraîchissez la liste pour le voir.');
+        }
+        console.error('UPSERT ' + table + ' (' + r.status + '):', txt);
+        throw new Error(table + ': ' + r.status + ' — ' + txt);
+      }
+      return r.json();
+    });
   },
   async delete(table, filter) {
-    var r = await fetch(SUPABASE_URL + '/rest/v1/' + table + '?' + filter, {
-      method: 'DELETE', headers: H()
+    return Verrou.requete('suppression ' + table, async function () {
+      var r = await fetch(SUPABASE_URL + '/rest/v1/' + table + '?' + filter, {
+        method: 'DELETE', headers: H()
+      });
+      if (!r.ok) throw new Error('DELETE ' + table + ': ' + r.status);
+      return true;
     });
-    if (!r.ok) throw new Error('DELETE ' + table + ': ' + r.status);
-    return true;
   },
   async deleteRow(table, id) {
     // Détecter si la clé primaire est 'ref' (stock) ou 'id'
     var pkField = (table === 'stock') ? 'ref' : 'id';
-    var r = await fetch(SUPABASE_URL + '/rest/v1/' + table + '?' + pkField + '=eq.' + encodeURIComponent(id), {
-      method: 'DELETE', headers: H()
+    return Verrou.requete('suppression ' + table, async function () {
+      var r = await fetch(SUPABASE_URL + '/rest/v1/' + table + '?' + pkField + '=eq.' + encodeURIComponent(id), {
+        method: 'DELETE', headers: H()
+      });
+      if (!r.ok) {
+        var txt = await r.text();
+        throw new Error('DELETE ' + table + ' (' + r.status + '): ' + txt);
+      }
+      return true;
     });
-    if (!r.ok) {
-      var txt = await r.text();
-      throw new Error('DELETE ' + table + ' (' + r.status + '): ' + txt);
-    }
-    return true;
   }
 };
 
@@ -930,6 +974,17 @@ async function saveStockBatch(items) {
  * un numéro déjà pris dès que ce cache était en retard — et l'écriture en
  * upsert écrasait alors la ligne existante au lieu d'en créer une.
  */
+/*
+ * DELIBEREMENT HORS DU VERROU D'ECRITURE.
+ *
+ * `prochainsIdsVente()` demande les deux numéros EN PARALLELE. Les passer par
+ * `Verrou.requete()` ferait refuser le second dès que l'appel a lieu hors
+ * geste — la vente tomberait sur « une opération est déjà en cours ».
+ *
+ * Et le risque couvert serait nul : un clic refait consomme un numéro de plus,
+ * donc un trou dans la numérotation, jamais une double écriture. C'est
+ * l'entorse assumée de la migration 032.
+ */
 async function prochainId(cle, prefixe, largeur) {
   var r = await fetch(SUPABASE_URL + '/rest/v1/rpc/prochain_id', {
     method: 'POST', headers: H(),
@@ -947,17 +1002,20 @@ async function prochainsIdsVente() {
 
 /** Ouvre un compte épargne avec son dépôt initial — une seule transaction. */
 async function ouvrirCompteEpargne(compteId, client, date, depotInitial, clientId) {
-  var r = await fetch(SUPABASE_URL + '/rest/v1/rpc/ouvrir_compte_epargne', {
-    method: 'POST', headers: H(),
-    // `p_client` reste le nom affiche ; `p_client_id` est ce qui designe la
-    // cliente depuis la migration 025. Le serveur verifie que l'identifiant
-    // appartient bien a la boutique.
-    body: JSON.stringify({ p_compte_id: compteId, p_client: client,
-                           p_date: date, p_depot_initial: depotInitial,
-                           p_client_id: clientId || null })
+  return Verrou.requete('ouverture de compte', async function () {
+    var r = await fetch(SUPABASE_URL + '/rest/v1/rpc/ouvrir_compte_epargne', {
+      method: 'POST', headers: H(),
+      // `p_client` reste le nom affiche ; `p_client_id` est ce qui designe la
+      // cliente depuis la migration 025. Le serveur verifie que l'identifiant
+      // appartient bien a la boutique.
+      body: JSON.stringify({ p_compte_id: compteId, p_client: client,
+                             p_date: date, p_depot_initial: depotInitial,
+                             p_client_id: clientId || null,
+                             p_cle: Verrou.cleCourante() })
+    });
+    if (!r.ok) throw await _erreurRpc(r, 'Création refusée');
+    return r.json();
   });
-  if (!r.ok) throw await _erreurRpc(r, 'Création refusée');
-  return r.json();
 }
 
 /**
@@ -967,13 +1025,16 @@ async function ouvrirCompteEpargne(compteId, client, date, depotInitial, clientI
  * plus diverger.
  */
 async function depotCompteEpargne(compteId, montant, date, note) {
-  var r = await fetch(SUPABASE_URL + '/rest/v1/rpc/depot_compte_epargne', {
-    method: 'POST', headers: H(),
-    body: JSON.stringify({ p_compte_id: compteId, p_montant: montant,
-                           p_date: date || null, p_note: note || null })
+  return Verrou.requete('dépôt', async function () {
+    var r = await fetch(SUPABASE_URL + '/rest/v1/rpc/depot_compte_epargne', {
+      method: 'POST', headers: H(),
+      body: JSON.stringify({ p_compte_id: compteId, p_montant: montant,
+                             p_date: date || null, p_note: note || null,
+                             p_cle: Verrou.cleCourante() })
+    });
+    if (!r.ok) throw await _erreurRpc(r, 'Dépôt refusé');
+    return r.json();
   });
-  if (!r.ok) throw await _erreurRpc(r, 'Dépôt refusé');
-  return r.json();
 }
 
 /**
@@ -1005,9 +1066,11 @@ async function _erreurRpc(r, prefixe) {
  * quand la vente échouait — une cliente y a perdu 40 000 F d'épargne.
  */
 async function venteSurCompteEpargne(p) {
+ return Verrou.requete('vente sur épargne', async function () {
   var r = await fetch(SUPABASE_URL + '/rest/v1/rpc/vente_sur_compte_epargne', {
     method: 'POST', headers: H(),
     body: JSON.stringify({
+      p_cle:             Verrou.cleCourante(),
       p_vente_id:        p.id,
       p_compte_id:       p.compteId,
       p_date:            p.date,
@@ -1032,6 +1095,7 @@ async function venteSurCompteEpargne(p) {
   });
   if (!r.ok) throw await _erreurRpc(r, 'Vente refusée');
   return r.json();
+ });
 }
 
 /**
@@ -1042,15 +1106,21 @@ async function venteSurCompteEpargne(p) {
  * montant supérieur au reste dû ou une vente annulée.
  */
 async function enregistrerPaiementVente(venteId, montant, date, paiement) {
-  var r = await fetch(SUPABASE_URL + '/rest/v1/rpc/enregistrer_paiement_vente', {
-    method: 'POST', headers: H(),
-    body: JSON.stringify({
-      p_vente_id: venteId, p_montant: montant,
-      p_date: date || null, p_paiement: paiement || null
-    })
+  return Verrou.requete('encaissement', async function () {
+    var r = await fetch(SUPABASE_URL + '/rest/v1/rpc/enregistrer_paiement_vente', {
+      method: 'POST', headers: H(),
+      body: JSON.stringify({
+        p_vente_id: venteId, p_montant: montant,
+        p_date: date || null, p_paiement: paiement || null,
+        // Ce geste n'insère aucune ligne : il incrémente `acompte`. Aucune
+        // contrainte d'unicité ne pouvait donc l'attraper — d'où la table
+        // `gestes` plutôt qu'une colonne (migration 033, § 2).
+        p_cle: Verrou.cleCourante()
+      })
+    });
+    if (!r.ok) throw await _erreurRpc(r, 'Paiement refusé');
+    return r.json();
   });
-  if (!r.ok) throw await _erreurRpc(r, 'Paiement refusé');
-  return r.json();
 }
 
 /**
@@ -1058,13 +1128,18 @@ async function enregistrerPaiementVente(venteId, montant, date, paiement) {
  * Le code est haché par PostgreSQL ; il n'est jamais stocké en clair, ni
  * renvoyé. Passer une chaîne vide retire l'accès au portail.
  */
+// Pas de clé de geste : poser un code revient à écrire une valeur, pas à
+// ajouter une ligne. Le refaire deux fois laisse le même état. Ce geste est
+// donc déjà idempotent, et lui ajouter un registre n'apporterait rien.
 async function definirPinClient(clientId, pin) {
-  var r = await fetch(SUPABASE_URL + '/rest/v1/rpc/definir_pin_client', {
-    method: 'POST', headers: H(),
-    body: JSON.stringify({ p_client_id: clientId, p_pin: pin || '' })
+  return Verrou.requete('code PIN', async function () {
+    var r = await fetch(SUPABASE_URL + '/rest/v1/rpc/definir_pin_client', {
+      method: 'POST', headers: H(),
+      body: JSON.stringify({ p_client_id: clientId, p_pin: pin || '' })
+    });
+    if (!r.ok) throw await _erreurRpc(r, 'Enregistrement du code refusé');
+    return r.json();
   });
-  if (!r.ok) throw await _erreurRpc(r, 'Enregistrement du code refusé');
-  return r.json();
 }
 
 /**
@@ -1072,16 +1147,31 @@ async function definirPinClient(clientId, pin) {
  * en espèces, le décaissement qui le fait sortir de la caisse — le tout en une
  * transaction côté serveur. Voir migration 013.
  */
+/*
+ * SANS CLE DE GESTE, ET C'EST UN CHOIX.
+ *
+ * Elle écrit pourtant deux lignes — un mouvement et un décaissement. Mais
+ * elle recalcule le solde depuis l'historique avant d'agir, et refuse un
+ * compte déjà à zéro. Un rejeu tombe donc sur « Ce compte est déjà à zéro »
+ * : il n'écrit rien. Le geste est protégé par sa propre logique.
+ *
+ * CLAUDE.md la liste parmi les fonctions vérifiées correctes « à ne pas
+ * rouvrir par symétrie ». La seule chose qu'une clé améliorerait est le
+ * message après un abandon réseau — pas la sûreté. Insuffisant pour
+ * réécrire une fonction qui touche à de l'argent rendu à une cliente.
+ */
 async function viderCompteEpargne(compteId, motif, date, note) {
-  var r = await fetch(SUPABASE_URL + '/rest/v1/rpc/vider_compte_epargne', {
-    method: 'POST', headers: H(),
-    body: JSON.stringify({ p_compte_id: compteId, p_motif: motif,
-                           p_date: date || null, p_note: note || null })
+  return Verrou.requete('solde de compte', async function () {
+    var r = await fetch(SUPABASE_URL + '/rest/v1/rpc/vider_compte_epargne', {
+      method: 'POST', headers: H(),
+      body: JSON.stringify({ p_compte_id: compteId, p_motif: motif,
+                             p_date: date || null, p_note: note || null })
+    });
+    if (!r.ok) throw await _erreurRpc(r, 'Opération refusée');
+    var d = await r.json();
+    if (d && d.ok === false) throw new Error(d.erreur || 'Opération refusée.');
+    return d;
   });
-  if (!r.ok) throw await _erreurRpc(r, 'Opération refusée');
-  var d = await r.json();
-  if (d && d.ok === false) throw new Error(d.erreur || 'Opération refusée.');
-  return d;
 }
 
 /**
@@ -1091,7 +1181,15 @@ async function viderCompteEpargne(compteId, motif, date, note) {
  * détient la clé de service. Elle revérifie que l'appelante est bien
  * propriétaire de SA boutique avant d'agir — le navigateur ne décide rien.
  */
+/*
+ * Verrouillée elle aussi — sans clé de geste, qui n'aurait pas de sens ici :
+ * créer un compte deux fois échoue sur l'adresse déjà prise, et remplacer un
+ * mot de passe deux fois par la même valeur laisse le même état. Le verrou
+ * sert donc surtout à empêcher deux créations de boutique concurrentes, dont
+ * la seconde laisserait une boutique sans propriétaire.
+ */
 async function appelMembresAdmin(corps) {
+ return Verrou.requete('compte / boutique', async function () {
   // En-têtes construits à la main, SANS le `Prefer` que H() ajoute pour
   // PostgREST : il ne veut rien dire pour une Edge Function, et le navigateur
   // refusait tout l'appel parce que la préflight ne l'autorisait pas —
@@ -1119,6 +1217,7 @@ async function appelMembresAdmin(corps) {
     throw new Error(d.erreur || 'Opération refusée (' + r.status + ').');
   }
   return d;
+ });
 }
 
 function creerCompteMembre(p) {

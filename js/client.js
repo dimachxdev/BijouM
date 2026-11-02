@@ -278,6 +278,9 @@ function renderCommandes(){
 // ─── Dépôt ─────────────────────────────────────────────────
 
 function ouvrirDepot(compteId){
+  // Ce qui s'ouvre est un depot NEUF : on jette la cle du precedent, meme
+  // s'il a echoue. Voir `confirmerDepot()`.
+  Verrou.oublier('depot:' + compteId);
   document.getElementById('depot-compte-id').value = compteId;
   document.getElementById('depot-montant').value = '';
   document.getElementById('depot-note').value = '';
@@ -296,6 +299,22 @@ function clearQA(){
   document.querySelectorAll('.qa-btn').forEach(function(b){ b.classList.remove('active'); });
 }
 
+/**
+ * LE GESTE LE PLUS EXPOSE AU REJEU DE TOUT LE PRODUIT.
+ *
+ * `rpc()` ci-dessus ABANDONNE a 15 secondes. Le serveur, lui, finit son
+ * travail. La cliente lit « le serveur met trop de temps a repondre », son
+ * depot est pourtant enregistre — et elle recommence. Rien dans le navigateur
+ * ne peut l'en empecher : les deux tentatives sont a deux minutes d'ecart,
+ * peut-etre apres un rechargement de page.
+ *
+ * D'ou la cle de geste, qui part avec l'appel. Au second passage, la fonction
+ * `portail_depot()` reconnait la cle, n'ecrit rien, et rend le resultat du
+ * premier depot — le recu affiche alors le bon solde, une seule fois credite.
+ *
+ * La cle est portee par le compte et survit a l'echec, elle n'est jetee qu'a
+ * la reouverture de la fenetre (`ouvrirDepot`) ou apres un depot abouti.
+ */
 async function confirmerDepot(){
   var compteId = document.getElementById('depot-compte-id').value;
   var montant  = parseInt(document.getElementById('depot-montant').value, 10) || 0;
@@ -303,15 +322,21 @@ async function confirmerDepot(){
 
   if(montant < 500){ showToast('Montant minimum : 500 FCFA'); return; }
 
+  var nomGeste = 'depot:' + compteId;
+  if(Verrou.enCours()){ showToast('Un dépôt est déjà en cours. Patientez.'); return; }
+  var cle = Verrou.cleDe(nomGeste);
+
   showLoading(true);
   closeModal('modal-depot');
 
   try {
     // Le serveur revérifie le montant et que le compte appartient bien à la
     // cliente connectée : un montant trafiqué côté navigateur ne passe pas.
-    var res = await rpc('portail_depot', {
-      p_token: JETON, p_compte: compteId,
-      p_montant: montant, p_note: note || null
+    var res = await Verrou.requete(nomGeste, function(){
+      return rpc('portail_depot', {
+        p_token: JETON, p_compte: compteId,
+        p_montant: montant, p_note: note || null, p_cle: cle
+      });
     });
 
     if(!res || !res.ok){
@@ -325,6 +350,8 @@ async function confirmerDepot(){
       montant: montant, note: note, date: today(),
       nouveauSolde: res.nouveau_solde
     };
+    // Abouti : le prochain depot sur ce compte portera une cle neuve.
+    Verrou.oublier(nomGeste);
 
     await chargerDonnees();   // on relit le serveur plutôt que de deviner l'état
     renderComptes();

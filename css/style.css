@@ -1000,3 +1000,71 @@ tbody tr:hover td { background: #f3eedf; }
 }
 
 @media print { .fab { display: none !important; } }
+
+/* ===========================================================================
+   ÉCRITURE EN COURS — `body[data-occupe]`, posé par js/verrou.js
+   ===========================================================================
+   Une règle, et non un `btn.disabled` recopié dans chaque handler : neuf sur
+   une trentaine le faisaient, et les boutons des cartes de liste, créés en
+   innerHTML, n'ont pas d'identifiant à désactiver.
+
+   Le besoin vient du constat du 2026-11-02 : sur une connexion lente, rien ne
+   signalait qu'une requête était partie. La vendeuse recliquait — et c'est ce
+   qui faisait deux ventes. Verrouiller sans rien montrer aurait seulement
+   remplacé le double enregistrement par un bouton mort sans explication.
+
+   Les trois marques, du plus discret au plus visible :
+   1. le curseur passe en attente, partout ;
+   2. les boutons de la modale ouverte et le bouton flottant ne répondent plus ;
+   3. un filet dans le ton or traverse le haut de l'écran.
+   --------------------------------------------------------------------------- */
+
+body[data-occupe] { cursor: progress; }
+
+/* `pointer-events` plutôt que `disabled` : la règle vaut aussi pour les
+   boutons rendus en innerHTML, qui n'ont ni id ni poignée JS. « Annuler » est
+   bloqué comme les autres — fermer la modale au milieu d'une écriture
+   cacherait son résultat, ce qui est précisément ce qu'on corrige. */
+/* `.modal-backdrop.show` — PAS `.modal.show`. La racine d'une modale porte
+   `modal-backdrop`, et `.modal` est le panneau a l'interieur. Ecrit de
+   memoire la premiere fois, le selecteur ne correspondait a rien : le filet
+   de progression s'affichait, les boutons restaient cliquables. Mesure dans
+   le navigateur, pas relu. */
+body[data-occupe] .modal-backdrop.show .modal-actions .btn,
+body[data-occupe] .fab {
+  pointer-events: none;
+  opacity: 0.55;
+}
+
+/* Le filet de progression. 3 px, au-dessus de tout, dans l'or de la charte —
+   `--kayor-or` à plat, lettres noires nulle part ici : c'est un trait, pas un
+   bouton. Il est purement décoratif, donc `aria-hidden` par construction (un
+   pseudo-élément n'entre pas dans l'arbre d'accessibilité) ; l'information
+   utile reste le toast. */
+body[data-occupe]::before {
+  content: '';
+  position: fixed;
+  inset: 0 0 auto 0;
+  height: 3px;
+  z-index: 10000;
+  background: linear-gradient(90deg,
+    transparent 0%, var(--kayor-or) 45%, var(--kayor-or) 55%, transparent 100%);
+  background-size: 220% 100%;
+  animation: kayor-occupe 1.1s linear infinite;
+}
+
+@keyframes kayor-occupe {
+  from { background-position: -110% 0; }
+  to   { background-position:  110% 0; }
+}
+
+/* Une vendeuse qui a demandé moins d'animations garde le filet — il porte
+   l'information — mais fixe, et sans défilement. */
+@media (prefers-reduced-motion: reduce) {
+  body[data-occupe]::before {
+    animation: none;
+    background: var(--kayor-or);
+  }
+}
+
+@media print { body[data-occupe]::before { display: none; } }

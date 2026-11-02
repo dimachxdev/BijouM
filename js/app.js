@@ -20,7 +20,7 @@
  * qui « peut tout faire » alors que les droits sont restreints, c'est presque
  * toujours ça.
  */
-const APP_VERSION = '2026-11-02-vitrine-cercles';
+const APP_VERSION = '2026-11-02-verrou-gestes';
 
 /**
  * Domaine de la vitrine publique, pour le QR imprime sur les factures.
@@ -92,6 +92,21 @@ function save() {
 // voir prochainId() et prochainsIdsVente() dans js/supabase.js.
 
 // ── Wrappers save + Supabase : écriture → relecture → re-render ───────────
+//
+// CES HUIT FONCTIONS AVALAIENT LEUR ERREUR dans un `console.error`, et rien
+// d'autre. Un `await saveAndSyncVente(v)` aboutissait donc meme quand la base
+// avait refuse l'ecriture : le handler fermait sa modale et annoncait « Vente
+// enregistree ». La seule trace etait dans la console, que personne n'ouvre
+// au comptoir.
+//
+// C'est le deuxieme mensonge de l'ecran, independant du double-clic, et il le
+// nourrit : une vendeuse qui ne voit aucun echec reclique sur ce qui semble
+// n'avoir rien fait. Elles relancent desormais (`throw e`), et le handler
+// affiche la cause — `_erreurRpc()` ayant deja mis le message de PostgreSQL
+// en tete.
+//
+// `saveAndSyncConnexion` est la seule exception, en bas : journaliser une
+// connexion ne doit jamais empecher de travailler.
 
 async function saveAndSyncVente(v) {
   save();
@@ -102,7 +117,7 @@ async function saveAndSyncVente(v) {
     STATE.ventes = rows.map(mapVente);
     save();
     renderJournal(); renderDashboard();
-  } catch(e) { console.error('saveAndSyncVente:', e); }
+  } catch(e) { console.error('saveAndSyncVente:', e); throw e; }
 }
 
 async function saveAndSyncStock(items) {
@@ -126,6 +141,7 @@ async function saveAndSyncStock(items) {
   } catch(e) {
     console.error('saveAndSyncStock:', e);
     showToast('Erreur sync stock: ' + e.message);
+    throw e;
   }
 }
 
@@ -142,7 +158,7 @@ async function saveAndSyncSortie(s) {
     STATE.stock = stockRows.map(mapStock);
     save();
     renderStocks(); renderDashboard();
-  } catch(e) { console.error('saveAndSyncSortie:', e); }
+  } catch(e) { console.error('saveAndSyncSortie:', e); throw e; }
 }
 
 async function saveAndSyncDecaissement(d) {
@@ -153,7 +169,7 @@ async function saveAndSyncDecaissement(d) {
     STATE.decaissements = rows.map(mapDecaissement);
     save();
     renderDecaissements(); renderDashboard();
-  } catch(e) { console.error('saveAndSyncDecaissement:', e); }
+  } catch(e) { console.error('saveAndSyncDecaissement:', e); throw e; }
 }
 
 async function saveAndSyncClient(c) {
@@ -164,7 +180,7 @@ async function saveAndSyncClient(c) {
     STATE.clients = rows;
     save();
     if(typeof renderClients === 'function') renderClients();
-  } catch(e) { console.error('saveAndSyncClient:', e); }
+  } catch(e) { console.error('saveAndSyncClient:', e); throw e; }
 }
 
 async function saveAndSyncCC(cc) {
@@ -182,7 +198,7 @@ async function saveAndSyncCC(cc) {
     STATE.comptesClients = comptes.map(mapCompte);
     save();
     renderComptesClients(); renderDashboard();
-  } catch(e) { console.error('saveAndSyncCC:', e); }
+  } catch(e) { console.error('saveAndSyncCC:', e); throw e; }
 }
 
 async function saveAndSyncReprise(r) {
@@ -196,7 +212,7 @@ async function saveAndSyncReprise(r) {
     STATE.stock = stockRows.map(mapStock);
     save();
     renderAchatsClients(); renderStocks(); renderDashboard();
-  } catch(e) { console.error('saveAndSyncReprise:', e); }
+  } catch(e) { console.error('saveAndSyncReprise:', e); throw e; }
 }
 
 async function saveAndSyncBijouArr(ba) {
@@ -215,7 +231,7 @@ async function saveAndSyncBijouArr(ba) {
     STATE.stock = stockRows.map(mapStock);
     save();
     renderBijouxArr(); renderStocks(); renderDashboard();
-  } catch(e) { console.error('saveAndSyncBijouArr:', e); }
+  } catch(e) { console.error('saveAndSyncBijouArr:', e); throw e; }
 }
 
 async function saveAndSyncConnexion(cn) {
@@ -223,6 +239,31 @@ async function saveAndSyncConnexion(cn) {
   try {
     await saveConnexion(cn);
   } catch(e) { console.error('saveAndSyncConnexion:', e); }
+}
+
+/**
+ * Enveloppe un handler d'ecriture : le verrou, la cle de geste et l'affichage
+ * de l'erreur, en UN seul endroit.
+ *
+ * Chaque handler d'argent s'ecrit donc :
+ *
+ *   function enregistrerSortie(){ return geste('sortie', _enregistrerSortie); }
+ *   async function _enregistrerSortie(){ ... }
+ *
+ * Deux lignes, et le geste est verrouille, rejouable et bavard sur ses
+ * echecs. Recopier `btn.disabled = true` dans le corps ne faisait rien de
+ * tout cela, et neuf handlers sur une trentaine seulement le faisaient.
+ *
+ * `nom` DESIGNE LE GESTE ET SA CIBLE quand il y en a une — « paiement:V-0042 »,
+ * pas « paiement ». La cle survit a un echec pour qu'un reessai soit reconnu
+ * du serveur ; sous un nom trop general, l'echec d'un versement ferait
+ * prendre le versement suivant, sur une AUTRE vente, pour son rejeu.
+ */
+function geste(nom, fn) {
+  return Verrou.geste(nom, fn).catch(function (e) {
+    if (Verrou.estOccupe(e)) return;
+    showToast('⚠ ' + ((e && e.message) || 'Opération échouée.'));
+  });
 }
 
 
@@ -1584,7 +1625,29 @@ function prepNouvelleVente(){
   });
 }
 
-async function enregistrerVente(){
+/**
+ * Un clic sur « Enregistrer » = un geste, et un seul.
+ *
+ * Avant le 2026-11-02, cette fonction finissait ainsi :
+ *
+ *   STATE.ventes.unshift(venteObj);
+ *   saveAndSyncVente(venteObj);          // aucun await
+ *   closeModal('modal-nouvelle-vente');  // la modale se ferme
+ *   showToast('Vente ' + id + ' ...');   // « c'est fait »
+ *
+ * La modale se fermait et le toast felicitait AVANT que l'ecriture ait touche
+ * la base. Si elle echouait, l'ecran affichait une vente qui n'existait pas.
+ * Et quand c'etait lent, rien ne bougeait : la vendeuse ne pouvait pas savoir
+ * qu'une requete etait partie, donc elle recliquait — et `prochain_id()`
+ * donnant un numero neuf a chaque clic, cela faisait DEUX ventes.
+ *
+ * Desormais : `Verrou.geste()` refuse le second clic, porte la cle que le
+ * serveur reconnait en cas de reessai, et rien ne se ferme ni ne s'annonce
+ * avant que la base ait repondu.
+ */
+function enregistrerVente(){ return geste('vente', _enregistrerVente); }
+
+async function _enregistrerVente(){
   const date    = document.getElementById('v-date').value;
   // Le selecteur rend un IDENTIFIANT ; le nom en est derive et part dans la
   // colonne `client`, qui est ce qui s'imprime sur la facture.
@@ -1630,7 +1693,7 @@ async function enregistrerVente(){
     }
     // Vente + retrait en une seule transaction serveur : les enchaîner ici
     // laissait passer le retrait quand la vente échouait.
-    try {
+    {
       // Numéros attribués par le serveur : le compteur local peut être en
       // retard et refabriquer un identifiant déjà pris.
       const num = await prochainsIdsVente();
@@ -1649,7 +1712,11 @@ async function enregistrerVente(){
       closeModal('modal-nouvelle-vente');
       renderJournal(); renderStocks();
       showToast('Vente '+idCpt+' — '+fmt(montant)+' déduit du compte de '+client);
-    } catch(e){ showToast('⚠ '+e.message); }
+    }
+    // Le try/catch est parti : l'erreur remonte a `enregistrerVente()`, qui
+    // l'affiche et laisse la modale ouverte. L'avaler ici fermait le geste
+    // en silence, et la cle etait alors oubliee comme apres un succes — donc
+    // un reessai aurait reecrit.
     return;
   } else {
     // Si acompte non rempli (0 ou vide) → vente soldée directement
@@ -1668,8 +1735,14 @@ async function enregistrerVente(){
     if(!ok) return;
   }
   const venteObj={id,date,client,clientId,description:desc,local,importe,poids:poidsVente,carat,typeBijou,paiement,montant,acompte,restant:montant-acompte,compteClientId,numFacture,payeParCompte};
+
+  // ATTENDU, et attendu AVANT d'afficher quoi que ce soit. L'etat local ne
+  // recoit la vente qu'une fois la base d'accord : sinon un echec laissait
+  // une vente a l'ecran qui n'existait nulle part, et le rechargement
+  // suivant la faisait disparaitre sans explication.
+  await saveAndSyncVente(venteObj);
+
   STATE.ventes.unshift(venteObj);
-  saveAndSyncVente(venteObj);
   closeModal('modal-nouvelle-vente');renderJournal();renderDashboard();renderStocks();
   showToast(paiement==='compte'?('Vente '+id+' — '+fmt(montant)+' deduit compte '+client):('Vente '+id+' — '+fmt(montant)));
 }
@@ -1710,6 +1783,10 @@ function ouvrirEditVente(id){
 }
 
 function sauvegarderVente(){
+  return geste('edit-vente:' + document.getElementById('edit-v-id').value,
+               _sauvegarderVente);
+}
+function _sauvegarderVente(){
   const id=document.getElementById('edit-v-id').value;
   const v=STATE.ventes.find(x=>x.id===id);if(!v)return;
   const admin=isAdmin();
@@ -1738,9 +1815,17 @@ function sauvegarderVente(){
 
   Object.assign(v,{date,client,clientId,description:desc,local,importe,carat,typeBijou,montant,acompte,restant:montant-acompte});
   save();
-  saveVente(v); // App → Supabase → App
-  closeModal('modal-edit-vente');
-  showToast('✓ Vente mise à jour.');
+  // Attendu : la modale se fermait et le toast annonçait « mise à jour »
+  // pendant que l'écriture partait sans surveillance.
+  //
+  // Pas de clé de geste ici, et il n'en faut pas : c'est une mise à jour de
+  // valeurs absolues sur une ligne qui existe déjà. La refaire deux fois
+  // laisse le même état. C'est l'inverse d'un encaissement, qui AJOUTE au
+  // montant déjà versé — voir `enregistrer_paiement_vente`.
+  return saveVente(v).then(function(){
+    closeModal('modal-edit-vente');
+    showToast('✓ Vente mise à jour.');
+  });
 }
 
 function ajouterAcompteVente(){
@@ -2033,7 +2118,8 @@ function rendreStockCartes(data){
 }
 document.getElementById('stock-search')?.addEventListener('input',function(){renderStocks(this.value);});
 
-function ajouterProduit(){
+function ajouterProduit(){ return geste('article', _ajouterProduit); }
+async function _ajouterProduit(){
   var nom=document.getElementById('p-nom').value.trim();
   var typeBijouP=(document.getElementById('p-type-bijou')&&document.getElementById('p-type-bijou').value)||'';
   var hasOrP=TYPES_AVEC_OR_CODES.indexOf(typeBijouP)>=0;
@@ -2044,10 +2130,21 @@ function ajouterProduit(){
   var seuil=parseFloat(document.getElementById('p-seuil')&&document.getElementById('p-seuil').value)||50;
   var ref=''; var prix=0; var type=hasOrP?prov:(typeBijouP||'autre');
   if(!nom||!typeBijouP||poids<=0){showToast('Designation, type de bijou et poids sont obligatoires.');return;}
-  STATE.counters.stk++; ref='STK-'+String(STATE.counters.stk).padStart(4,'0');
+
+  // La reference vient du SERVEUR. Elle sortait de `STATE.counters.stk`, un
+  // compteur local — exactement ce que « La numerotation vient du serveur »
+  // interdit depuis la suppression de `nextId()`. Deux postes qui creaient un
+  // article en meme temps fabriquaient le meme STK-0004, et l'upsert ecrasait
+  // le premier article par le second.
+  ref = await prochainId('stk','STK',4);
+
   // Le stock est géré en poids total (g) — qty=poids pour compatibilité déduction
-  var stockObj={ref,nom,carat,type,typeBijou:typeBijouP,provenance:prov,poids:poids,qty:qty,poidsTotalG:poids,prix,seuil};STATE.stock.unshift(stockObj);
-  saveStock(stockObj).then(function(){closeModal('modal-add-produit');showToast('Article ajouté.');});
+  var stockObj={ref,nom,carat,type,typeBijou:typeBijouP,provenance:prov,poids:poids,qty:qty,poidsTotalG:poids,prix,seuil};
+  await saveStock(stockObj);
+  STATE.stock.unshift(stockObj);
+  closeModal('modal-add-produit');
+  renderStocks();
+  showToast('Article '+ref+' ajouté.');
 }
 function ajusterStock(ref){
   const i=STATE.stock.find(x=>x.ref===ref); if(!i) return;
@@ -2059,7 +2156,13 @@ function ajusterStock(ref){
   document.getElementById('ajust-stock-qty-actuel').textContent='Stock actuel : '+(i.qty||0)+' article'+(i.qty>1?'s':'');
   document.getElementById('modal-ajust-stock').classList.add('show');
 }
-async function validerAjustStock(){
+function validerAjustStock(){
+  // Nomme par l'article : l'echec d'un ajustement ne doit pas faire passer
+  // l'ajustement d'un AUTRE article pour son rejeu.
+  var ref = document.getElementById('ajust-stock-ref').value;
+  return geste('ajust-stock:' + ref, _validerAjustStock);
+}
+async function _validerAjustStock(){
   const ref=document.getElementById('ajust-stock-ref').value;
   const ajoutPoids=parseFloat(document.getElementById('ajust-stock-poids').value)||0;
   const ajoutQty=parseInt(document.getElementById('ajust-stock-qty').value)||0;
@@ -2196,7 +2299,8 @@ function rendreSortiesCartes(triees){
     };
   }, 'Aucune sortie enregistrée.');
 }
-async function enregistrerSortie(){
+function enregistrerSortie(){ return geste('sortie', _enregistrerSortie); }
+async function _enregistrerSortie(){
   if(!isAdmin()){showToast('Seul l\'administrateur peut effectuer des sorties.');return;}
   var date        = document.getElementById('s-date').value;
   var stockRef    = document.getElementById('s-stock-ref')&&document.getElementById('s-stock-ref').value||'';
@@ -2224,8 +2328,10 @@ async function enregistrerSortie(){
   var id = await prochainId('s','S',4);
   var labelType=(stockItem?stockItem.nom:typeBijou)+(carat?' — '+carat.toUpperCase():'');
   const sortieObj={id,date,stockRef:stockRef||'',typeBijou:labelType,carat:carat||'—',poids:poidsSort,nbArticles:nbArticles||0,motif,commentaire,validePar:STATE.currentUser?.nom||'admin'};
-  STATE.sorties.unshift(sortieObj);
+  // L'etat local apres la base, comme pour une vente : l'inverse laissait la
+  // sortie a l'ecran meme quand l'ecriture avait echoue.
   await saveAndSyncSortie(sortieObj);
+  STATE.sorties.unshift(sortieObj);
   closeModal('modal-add-sortie');renderSorties();renderStocks();renderDashboard();
   showToast('Sortie '+id+' — '+(poidsSort?poidsSort+'g':'')+(nbArticles?' '+nbArticles+' art.':''));
 }
@@ -2289,12 +2395,16 @@ function rendreDecaissCartes(tries){
     };
   }, 'Aucun décaissement.');
 }
-function enregistrerDecaissement(){
+function enregistrerDecaissement(){ return geste('decaissement', _enregistrerDecaissement); }
+function _enregistrerDecaissement(){
   const date=document.getElementById('d-date').value,cat=document.getElementById('d-categorie').value,desc=document.getElementById('d-description').value.trim(),montant=parseInt(document.getElementById('d-montant').value)||0;
   if(!date||!cat||!desc||montant<=0){showToast('⚠ Tous les champs sont obligatoires.');return;}
   // Numéro attribué par le serveur : le compteur local peut être en retard et
   // refabriquer un identifiant déjà pris, que l'upsert écraserait alors.
-  prochainId('d','D',4)
+  // La chaine est RENDUE, et son `.catch` a ete retire : l'erreur doit
+  // remonter a `geste()`. L'avaler ici ferait croire au verrou que le geste a
+  // abouti, il oublierait la cle — et le reessai reecrirait.
+  return prochainId('d','D',4)
     .then(function(id){
       return saveDecaissement({
         id:id, date:date, categorie:cat, description:desc, montant:montant,
@@ -2307,8 +2417,7 @@ function enregistrerDecaissement(){
         renderDecaissements(); renderDashboard();
         showToast('✓ Décaissement '+id+' enregistré.');
       });
-    })
-    .catch(function(e){ showToast('⚠ '+e.message); });
+    });
 }
 function supprimerDecaiss(id){
   if(!isAdmin())return;
@@ -2368,21 +2477,19 @@ document.getElementById('client-search')?.addEventListener('input',function(){re
 document.getElementById('cc-search')?.addEventListener('input',function(){renderComptesClients(this.value);});
 document.getElementById('arr-search')?.addEventListener('input',renderBijouxArr);
 document.getElementById('arr-filtre')?.addEventListener('change',renderBijouxArr);
-function ajouterClient(){
+function ajouterClient(){ return geste('client', _ajouterClient); }
+function _ajouterClient(){
   const nom=document.getElementById('c-nom').value.trim(),tel=document.getElementById('c-tel').value.trim(),email=document.getElementById('c-email').value.trim(),adresse=document.getElementById('c-adresse').value.trim();
   const pin=(document.getElementById('c-pin')?.value||'').replace(/\D/g,'').slice(0,4);
   if(!nom||!tel){showToast('⚠ Nom et téléphone obligatoires.');return;}
   if(STATE.clients.find(c=>c.tel===tel)){showToast('⚠ Ce numéro existe déjà.');return;}
   if(pin&&pin.length!==4){showToast('⚠ Le PIN doit faire exactement 4 chiffres.');return;}
-  closeModal('modal-add-client');
-  ['c-nom','c-tel','c-email','c-adresse'].forEach(x=>document.getElementById(x).value='');
-  if(document.getElementById('c-pin')) document.getElementById('c-pin').value='';
 
   // Le numéro vient du serveur, puis la fiche, puis le code — dans cet ordre.
   // Le code est haché par PostgreSQL et ne transite ni par localStorage ni
   // par la table en clair.
   var id;
-  prochainId('cl','CL',4)
+  return prochainId('cl','CL',4)
     .then(function(nouvelId){
       id = nouvelId;
       return saveClient({ id:id, nom:nom, tel:tel, email:email, adresse:adresse });
@@ -2390,10 +2497,15 @@ function ajouterClient(){
     .then(function(){ return pin ? definirPinClient(id, pin) : null; })
     .then(function(){ return chargerDonnees(); })
     .then(function(){
+      // La modale se fermait et les champs se vidaient AVANT l'ecriture : un
+      // refus laissait la personne devant un formulaire vide, sans savoir si
+      // la fiche existait. Elle ne se ferme plus qu'une fois la base d'accord.
+      closeModal('modal-add-client');
+      ['c-nom','c-tel','c-email','c-adresse'].forEach(x=>document.getElementById(x).value='');
+      if(document.getElementById('c-pin')) document.getElementById('c-pin').value='';
       renderClients();
       showToast('✓ Cliente « '+nom+' » ajoutée.'+(pin?' Accès portail activé.':''));
-    })
-    .catch(function(e){ showToast('⚠ '+e.message); });
+    });
 }
 
 function modifierPinClient(clientId){
@@ -2532,14 +2644,15 @@ async function confirmerViderCompte() {
   }
 }
 
-function creerCompteClient(){
+function creerCompteClient(){ return geste('ouvrir-compte', _creerCompteClient); }
+function _creerCompteClient(){
   const clientId=document.getElementById('cc-client').value,date=document.getElementById('cc-date').value,depot=parseInt(document.getElementById('cc-depot-init').value)||0;
   const client=nomClientParId(clientId);
   if(!clientId||!date||depot<=0){showToast('⚠ Client, date et dépôt initial sont obligatoires.');return;}
   // Le compte et son dépôt d'ouverture dans une seule transaction serveur :
   // séparés, un compte pouvait exister avec un solde sans mouvement en face.
   var id;
-  prochainId('cc','CC',4)
+  return prochainId('cc','CC',4)
     .then(function(nouvelId){
       id = nouvelId;
       return ouvrirCompteEpargne(id, client, date, depot, clientId);
@@ -2551,11 +2664,15 @@ function creerCompteClient(){
         renderComptesClients(); renderDashboard();
         showToast('Compte '+id+' créé pour '+client+'.');
       });
-    })
-    .catch(function(e){ showToast('⚠ '+e.message); });
+    });
 }
 function openDepotCC(id){
   const cc=STATE.comptesClients.find(c=>c.id===id); if(!cc)return;
+  // Ce qui s'ouvre ici est un geste NEUF, meme si le precedent a echoue et
+  // que la personne a renonce. Sans cet oubli, la cle gardee ferait prendre
+  // ce depot pour le rejeu de celui qui n'a pas abouti — et le serveur
+  // rendrait l'ancien resultat sans rien ecrire.
+  Verrou.oublier('depot:' + id);
   document.getElementById('depot-cc-id').value=id;
   document.getElementById('depot-cc-date').value=today();
   document.getElementById('depot-cc-montant').value='';
@@ -2568,13 +2685,19 @@ function openDepotCC(id){
   document.getElementById('modal-depot-cc').classList.add('show');
 }
 function ajouterDepotCC(){
+  // Nomme par le compte : l'echec d'un depot ne doit pas faire prendre le
+  // depot suivant, sur un AUTRE compte, pour son rejeu.
+  return geste('depot:' + document.getElementById('depot-cc-id').value,
+               _ajouterDepotCC);
+}
+function _ajouterDepotCC(){
   const id=document.getElementById('depot-cc-id').value,date=document.getElementById('depot-cc-date').value,montant=parseInt(document.getElementById('depot-cc-montant').value)||0,note=document.getElementById('depot-cc-note').value||'Dépôt';
   if(!date||montant<=0){showToast('⚠ Date et montant obligatoires.');return;}
   const cc=STATE.comptesClients.find(c=>c.id===id);if(!cc)return;
   // Un dépôt est une saisie de comptoir, ouverte à toute l'équipe — mais c'est
   // techniquement un UPDATE du solde, désormais fermé au vendeur. L'opération
   // serveur écrit le mouvement et recale le solde sur son historique.
-  depotCompteEpargne(id, montant, date, note)
+  return depotCompteEpargne(id, montant, date, note)
     .then(function(res){
       if(!res || res.ok===false){ showToast('⛔ '+((res&&res.erreur)||'Dépôt refusé.')); return; }
       return chargerDonnees().then(function(){
@@ -2582,10 +2705,10 @@ function ajouterDepotCC(){
         renderComptesClients(); renderDashboard();
         showToast('✓ Dépôt de '+fmt(montant)+' enregistré. Nouveau solde : '+fmt(res.nouveau_solde));
       });
-    })
-    .catch(function(e){ showToast('⚠ '+e.message); });
+    });
 }
-function cloturerCC(id){
+function cloturerCC(id){ return geste('cloture:' + id, function(){ return _cloturerCC(id); }); }
+function _cloturerCC(id){
   const cc=STATE.comptesClients.find(c=>c.id===id);if(!cc)return;
   if(!confirm(`Clôturer le compte de ${cc.client} et créer une vente de ${fmt(cc.solde)} ?`))return;
   if(!isAdmin() && STATE.currentUser?.role!=='gestionnaire'){
@@ -2597,7 +2720,7 @@ function cloturerCC(id){
   // au moment des dépôts : la vente ne doit donc rien y ajouter, d'où
   // `montantCompte` égal au montant. L'ancienne version mettait `acompte` au
   // solde sans le signaler, ce qui recomptait la somme une seconde fois.
-  prochainsIdsVente()
+  return prochainsIdsVente()
     .then(function(num){
       return venteSurCompteEpargne({
         id: num.id, compteId: cc.id, date: today(),
@@ -2615,8 +2738,7 @@ function cloturerCC(id){
           renderComptesClients(); renderJournal(); renderDashboard();
           showToast('Compte clôturé — vente '+r.id+' créée.');
         });
-    })
-    .catch(function(e){ showToast('⚠ '+e.message); });
+    });
 }
 function supprimerCC(id){
   if(!isAdmin())return;
@@ -2709,10 +2831,18 @@ function ouvrirFinalisation(venteId){
   document.getElementById('fin-date').value=today();
   document.getElementById('fin-montant').value=v.restant||'';
   document.getElementById('fin-paiement').value='especes';
+  Verrou.oublier('paiement:' + venteId);   // geste neuf a chaque ouverture
   openModal('modal-finaliser');
 }
 
 function confirmerFinalisation(){
+  // La cible dans le nom : un versement qui echoue sur V-0042 ne doit pas
+  // faire passer le versement suivant, sur V-0043, pour son rejeu — le
+  // serveur rendrait alors l'ancien resultat et n'encaisserait rien.
+  return geste('paiement:' + document.getElementById('fin-vente-id').value,
+               _confirmerFinalisation);
+}
+function _confirmerFinalisation(){
   const venteId=document.getElementById('fin-vente-id').value;
   const montant=parseInt(document.getElementById('fin-montant').value)||0;
   const date=document.getElementById('fin-date').value;
@@ -2722,14 +2852,15 @@ function confirmerFinalisation(){
   if(montant<=0){showToast('⚠ Montant obligatoire.');return;}
   if(montant>(v.restant||0)){showToast(`⚠ Montant supérieur au restant dû (${fmt(v.restant)})`);return;}
 
-  const btn=document.getElementById('btn-finaliser');
-  if(btn){ btn.disabled=true; btn.textContent='Enregistrement…'; }
-
+  // Le `btn.disabled` d'ici a ete retire : le verrou le fait pour tous les
+  // boutons de modale, par une regle CSS sur `body[data-occupe]`. Le garder
+  // aurait recopie la regle une fois de plus.
+  //
   // Passe par une opération serveur dédiée : encaisser est ouvert à toute
   // l'équipe, alors que modifier une vente (montant, cliente, description)
   // est réservé aux administrateurs. Sans cette séparation, ouvrir l'un
   // reviendrait à ouvrir l'autre — c'est la même ligne en base.
-  enregistrerPaiementVente(venteId, montant, date, paiement)
+  return enregistrerPaiementVente(venteId, montant, date, paiement)
     .then(function(res){
       if(!res || res.ok===false){ showToast('⛔ '+((res&&res.erreur)||'Paiement refusé.')); return; }
       v.acompte = res.acompte;
@@ -2741,9 +2872,7 @@ function confirmerFinalisation(){
       showToast(res.solde
         ? `✓ Commande soldée ! Paiement de ${fmt(montant)} encaissé.`
         : `✓ Paiement de ${fmt(montant)} encaissé. Restant : ${fmt(res.restant)}`);
-    })
-    .catch(function(e){ showToast('⚠ '+e.message); })
-    .finally(function(){ if(btn){ btn.disabled=false; btn.textContent="✓ Valider l'encaissement"; } });
+    });
 }
 
 function ouvrirRemboursement(venteId){
@@ -2760,6 +2889,10 @@ function ouvrirRemboursement(venteId){
 }
 
 function confirmerRemboursement(){
+  return geste('remboursement:' + document.getElementById('remb-vente-id').value,
+               _confirmerRemboursement);
+}
+function _confirmerRemboursement(){
   const venteId=document.getElementById('remb-vente-id').value;
   const montant=parseInt(document.getElementById('remb-montant').value)||0;
   const date=document.getElementById('remb-date').value;
@@ -2781,7 +2914,7 @@ function confirmerRemboursement(){
   v.annuleeMotif = motif;
   v.restant = 0;                 // plus rien à réclamer
 
-  (montant > 0
+  return (montant > 0
     ? prochainId('d','D',4).then(function(dId){
         return saveDecaissement({
           id:dId, date:date, categorie:'Remboursement client',
@@ -2797,8 +2930,7 @@ function confirmerRemboursement(){
       closeModal('modal-remboursement');
       renderBijouxArr(); renderJournal(); renderDecaissements(); renderDashboard();
       showToast(`✓ Remboursement de ${fmt(montant)} enregistré. Commande annulée.`);
-    })
-    .catch(function(e){ showToast('⚠ '+e.message); });
+    });
 }
 
 // ============================================
@@ -2929,6 +3061,10 @@ function celluleSortieCaisse(a){
  * être différé — mais le rattachement évite qu'un oubli passe inaperçu.
  */
 function creerDecaissementReprise(repriseId){
+  return geste('sortie-reprise:' + repriseId,
+               function(){ return _creerDecaissementReprise(repriseId); });
+}
+function _creerDecaissementReprise(repriseId){
   if(!isAdmin()){showToast('⛔ Réservé à l\'administrateur.');return;}
   const a = STATE.achatsClients.find(x=>x.id===repriseId);
   if(!a) return;
@@ -2941,7 +3077,7 @@ function creerDecaissementReprise(repriseId){
   // Numéro attribué par le serveur : le calculer ici à partir du compteur en
   // cache refabriquait un identifiant déjà pris, et l'écriture en upsert
   // écrasait alors le décaissement d'une autre reprise.
-  prochainId('d','D',4)
+  return prochainId('d','D',4)
     .then(function(dId){
       const dec={
         id:dId, date:a.date, categorie:'Reprise client',
@@ -2957,11 +3093,11 @@ function creerDecaissementReprise(repriseId){
         renderAchatsClients(); renderDecaissements(); renderDashboard();
         showToast(`✓ Sortie de ${fmt(montant)} enregistrée (${dId}).`);
       });
-    })
-    .catch(function(e){ showToast('⚠ '+e.message); });
+    });
 }
 
-function enregistrerAchatClient(){
+function enregistrerAchatClient(){ return geste('reprise', _enregistrerAchatClient); }
+async function _enregistrerAchatClient(){
   var date   = document.getElementById('ac-date').value;
   var clientId = document.getElementById('ac-client').value;
   var client = nomClientParId(clientId);
@@ -2978,22 +3114,23 @@ function enregistrerAchatClient(){
   if(!date||!clientId||!desc||!typeBijou||prix<=0){
     showToast('Tous les champs obligatoires doivent etre remplis.');return;
   }
+  // La photo est lue AVANT l'écriture, et attendue : la lecture passait par
+  // un `reader.onload` qui sortait de la chaîne de promesses, donc le verrou
+  // se serait relâché avant que l'écriture ne commence.
   const fileEl = document.getElementById('ac-photo');
   const file   = fileEl?.files?.[0];
-  if (file) {
-    // Lire la photo en base64 puis enregistrer
-    const reader = new FileReader();
-    reader.onload = function(e) {
-      // La fonction est asynchrone depuis que le numéro vient du serveur :
-      // sans ce .catch, un échec resterait invisible.
-      _sauvegarderReprise(date,client,desc,carat,typeBijou,poids,localAC,importeAC,prix,note,e.target.result,clientId)
-        .catch(function(err){ showToast('⚠ '+err.message); });
-    };
+  const photo  = file ? await _lireFichierB64(file) : null;
+  return _sauvegarderReprise(date,client,desc,carat,typeBijou,poids,localAC,importeAC,prix,note,photo,clientId);
+}
+
+/** Un FileReader rendu attendable, pour qu'il tienne dans un geste. */
+function _lireFichierB64(file){
+  return new Promise(function(resoudre, rejeter){
+    var reader = new FileReader();
+    reader.onload  = function(e){ resoudre(e.target.result); };
+    reader.onerror = function(){ rejeter(new Error('Photo illisible.')); };
     reader.readAsDataURL(file);
-  } else {
-    _sauvegarderReprise(date,client,desc,carat,typeBijou,poids,localAC,importeAC,prix,note,null,clientId)
-      .catch(function(err){ showToast('⚠ '+err.message); });
-  }
+  });
 }
 
 async function _sauvegarderReprise(date,client,desc,carat,typeBijou,poids,localVal,importeVal,prix,note,photo,clientId){
@@ -3228,7 +3365,8 @@ function closeMiniClient() {
   document.getElementById('modal-mini-client').classList.remove('show');
 }
 
-function enregistrerMiniClient() {
+function enregistrerMiniClient() { return geste('mini-client', _enregistrerMiniClient); }
+async function _enregistrerMiniClient() {
   const nom     = document.getElementById('mini-c-nom').value.trim();
   const tel     = document.getElementById('mini-c-tel').value.trim();
   const adresse = document.getElementById('mini-c-adresse').value.trim();
@@ -3237,14 +3375,20 @@ function enregistrerMiniClient() {
   if (!nom || !tel) { showToast('⚠ Nom et téléphone obligatoires.'); return; }
   if (STATE.clients.find(c => c.tel === tel)) { showToast('⚠ Ce numéro existe déjà.'); return; }
 
-  STATE.counters.cl = (STATE.counters.cl || 9) + 1;
+  // L'identifiant vient du SERVEUR, comme dans `ajouterClient()`. Il sortait
+  // ici de `STATE.counters.cl`, un compteur local — et c'est ce qui a produit
+  // des `CL-010` a trois chiffres a cote des `CL-0023` du serveur. Surtout,
+  // deux postes creaient la meme cliente sous le meme identifiant, et depuis
+  // la migration 025 cet identifiant porte l'identite : epargne, commandes et
+  // acces au portail se seraient melanges.
   const newClient = {
-    id: 'CL-' + String(STATE.counters.cl).padStart(3,'0'),
+    id: await prochainId('cl','CL',4),
     nom, tel, email: '', adresse
   };
+  // Attendu : la fiche n'apparait dans le selecteur qu'une fois en base.
+  await saveClient(newClient);
   STATE.clients.unshift(newClient);
   save();
-  saveClient(newClient); // App→Supabase→App
   ['v-client','edit-v-client','cc-client','ac-client'].forEach(selId => {
     // Picker style
     const searchEl = document.getElementById(selId+'-search');
@@ -3319,6 +3463,10 @@ function previewAjustCC(){
   document.getElementById('ajust-cc-restant').value=montant>0?(restant<0?'Depassement':fmt(restant)):'';
 }
 function validerAjustCC(){
+  return geste('ajust-cc:' + document.getElementById('ajust-cc-id').value,
+               _validerAjustCC);
+}
+function _validerAjustCC(){
   var id=document.getElementById('ajust-cc-id').value;
   var cc=STATE.comptesClients.find(function(c){return c.id===id;});if(!cc)return;
   var montant=parseInt(document.getElementById('ajust-cc-montant').value)||0;
@@ -3330,7 +3478,7 @@ function validerAjustCC(){
   // Vente + retrait en une seule transaction serveur, numéros attribués par
   // PostgreSQL : les enchaîner ici laissait passer le retrait quand la vente
   // échouait, et le compteur local pouvait refabriquer un numéro déjà pris.
-  prochainsIdsVente()
+  return prochainsIdsVente()
     .then(function(num){
       return venteSurCompteEpargne({
         id: num.id, compteId: cc.id, date: today(), description: desc,
@@ -3345,8 +3493,7 @@ function validerAjustCC(){
         renderComptesClients(); renderJournal(); renderDashboard();
         showToast('Vente '+r.id+' créée — '+fmt(montant)+' déduit du compte de '+cc.client);
       });
-    })
-    .catch(function(e){ showToast('⚠ '+e.message); });
+    });
 }
 function imprimerCompteClient(id){
   var cc=STATE.comptesClients.find(function(c){return c.id===id;});if(!cc)return;
@@ -3568,6 +3715,10 @@ function majResteComplementCC() {
 }
 
 function validerComplementCC() {
+  return geste('complement:' + document.getElementById('complement-cc-id').value,
+               _validerComplementCC);
+}
+function _validerComplementCC() {
   var ccId        = document.getElementById('complement-cc-id').value;
   var montant     = parseInt(document.getElementById('complement-cc-montant').value)||0;
   var date        = document.getElementById('complement-cc-date').value;
@@ -3597,7 +3748,7 @@ function validerComplementCC() {
   // Une seule transaction serveur : la vente et le retrait aboutissent
   // ensemble, ou aucun des deux. L'ancienne version les lançait en parallèle
   // sans intercepter l'échec — le retrait passait, la vente non.
-  prochainsIdsVente()
+  return prochainsIdsVente()
   .then(function(num){
     id = num.id;
     return venteSurCompteEpargne({
@@ -3624,8 +3775,7 @@ function validerComplementCC() {
         ? 'Vente '+id+' — reste '+fmt(res.restant)+' dû. Suivi dans Arrhes & Commandes.'
         : 'Vente '+id+' — Compte : '+fmt(soldeUtilise)+' + '+paiementComp+' : '+fmt(montantComp));
     });
-  })
-  .catch(function(e){ showToast('⚠ '+e.message); });
+  });
 }
 
 

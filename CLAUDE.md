@@ -316,6 +316,18 @@ identifiants déjà pris, et les upserts écrasaient les ventes existantes.
 `nextId()` a été supprimé, ne pas le réintroduire. Deux postes qui vendent en
 même temps produiraient le même `V-0042`.
 
+**La règle avait deux survivants, trouvés le 2026-11-02** : `ajouterProduit()`
+fabriquait sa référence depuis `STATE.counters.stk`, et `enregistrerMiniClient()`
+son identifiant depuis `STATE.counters.cl`. Les deux passent désormais par
+`prochainId()`.
+
+Le second était le plus grave : depuis la migration 025, `client_id` **porte
+l'identité**. Deux postes créant une cliente au même moment lui donnaient le
+même identifiant, et épargne, commandes et accès au portail se seraient
+mélangés — le défaut même que 025 et 026 ferment. C'est aussi ce qui explique
+les `CL-010` à trois chiffres à côté des `CL-0023` du serveur : deux
+fabricants, deux formats.
+
 ### Ne jamais jeter le corps d'une erreur PostgREST
 
 Sept appels RPC ne gardaient que le code HTTP : « Vente refusée (500) ». Or
@@ -327,6 +339,120 @@ base, et c'est exactement ce qui est arrivé le 2026-10-23.
 lit : `message` en tête (c'est l'exception volontaire de nos fonctions, écrite
 pour la personne devant l'écran), `details` et `hint` derrière. **Tout nouvel
 appel RPC passe par lui.**
+
+### Un geste ne s'enregistre qu'une fois — la clé de geste
+
+Constaté le 2026-11-02, en essais. Sur une connexion lente, **rien ne signale
+qu'une requête est partie**. La personne reclique. Deux ventes, deux dépôts,
+deux décaissements, et le stock déduit deux fois.
+
+**Et la base ne pouvait pas le voir.** `prochain_id()` réserve un identifiant
+**à chaque clic**, avant l'écriture : le premier prend `V-0042`, le second
+`V-0043`, et les deux sont des ventes parfaitement valides. Il n'y avait
+aucune contrainte à violer, donc aucun refus possible. Mesuré le même jour à
+Saint-Louis : compteur `v` = 35 pour 15 ventes présentes.
+
+Corollaire à garder en tête : les contrôles « cette vente existe déjà » de
+`vente_sur_compte_epargne()` et `ouvrir_compte_epargne()` **ne servent jamais
+contre un double-clic**. Ils protègent d'un rejeu à l'identique, pas d'une
+répétition du geste.
+
+Depuis les migrations 032 et 033 :
+
+- Le navigateur tire un **UUID à l'ouverture de chaque fenêtre de saisie** et
+  le renvoie tel quel à chaque tentative du même geste.
+- Les cinq fonctions d'argent réservent cette clé dans la table `gestes`
+  **après toutes leurs validations, juste avant la première écriture**, et y
+  rangent leur résultat. Une répétition reçoit le résultat gardé sans rien
+  réécrire.
+- Les six tables écrites en direct par PostgREST portent `cle_geste` et un
+  index unique partiel. Le doublon y est refusé par la contrainte, et
+  `_supa.upsert()` traduit le 23505 en « Ce geste a déjà été enregistré ».
+
+**La place de la réservation n'est pas un détail.** Au-dessus des validations,
+un refus brûlerait la clé : la personne corrige son montant, reclique, et
+s'entend répondre « geste déjà lancé » pour un geste qui n'a rien écrit — le
+formulaire deviendrait à usage unique. Donc **aucun `return` de refus ne doit
+se trouver sous la ligne de réservation**. Une exception, elle, est sans
+danger : elle annule la transaction, et la clé redevient libre.
+
+**Une table plutôt qu'une colonne, à cause d'`enregistrer_paiement_vente()`**
+qui n'insère rien — elle fait `acompte = acompte + montant`. Aucune contrainte
+d'unicité n'aurait pu l'attraper, et c'est le geste où un doublon se voit le
+moins et coûte le plus : une cliente créditée deux fois de ce qu'elle a versé
+une fois.
+
+Deux fonctions restent **volontairement sans clé**, et ce n'est pas un oubli :
+
+- `definir_pin_client()` écrit une valeur, pas une ligne. Le refaire laisse le
+  même état.
+- `vider_compte_epargne()` recalcule le solde depuis l'historique et refuse un
+  compte déjà à zéro : un rejeu n'écrit rien. CLAUDE.md la liste parmi les
+  fonctions « à ne pas rouvrir par symétrie », et une clé n'améliorerait que
+  le message, pas la sûreté.
+
+`prochain_id()` n'est pas touchée non plus : un clic refait consomme un numéro,
+donc un trou dans la numérotation — jamais une double écriture.
+
+### Le verrou du navigateur est du confort, et doit être lu comme tel
+
+`js/verrou.js` empêche le deuxième clic. Il n'empêche ni le rechargement de
+page, ni l'abandon à 15 s du portail cliente sur un dépôt déjà écrit, ni deux
+postes. **Le vrai verrou est la clé de geste ci-dessus.**
+
+Deux portes, et c'est ce qui le fait fonctionner :
+
+| | |
+|---|---|
+| `Verrou.geste(nom, fn)` | un handler. Un deuxième est **refusé**, jamais mis en file — une file ferait les deux ventes, l'une après l'autre. |
+| `Verrou.requete(nom, fn)` | une écriture, dans `js/supabase.js`. Transparente **à l'intérieur** d'un geste. |
+
+**`requete` n'est pas réentrante et ne peut pas l'être** : un deuxième clic et
+un appel imbriqué franchiraient la même porte, et aucun drapeau ne les
+distingue. **Donc une fonction qui fait plus d'une écriture s'enveloppe dans
+un `geste`.**
+
+Le reste du dispositif, à ne pas défaire :
+
+- **La clé survit à un échec, elle est oubliée au succès.** Une clé neuve à
+  chaque tentative rendrait le réessai invisible du serveur ; une clé gardée
+  après un geste abouti ferait prendre le geste **suivant** pour son rejeu.
+  Un handler qui ravale son erreur dans un `.catch` local casse exactement
+  cela : le verrou croit que le geste a abouti.
+- **Le nom du geste porte sa cible** — `paiement:V-0042`, pas `paiement`.
+  Sinon l'échec d'un versement fait passer le versement suivant, sur une
+  autre vente, pour son rejeu.
+- **Les lectures ne sont jamais bloquées** : `chargerDonnees()` tourne juste
+  après chaque écriture.
+- **Un chien de garde relâche au bout d'une minute.** Les écritures partent en
+  `fetch` nu, sans délai d'abandon : sans lui, une requête qui pend laisserait
+  l'application inutilisable. La requête continue peut-être — c'est la clé de
+  geste qui rend le réessai sûr.
+- **Le retour visuel n'est pas décoratif.** Verrouiller sans rien montrer
+  remplace le double enregistrement par un bouton mort sans explication. Une
+  seule règle CSS sur `body[data-occupe]` : curseur en attente, boutons de la
+  modale ouverte et bouton flottant inertes, filet or en haut d'écran. Le
+  sélecteur est **`.modal-backdrop.show`**, pas `.modal.show` — écrit de
+  mémoire, il ne correspondait à rien et seuls les boutons restaient
+  cliquables. Mesuré dans le navigateur, pas relu.
+
+### L'écran ne doit pas féliciter avant que la base ait répondu
+
+C'est ce qui faisait recliquer, et c'était le vrai moteur du problème.
+
+Deux mensonges indépendants, corrigés le 2026-11-02 :
+
+- **Les huit `saveAndSyncX` avalaient leur erreur** dans un `console.error`.
+  `await saveAndSyncVente(v)` aboutissait donc même quand la base avait refusé
+  : le handler fermait sa modale et annonçait « Vente enregistrée ». Elles
+  relancent désormais. Seule `saveAndSyncConnexion` garde son silence —
+  journaliser ne doit jamais empêcher de travailler.
+- **`enregistrerVente()` ne l'attendait même pas** : `saveAndSyncVente(venteObj)`
+  sans `await`, puis `closeModal()`, puis le toast de succès.
+
+Règle : **l'état local après la base, jamais avant.** Un `STATE.ventes.unshift()`
+avant l'écriture laisse à l'écran une vente qui n'existe nulle part, et le
+rechargement suivant la fait disparaître sans explication.
 
 ### Une table, trois fonctions d'écriture
 

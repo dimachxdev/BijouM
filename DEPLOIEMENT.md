@@ -1,6 +1,12 @@
-# Déploiement du 2026-10-31 — vitrine publique et QR
+# Déploiement — vitrine publique, QR, CGU et verrou des gestes
 
-Écrit à la fin de la session du 2026-10-31. À suivre dans l'ordre.
+Mis à jour le 2026-11-02. À suivre dans l'ordre.
+
+> **Ce déploiement porte deux lots.** La vitrine et les CGU, prêts depuis le
+> 2026-10-31 et jamais mis en ligne, et le verrou des gestes du 2026-11-02.
+> Les migrations **032 et 033 sont appliquées et vérifiées** : la base accepte
+> déjà la clé de geste, et l'ignore tant que le code en ligne ne l'envoie pas
+> (`p_cle` a une valeur par défaut). Rien n'est cassé en attendant.
 
 ---
 
@@ -32,20 +38,34 @@ déployé n'appelle pas encore. Rien n'est cassé en production à cet instant.
 
 ---
 
-## 2. Les neuf fichiers à déployer
+## 2. Les treize fichiers à déployer
 
 ```
 boutique.html          ← NOUVEAU
 cgu.html               ← NOUVEAU
 js/boutique.js         ← NOUVEAU
 js/qr.js               ← NOUVEAU
+js/verrou.js           ← NOUVEAU
 index.html
 operateur.html
+client.html
 css/style.css
 js/app.js
 js/auth.js
 js/operateur.js
+js/supabase.js
+js/client.js
 ```
+
+> **`js/verrou.js` se charge EN PREMIER** sur les trois pages : `js/app.js`,
+> `js/supabase.js`, `js/client.js` et `js/operateur.js` l'appellent tous. S'il
+> manque, chaque écriture tombe sur « Verrou is not defined » — et plus rien
+> ne s'enregistre. C'est le fichier à vérifier d'abord si le comptoir se bloque
+> après déploiement.
+>
+> **`client.html` change pour la première fois depuis le 2026-10-21.** Son
+> empreinte passe de `?v=2026-10-21d` à `?v=2026-11-02b` : le portail cliente
+> envoie désormais la clé de geste avec son dépôt.
 
 > **`CGU.md` ne se déploie pas** — `.vercelignore` écarte les `*.md`, et
 > c'est voulu : son § 12 énumère les faiblesses du service. La version
@@ -62,19 +82,15 @@ déjà `migrations/`, les `*.md`, `config_backup.json` et `.claude/`.
 
 Repères de version, pour vérifier que le déploiement a bien pris :
 
-- empreintes de cache : `?v=2026-11-02a`
-- `APP_VERSION` : `2026-11-02-vitrine-cercles`
-
-`client.html` n'a pas changé (`?v=2026-10-21d`) — c'est normal, le portail
-cliente ne consomme que le JSON de `portail_donnees()`, dont la forme est
-restée identique.
+- empreintes de cache : `?v=2026-11-02b`
+- `APP_VERSION` : `2026-11-02-verrou-gestes`
 
 ---
 
 ## 3. Juste après le déploiement
 
 **Rechargez avec Ctrl + Maj + R**, puis regardez la version sous l'écran de
-connexion. Tant qu'elle n'affiche pas `2026-10-31-vitrine-qr`, rien de ce
+connexion. Tant qu'elle n'affiche pas `2026-11-02-verrou-gestes`, rien de ce
 qui suit n'a de sens : c'est le cache, pas un bug. C'est la première chose à
 vérifier devant tout comportement incohérent.
 
@@ -127,6 +143,30 @@ sans légende.
 > facture s'affiche quand même sans code — c'est volontaire, une vente ne
 > doit pas échouer parce qu'une vitrine est indisponible. Regardez alors la
 > console : « QR vitrine indisponible ».
+
+### c bis. **Le double-clic, et c'est le test qui compte**
+
+Ouvrez « Nouvelle vente », remplissez-la, puis **cliquez deux fois de suite,
+vite, sur Enregistrer**. Recommencez sur un dépôt et sur un encaissement.
+
+Attendu, à chaque fois :
+
+- un filet or traverse le haut de l'écran pendant l'écriture ;
+- les boutons de la modale deviennent inertes et se grisent ;
+- **une seule ligne** apparaît dans la liste.
+
+> *Prouve* la chaîne entière. Avant, deux clics faisaient deux ventes, avec
+> deux numéros distincts — et rien en base ne pouvait les distinguer d'un
+> travail légitime.
+
+Puis le cas que le navigateur ne peut pas fermer, le seul qui démontre les
+migrations 032/033 : faites un encaissement, et **avant** qu'il réponde,
+coupez les données du téléphone. Le geste échoue. Rétablissez, recliquez sur
+le même bouton sans fermer la fenêtre.
+
+> *Prouve* que le serveur reconnaît le réessai : l'acompte doit monter **une
+> seule fois**. S'il monte deux fois, la clé n'a pas été renvoyée — regardez
+> si `js/verrou.js` est bien en ligne.
 
 ### d. **Scanner le code avec un vrai téléphone**
 
