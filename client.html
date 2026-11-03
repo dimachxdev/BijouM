@@ -16,7 +16,7 @@
 body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;min-height:100vh}
 
 /* ── LOGIN ── */
-#page-login{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
+#page-login,#page-boutiques{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
 .login-box{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:36px 32px;width:100%;max-width:400px;box-shadow:var(--shadow)}
 .logo-area{text-align:center;margin-bottom:28px}
 .logo-area img{width:72px;height:72px;object-fit:contain;border-radius:50%;border:2px solid var(--or)}
@@ -156,14 +156,41 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 <!-- ═══════════════════════════════════════
      PAGE DASHBOARD
 ══════════════════════════════════════════ -->
+<!-- ═══════════════════════════════════════
+     CHOIX DE LA BOUTIQUE
+     N'apparaît que si le même numéro et le même code ouvrent un compte dans
+     plusieurs bijouteries. Chaque entrée est une session distincte, déjà
+     ouverte par le serveur : choisir ne fait que désigner laquelle utiliser.
+══════════════════════════════════════════ -->
+<div id="page-boutiques" style="display:none">
+  <div class="login-box" style="max-width:420px">
+    <div class="logo-area"><h1>Vos bijouteries</h1></div>
+    <p class="loading-text" style="margin-bottom:18px">
+      Votre numéro ouvre un compte dans plusieurs bijouteries.
+      Choisissez celle que vous souhaitez consulter.
+    </p>
+    <div id="liste-boutiques"></div>
+    <button class="btn btn-secondary" style="margin-top:14px;width:100%"
+            onclick="doLogout()">Annuler</button>
+  </div>
+</div>
+
 <div id="page-dashboard">
+  <!-- C'est la boutique qui s'affiche ici, pas KAYOR.
+       Cette page est ouverte par la cliente d'une bijouterie : elle doit y
+       lire le nom de SA bijouterie, au même titre que sur sa facture. Le
+       logo du logiciel y figurait en dur — même faute que le repli de
+       `_logoFacture()` corrigé le 2026-10-21 (§ 3).
+       Et depuis la migration 037, une cliente peut avoir un compte dans deux
+       bijouteries : sans ce nom à l'écran, rien ne lui dit laquelle. -->
   <div class="dash-header">
     <div class="dash-logo">
-      <img src="assets/logo-kayor.jpg" onerror="this.style.display='none'" />
-      <span>KAYOR</span>
+      <span id="dash-boutique"></span>
     </div>
     <div class="dash-user">
       <span class="dash-user-name" id="dash-client-nom"></span>
+      <button class="btn-logout" id="btn-changer-boutique"
+              style="display:none" onclick="choisirBoutique()">⇄ Changer</button>
       <button class="btn-logout" onclick="doLogout()">Déconnexion</button>
     </div>
   </div>
@@ -185,6 +212,10 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 <div class="modal-bg" id="modal-depot">
   <div class="modal-box">
     <div class="modal-title">Effectuer un dépôt</div>
+    <!-- Chez QUI ce dépôt est versé. C'est la demande du 2026-11-03 : une
+         cliente de deux bijouteries doit lire la bonne avant de valider. -->
+    <div id="depot-boutique" class="badge badge-or"
+         style="display:block;margin-bottom:14px;text-align:center"></div>
     <input type="hidden" id="depot-compte-id" />
     <div class="form-group">
       <label class="form-label">Montant rapide</label>
@@ -223,8 +254,8 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
   </div>
 </div>
 
-<script src="js/verrou.js?v=2026-11-02c"></script>
-  <script src="js/security.js?v=2026-11-02c"></script>
-<script src="js/client.js?v=2026-11-02c"></script>
+<script src="js/verrou.js?v=2026-11-03a"></script>
+  <script src="js/security.js?v=2026-11-03a"></script>
+<script src="js/client.js?v=2026-11-03a"></script>
 </body>
 </html>

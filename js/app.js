@@ -20,7 +20,7 @@
  * qui « peut tout faire » alors que les droits sont restreints, c'est presque
  * toujours ça.
  */
-const APP_VERSION = '2026-11-02-sauvegardes';
+const APP_VERSION = '2026-11-03-portail-boutiques';
 
 /**
  * Domaine de la vitrine publique, pour le QR imprime sur les factures.

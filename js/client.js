@@ -18,9 +18,15 @@ const SUPA_KEY = 'sb_publishable_3EBGFxeT8B8cys54IZj3Nw_ZTS-4ZR1';
 // ouvert depuis une tablette de boutique ou un téléphone prêté. La session
 // disparaît à la fermeture de l'onglet.
 const CLE_JETON = 'kayor_portail_token';
+// La liste des accès suit le jeton : sans elle, un rechargement de page
+// ferait perdre la possibilité de passer à l'autre bijouterie sans se
+// reconnecter. Même durée de vie, même stockage.
+const CLE_ACCES = 'kayor_portail_acces';
 
 var JETON     = null;
 var CLIENT    = null;
+var BOUTIQUE  = null;   // { nom, code, telephone } — celle de la session en cours
+var ACCES     = [];     // une entrée par bijouterie où le code a concordé
 var COMPTES   = [];
 var COMMANDES = [];
 var DERNIER_DEPOT = null;
@@ -85,14 +91,22 @@ async function rpc(nom, params){
 
 // ─── Navigation ────────────────────────────────────────────
 
+// La liste est ici, et nulle part ailleurs : ajouter une page sans l'y
+// inscrire la laisserait visible sous la suivante. C'est arrivé en ajoutant
+// `page-boutiques` le 2026-11-03.
+var PAGES = ['page-login', 'page-boutiques', 'page-dashboard'];
+
 function showPage(id){
-  document.getElementById('page-login').style.display = 'none';
-  document.getElementById('page-dashboard').style.display = 'none';
+  PAGES.forEach(function(p){
+    var el = document.getElementById(p);
+    if(el) el.style.display = 'none';
+  });
   var el = document.getElementById(id);
   if(!el) return;
   // Valeur explicite : une règle CSS pose display:none, et remettre une chaîne
   // vide laisserait cette règle s'appliquer — la page resterait invisible.
-  el.style.display = (id === 'page-login') ? 'flex' : 'block';
+  // Les deux écrans bâtis sur `.login-box` se centrent en flex.
+  el.style.display = (id === 'page-dashboard') ? 'block' : 'flex';
 }
 
 // ─── Saisie du PIN ─────────────────────────────────────────
@@ -144,10 +158,21 @@ async function doLogin(){
       return;
     }
 
-    JETON  = res.token;
-    CLIENT = res.client;
-    try { sessionStorage.setItem(CLE_JETON, JETON); } catch(e){ /* navigation privée */ }
+    // Depuis la migration 037, le serveur ouvre une session PAR bijouterie où
+    // le numéro et le code concordent. Il n'en choisit plus une au hasard.
+    ACCES = res.acces || [{ token: res.token, boutique: res.boutique, client: res.client }];
+    memoriserAcces();
 
+    if(res.plusieurs){
+      // On ne charge rien tant qu'elle n'a pas choisi : afficher l'épargne
+      // d'une bijouterie qu'elle n'a pas désignée est exactement le défaut
+      // qu'on corrige.
+      showLoading(false);
+      afficherChoixBoutique();
+      return;
+    }
+
+    utiliserAcces(0);
     await chargerDonnees();
     afficherDashboard();
   } catch(e){
@@ -163,9 +188,68 @@ async function chargerDonnees(){
     throw new Error((res && res.erreur) || 'Session expirée.');
   }
   CLIENT    = res.client   || CLIENT;
+  // La boutique vient du SERVEUR, déduite de la session — jamais de ce que le
+  // navigateur croit avoir choisi. Les deux doivent toujours concorder, et
+  // c'est le serveur qui fait foi.
+  BOUTIQUE  = res.boutique || BOUTIQUE;
   COMPTES   = res.comptes  || [];
   COMMANDES = res.commandes || [];
 }
+
+// ─── Plusieurs bijouteries ─────────────────────────────────
+
+function memoriserAcces(){
+  try { sessionStorage.setItem(CLE_ACCES, JSON.stringify(ACCES)); } catch(e){}
+}
+
+function relireAcces(){
+  try { ACCES = JSON.parse(sessionStorage.getItem(CLE_ACCES) || '[]'); }
+  catch(e){ ACCES = []; }
+}
+
+/** Désigne l'accès à utiliser. Ne décide de rien : le serveur revérifie. */
+function utiliserAcces(i){
+  var a = ACCES[i];
+  if(!a) return;
+  JETON    = a.token;
+  CLIENT   = a.client;
+  BOUTIQUE = a.boutique;
+  try { sessionStorage.setItem(CLE_JETON, JETON); } catch(e){ /* navigation privée */ }
+}
+
+function afficherChoixBoutique(){
+  var cible = document.getElementById('liste-boutiques');
+  cible.innerHTML = '';
+
+  // `textContent` et non `innerHTML` : le nom vient de la base, et une
+  // bijouterie nommée `<img src=x onerror=…>` s'exécuterait ici (§ 3).
+  ACCES.forEach(function(a, i){
+    var b = document.createElement('button');
+    b.className = 'btn btn-primary';
+    b.style.cssText = 'width:100%;margin-bottom:10px;display:block;text-align:left';
+    b.textContent = (a.boutique && a.boutique.nom) || 'Bijouterie';
+    b.onclick = function(){ basculerVers(i); };
+    cible.appendChild(b);
+  });
+
+  showPage('page-boutiques');
+  showLoading(false);
+}
+
+async function basculerVers(i){
+  showLoading(true);
+  try {
+    utiliserAcces(i);
+    await chargerDonnees();
+    afficherDashboard();
+  } catch(e){
+    showLoading(false);
+    showToast(e.message || 'Impossible d’ouvrir cette bijouterie.');
+  }
+}
+
+/** Le bouton « ⇄ Changer » de l'en-tête. */
+function choisirBoutique(){ afficherChoixBoutique(); }
 
 /**
  * Reprise de session au chargement de la page.
@@ -181,14 +265,18 @@ async function reprendreSession(){
   try {
     if(jeton){
       JETON = jeton;
+      // La liste des accès est relue avant les données : c'est elle qui
+      // décide si « ⇄ Changer » doit apparaître après un rechargement.
+      relireAcces();
       await chargerDonnees();
       afficherDashboard();
       return;
     }
   } catch(e){
     // Jeton expiré ou révoqué : on repart proprement de l'écran de connexion.
-    JETON = null;
+    JETON = null; ACCES = [];
     try { sessionStorage.removeItem(CLE_JETON); } catch(_){}
+    try { sessionStorage.removeItem(CLE_ACCES); } catch(_){}
   }
 
   // Le balisage pose display:none sur les deux pages : il faut afficher
@@ -202,6 +290,16 @@ async function reprendreSession(){
 function afficherDashboard(){
   showLoading(false);
   document.getElementById('dash-client-nom').textContent = CLIENT.nom || '';
+
+  // Le nom de la bijouterie, en en-tête. `textContent` : il vient de la base.
+  document.getElementById('dash-boutique').textContent =
+    (BOUTIQUE && BOUTIQUE.nom) || '';
+
+  // « ⇄ Changer » n'apparaît que s'il y a vraiment ailleurs où aller : un
+  // bouton qui ne mène nulle part inquiète sans rien apporter.
+  var chg = document.getElementById('btn-changer-boutique');
+  if(chg) chg.style.display = (ACCES.length > 1) ? '' : 'none';
+
   renderComptes();
   renderCommandes();
   showPage('page-dashboard');
@@ -281,6 +379,11 @@ function ouvrirDepot(compteId){
   // Ce qui s'ouvre est un depot NEUF : on jette la cle du precedent, meme
   // s'il a echoue. Voir `confirmerDepot()`.
   Verrou.oublier('depot:' + compteId);
+  // Chez qui ce dépôt est versé, lu sur la fenêtre elle-même : c'est le geste
+  // où se tromper de bijouterie coûte le plus cher, et le seul écran où la
+  // cliente engage de l'argent.
+  var bq = document.getElementById('depot-boutique');
+  if(bq) bq.textContent = 'Dépôt chez ' + ((BOUTIQUE && BOUTIQUE.nom) || 'votre bijouterie');
   document.getElementById('depot-compte-id').value = compteId;
   document.getElementById('depot-montant').value = '';
   document.getElementById('depot-note').value = '';
@@ -401,16 +504,28 @@ function afficherRecu(){
 
 async function doLogout(){
   var jeton = JETON;
-  JETON = null; CLIENT = null; COMPTES = []; COMMANDES = []; DERNIER_DEPOT = null;
+  // Les jetons des AUTRES bijouteries partent aussi : n'invalider que celui
+  // en cours laisserait des sessions ouvertes dans le navigateur d'un
+  // téléphone prêté, sans que rien ne les montre.
+  var autres = ACCES.map(function(a){ return a.token; })
+                    .filter(function(t){ return t && t !== jeton; });
+  JETON = null; CLIENT = null; BOUTIQUE = null; ACCES = [];
+  COMPTES = []; COMMANDES = []; DERNIER_DEPOT = null;
   try { sessionStorage.removeItem(CLE_JETON); } catch(e){}
+  try { sessionStorage.removeItem(CLE_ACCES); } catch(e){}
 
   clearPin();
   document.getElementById('login-tel').value = '';
   erreurLogin('');
   showPage('page-login');
 
-  // Invalide le jeton côté serveur : sans cela il resterait valable deux heures.
-  if(jeton){ try { await rpc('portail_logout', { p_token: jeton }); } catch(e){} }
+  // Invalide les jetons côté serveur : sans cela ils resteraient valables
+  // deux heures. Tous, pas seulement celui qui était affiché — une session
+  // ouverte sur l'autre bijouterie est une session ouverte.
+  if(jeton) autres.unshift(jeton);
+  for(var i = 0; i < autres.length; i++){
+    try { await rpc('portail_logout', { p_token: autres[i] }); } catch(e){}
+  }
 }
 
 document.addEventListener('DOMContentLoaded', reprendreSession);

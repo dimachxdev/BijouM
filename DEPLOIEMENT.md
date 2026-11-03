@@ -89,15 +89,15 @@ déjà `migrations/`, les `*.md`, `config_backup.json` et `.claude/`.
 
 Repères de version, pour vérifier que le déploiement a bien pris :
 
-- empreintes de cache : `?v=2026-11-02c`
-- `APP_VERSION` : `2026-11-02-sauvegardes`
+- empreintes de cache : `?v=2026-11-03a`
+- `APP_VERSION` : `2026-11-03-portail-boutiques`
 
 ---
 
 ## 3. Juste après le déploiement
 
 **Rechargez avec Ctrl + Maj + R**, puis regardez la version sous l'écran de
-connexion. Tant qu'elle n'affiche pas `2026-11-02-sauvegardes`, rien de ce
+connexion. Tant qu'elle n'affiche pas `2026-11-03-portail-boutiques`, rien de ce
 qui suit n'a de sens : c'est le cache, pas un bug. C'est la première chose à
 vérifier devant tout comportement incohérent.
 
@@ -194,6 +194,28 @@ refaites exactement la même**, sans vous presser.
 > Enfin, enregistrez une sortie, **rechargez la page avec F5**, et refaites la
 > même : la fenêtre doit encore apparaître. C'est le cas que ni le verrou ni
 > la clé ne couvrent, et il passe par `localStorage` — donc par appareil.
+
+### c quater. Le portail nomme la bijouterie
+
+Ouvrez `client.html` avec une cliente qui a un code. L'en-tête doit afficher
+le **nom de la bijouterie** — plus « KAYOR », qui y figurait en dur — et la
+fenêtre de dépôt doit dire « Dépôt chez … ».
+
+> *Prouve* que `portail_donnees()` renvoie bien la boutique (migration 037).
+> Si l'en-tête reste vide, c'est `client.html` qui n'est pas à jour.
+
+**L'essai qui démontre la migration 037** demande une préparation : donnez à
+une même cliente **le même numéro et le même code** dans deux boutiques.
+
+> Attendu : un écran « Vos bijouteries » avec les deux noms, puis, pour
+> chacune, **son** solde et **son** historique. Le bouton « ⇄ Changer » passe
+> de l'une à l'autre sans se reconnecter.
+>
+> Avec un code **différent** dans chaque boutique, pas d'écran de choix :
+> elle entre directement dans celle dont le code a été tapé. C'est voulu.
+>
+> Et pour une cliente d'**une seule** boutique — le cas de presque toutes —
+> rien ne doit changer : pas d'écran de choix, pas de bouton « Changer ».
 
 ### d. **Scanner le code avec un vrai téléphone**
 

@@ -148,6 +148,58 @@ Depuis les migrations 025 et 026 :
   **sur le compte**. La vente appartient à celle à qui appartient l'épargne
   qui la paie. Une identité qui se propage ne se re-saisit pas.
 
+### Une cliente peut être cliente de deux bijouteries
+
+Signalé le 2026-11-03. `portail_login()` cherchait la fiche ainsi :
+
+```sql
+   where regexp_replace(c.tel,'\D','','g') = v_tel
+     and c.pin_hash = crypt(p_pin, c.pin_hash)
+   limit 1;                          -- ni ordre, ni boutique
+```
+
+C'est, mot pour mot, le motif du § 1 : **« un `limit 1` aurait pris en silence
+la ligne d'une autre boutique »** — et cette fois dans le chemin
+d'authentification. Il ne vole rien : la session porte
+`(client_id, organisation_id)` et `portail_donnees()` filtre dessus depuis la
+023. Mais il **choisissait à la place de la cliente**, sans ordre défini : elle
+voyait l'épargne d'une seule de ses deux bijouteries, son dépôt y partait, et
+l'autre lui était inaccessible sans que rien ne le lui dise.
+
+Le défaut ne se déclenche que si le **même numéro porte le même code** dans
+deux boutiques — avec des codes différents, `crypt()` départage tout seul.
+C'est pourquoi il n'avait jamais été vu. Vérifié le 2026-11-03 : aucun numéro
+n'est présent dans deux boutiques. Le trou était ouvert, personne n'est passé.
+
+Depuis la migration 037 :
+
+- **Plus de `limit 1`.** On ouvre une session par boutique où le code
+  concorde, et la cliente choisit. **Une session reste le lien vers UNE
+  boutique** — une session multi-boutiques obligerait à rouvrir le filtre
+  `v_sess.organisation_id` partout, c'est-à-dire à défaire les migrations 023
+  et 026.
+- **L'ordre est explicite** (`order by o.nom, c.id`). Sans lui, la « première »
+  boutique changeait d'un appel à l'autre.
+- **Rien n'est divulgué** : seules les fiches dont le code concorde sont
+  listées. Un code juste dans une boutique et faux dans l'autre ne révèle pas
+  la seconde.
+- **`portail_donnees()` renvoie le nom de la boutique.** Séparer deux
+  boutiques sans pouvoir les nommer ne sépare rien. Le nom seulement, pas le
+  logo : 200 Ko de base64 sur une connexion mobile, pour une information que
+  le nom porte déjà.
+- Côté navigateur, `ACCES` suit le jeton dans `sessionStorage`, et **la
+  déconnexion invalide tous les jetons**, pas seulement celui affiché — sur un
+  téléphone prêté, une session ouverte sur l'autre bijouterie est une session
+  ouverte.
+- `showPage()` a désormais une **liste** de pages. Ajouter un écran sans l'y
+  inscrire le laisse visible sous le suivant ; c'est arrivé le jour même.
+
+**Le portail affiche le nom de la bijouterie, plus celui de KAYOR.** L'en-tête
+portait le logo et le mot « KAYOR » en dur. C'est la même faute que le repli
+de `_logoFacture()` corrigé le 2026-10-21 : cette page est ouverte par la
+cliente d'une bijouterie, elle doit y lire **sa** bijouterie. Et la fenêtre de
+dépôt le répète — c'est le seul écran où elle engage de l'argent.
+
 ### La clé de service ne touche jamais le navigateur
 
 Créer un compte ou remplacer un mot de passe exige l'API Admin de Supabase,
