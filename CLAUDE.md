@@ -1225,6 +1225,74 @@ lire la table — corrigé par la 036.
 
 ---
 
+## 6 ter. Deux éditions : avec ou sans stock
+
+Demandé le 2026-11-04, pour les boutiques d'essai : « le plus simple de
+facturer sans gestion de stock derrière », tout le volet argent restant
+entier.
+
+### Ce que le modèle permettait déjà
+
+Vérifié avant d'écrire : **`ventes` ne porte aucune colonne de stock.** Elle a
+ses propres `description`, `type_bijou`, `carat`, `poids`, `local`, `importe`.
+Le navigateur les recopiait depuis l'article choisi, mais rien en base
+n'exigeait qu'un article existe.
+
+Le lien au stock n'était donc qu'un **effet de bord** : `deduireStock()`,
+appelé à quatre endroits. Il n'y avait pas de modèle à changer, seulement un
+comportement à rendre facultatif.
+
+### Une colonne, et surtout pas `plan = 'essai'`
+
+`organisations.gestion_stock` (migration 038). Déduire le mode du plan serait
+plus court, et c'est un piège :
+
+- une boutique d'essai **qui paie** verrait la forme de son produit changer
+  sous ses doigts, sans l'avoir demandé ;
+- une boutique qui se trouve bien du mode simple n'aurait aucun moyen de le
+  garder en payant ;
+- et le § 5 confie au plan ce à quoi on **a droit**, jamais la forme de
+  l'outil.
+
+La console propose le mode simple par défaut quand le plan est « essai » : la
+**suggestion** suit le plan, la **valeur** reste explicite.
+
+### Qui peut le changer — la 027 répond toute seule
+
+La colonne est **hors du `grant update` d'`authenticated`**. Une propriétaire
+ne peut donc pas y toucher ; seul l'opérateur, par
+`basculer_gestion_stock()`. Aucune policy à écrire — « une policy dit quelles
+lignes, jamais quelles colonnes » (§ 1). Vérifié par contre-épreuve : la même
+propriétaire écrit toujours son adresse, et se voit refuser `gestion_stock`.
+
+**Ce drapeau n'est pas une autorisation.** Le forcer dans la console ferait
+réapparaître des écrans qui écriraient dans le stock de **sa propre**
+boutique : rien ne fuit. C'est la forme de l'outil. Ne pas lui faire porter
+autre chose.
+
+### Les trois points de bascule, et pourquoi ils sont là
+
+- **`peutAcceder()`** : `stocks` et `sorties` renvoient `false`. Un seul point
+  gouverne la navigation, et le bouton flottant recopiant le bouton de la
+  section ouverte, il disparaît avec elle — sans une ligne de plus (§ 3).
+- **`deduireStock()` et `restituerStock()`** portent la condition **en
+  elles-mêmes**, pas chez leurs quatre appelants : recopiée, elle aurait fini
+  par manquer au cinquième. `deduireStock()` rend **`true`** quand il n'y a
+  rien à faire — `false` ferait avorter la vente qui vient d'être écrite.
+- **`prepNouvelleVente()`** substitue au sélecteur d'article un bloc de saisie
+  libre (type, carat, provenance). **Les deux blocs ne coexistent jamais** :
+  sinon la vendeuse aurait deux façons de décrire la même marchandise, donc
+  deux vérités.
+
+`gereLeStock()` **défaut `true`** : une page dont la colonne n'a pas été lue
+garde ses onglets. Une vendeuse ne doit pas croire que son stock s'est
+volatilisé parce qu'un champ manquait.
+
+En édition simple, la **description devient obligatoire** — elle remplace
+l'article, et c'est elle qui s'imprime sur la facture remise à la cliente.
+
+---
+
 ## 7. Journal et détection
 
 `connexions` n'a **que** des policies `INSERT` et `SELECT` : ni `UPDATE`, ni
