@@ -264,6 +264,12 @@
     $('e-proprio-login').innerHTML = b.proprietaire_login
       ? esc(b.proprietaire_nom || '') + ' — identifiant <strong>' + esc(b.proprietaire_login) + '</strong>'
       : '<span style="color:var(--danger-text)">Cette boutique n\'a aucune propriétaire : personne ne peut y entrer.</span>';
+    // La valeur en base fait foi. Le plan ne la décide pas : il la SUGGÈRE
+    // seulement à la création — une boutique d'essai qui paie ne doit pas
+    // voir la forme de son produit changer sous ses doigts (migration 038).
+    $('e-gestion-stock').value = (b.gestion_stock === false) ? 'non' : 'oui';
+    $('e-edition-avis').textContent = '';
+
     $('e-titre').textContent = '« ' + (b.nom || '') + ' »';
     $('e-code').textContent  = 'Code ' + (b.slug || '');
     $('op-form-edition').style.display = 'block';
@@ -560,6 +566,24 @@
     };
   }
 
+  /**
+   * Basculer une boutique entre l'édition complète et l'édition simple.
+   *
+   * Rien n'est effacé : la fonction serveur rend le nombre d'articles qui
+   * restent en base, et on l'affiche. Un opérateur qui croirait effacer en
+   * basculant prendrait la décision inverse.
+   */
+  async function appliquerEdition() {
+    var id = $('e-id').value;
+    var actif = $('e-gestion-stock').value === 'oui';
+    var r = await rpc('basculer_gestion_stock', { p_org_id: id, p_actif: actif });
+    if (!r || r.ok === false) throw new Error(r && r.erreur ? r.erreur : 'Refus du serveur.');
+    $('e-edition-avis').textContent = r.avis || '';
+    await rafraichir();
+    message('✓ « ' + r.boutique + ' » : '
+          + (actif ? 'édition complète.' : 'édition simple.'));
+  }
+
   // ------------------------------------------------- sauvegardes et structure
   /**
    * Le bandeau qui previent, et le resume qui dit de quand date le filet.
@@ -690,6 +714,7 @@
     $('op-btn-creer').onclick     = verrouille('creer-boutique', creer);
     $('op-btn-enregistrer').onclick = verrouille('editer-boutique', enregistrerEdition);
     $('op-btn-mdp-proprio').onclick = verrouille('mdp-proprietaire', remplacerMotDePasseProprio);
+    $('op-btn-edition').onclick     = verrouille('edition-boutique', appliquerEdition);
     // La touche Entree passe par le MEME chemin verrouille que le bouton.
     // L'y oublier aurait laisse une porte ouverte a cote de la porte fermee.
     $('op-pass').addEventListener('keydown', function (e) {

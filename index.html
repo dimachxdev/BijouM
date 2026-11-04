@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>KAYOR — Brillez sans effort</title>
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml" />
-  <link rel="stylesheet" href="css/style.css?v=2026-11-03a" />
+  <link rel="stylesheet" href="css/style.css?v=2026-11-04a" />
 </head>
 <body>
 
@@ -833,14 +833,42 @@
       </div>
       <div style="font-size:11px;color:var(--text-secondary);margin-top:4px">Le montant sera automatiquement deduit du compte epargne.</div>
     </div>
-    <!-- Sélecteur article stock -->
-    <div class="form-group" style="margin-bottom:8px">
+    <!-- Sélecteur article stock — masqué en édition simple (migration 038),
+         où la marchandise se décrit à la main juste en dessous. -->
+    <div class="form-group" style="margin-bottom:8px" id="v-bloc-stock">
       <label class="form-label">Article en stock *</label>
       <select class="form-input" id="v-stock-ref" onchange="onSelectStockVente('v')">
         <option value="">— Choisir un article en stock —</option>
       </select>
     </div>
-    <!-- Info stock sélectionné -->
+
+    <!-- ÉDITION SIMPLE : la marchandise se saisit, elle ne se choisit pas.
+         Les mêmes informations qu'une vente ordinaire — elles ont toujours
+         eu leurs colonnes dans `ventes`, elles étaient seulement recopiées
+         depuis l'article. Ce sont elles qui s'impriment sur la facture. -->
+    <div id="v-bloc-libre" style="display:none">
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Type de bijou *</label>
+          <select class="form-input" id="v-type-bijou-libre"
+                  onchange="onChangeTypeBijouLibre()"></select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Carat</label>
+          <select class="form-input" id="v-carat-libre"></select>
+        </div>
+      </div>
+      <div class="form-row" id="v-ligne-or-libre">
+        <div class="form-group">
+          <label class="form-label">Provenance de l'or</label>
+          <select class="form-input" id="v-provenance-libre">
+            <option value="local">Or local</option>
+            <option value="importe">Or importé</option>
+          </select>
+        </div>
+      </div>
+    </div>
+    <!-- Info stock sélectionné (jamais affiché en édition simple) -->
     <div id="v-stock-info" style="display:none;margin-bottom:12px;padding:10px 14px;background:var(--bg-secondary);border-radius:var(--radius-md)">
       <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px;margin-bottom:6px">
         <span style="font-size:12px;color:var(--text-secondary)" id="v-stock-label">—</span>
@@ -1650,15 +1678,15 @@
 
 <div class="toast" id="toast"></div>
   <!-- Supabase SDK -->
-  <script src="js/verrou.js?v=2026-11-03a"></script>
-  <script src="js/security.js?v=2026-11-03a"></script>
-  <script src="js/auth.js?v=2026-11-03a"></script>
-  <script src="js/data.js?v=2026-11-03a"></script>
-  <script src="js/supabase.js?v=2026-11-03a"></script>
+  <script src="js/verrou.js?v=2026-11-04a"></script>
+  <script src="js/security.js?v=2026-11-04a"></script>
+  <script src="js/auth.js?v=2026-11-04a"></script>
+  <script src="js/data.js?v=2026-11-04a"></script>
+  <script src="js/supabase.js?v=2026-11-04a"></script>
   <!-- Encodeur QR local : la regle 6 interdit un CDN, et ce code est lu par
        la page ou vit le jeton de session. Doit precéder app.js. -->
-  <script src="js/qr.js?v=2026-11-03a"></script>
-  <script src="js/app.js?v=2026-11-03a"></script>
+  <script src="js/qr.js?v=2026-11-04a"></script>
+  <script src="js/app.js?v=2026-11-04a"></script>
 
 <!-- MODAL AJUSTER STOCK -->
 <div class="modal-backdrop" id="modal-ajust-stock">

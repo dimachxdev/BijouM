@@ -89,15 +89,15 @@ déjà `migrations/`, les `*.md`, `config_backup.json` et `.claude/`.
 
 Repères de version, pour vérifier que le déploiement a bien pris :
 
-- empreintes de cache : `?v=2026-11-03a`
-- `APP_VERSION` : `2026-11-03-portail-boutiques`
+- empreintes de cache : `?v=2026-11-04a`
+- `APP_VERSION` : `2026-11-04-edition-simple`
 
 ---
 
 ## 3. Juste après le déploiement
 
 **Rechargez avec Ctrl + Maj + R**, puis regardez la version sous l'écran de
-connexion. Tant qu'elle n'affiche pas `2026-11-03-portail-boutiques`, rien de ce
+connexion. Tant qu'elle n'affiche pas `2026-11-04-edition-simple`, rien de ce
 qui suit n'a de sens : c'est le cache, pas un bug. C'est la première chose à
 vérifier devant tout comportement incohérent.
 
@@ -216,6 +216,25 @@ une même cliente **le même numéro et le même code** dans deux boutiques.
 >
 > Et pour une cliente d'**une seule** boutique — le cas de presque toutes —
 > rien ne doit changer : pas d'écran de choix, pas de bouton « Changer ».
+
+### c quinquies. Les deux éditions
+
+Dans la console opérateur, ouvrez une boutique → **Édition** → « Simple —
+facturation seule » → Appliquer. Puis reconnectez-vous dans cette boutique
+(le drapeau est lu à la connexion).
+
+> Attendu : **Stock et Sorties ont disparu** de la navigation, et le bouton
+> flottant avec. « Nouvelle vente » ne demande plus d'article : on décrit le
+> bijou (type, carat, provenance, poids) et la description devient
+> obligatoire. Caisse, épargne, dépôts, décaissements et arrhes sont intacts.
+>
+> Repassez en « Complète » : les onglets reviennent, **et les articles sont
+> toujours là**. Rien n'est effacé en basculant — la fonction serveur le
+> rappelle d'ailleurs dans sa réponse.
+>
+> La contre-épreuve, à faire une fois : dans une boutique en édition
+> **complète**, « Nouvelle vente » doit toujours refuser sans article, et
+> déduire le stock après la vente.
 
 ### d. **Scanner le code avec un vrai téléphone**
 

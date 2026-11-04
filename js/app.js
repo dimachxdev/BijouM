@@ -20,7 +20,7 @@
  * qui « peut tout faire » alors que les droits sont restreints, c'est presque
  * toujours ça.
  */
-const APP_VERSION = '2026-11-03-portail-boutiques';
+const APP_VERSION = '2026-11-04-edition-simple';
 
 /**
  * Domaine de la vitrine publique, pour le QR imprime sur les factures.
@@ -274,9 +274,38 @@ function geste(nom, fn) {
 // L'autorisation réelle est appliquée par les policies RLS dans PostgreSQL :
 // forcer STATE.currentUser.role dans la console change l'interface, pas les
 // droits — les requêtes sont rejetées côté serveur.
+/**
+ * Cette boutique tient-elle un stock ?
+ *
+ * `false` = edition simple (migration 038) : on facture librement, sans
+ * article et sans deduction. Tout le volet argent — caisse, epargne,
+ * decaissements, arrhes — reste entier.
+ *
+ * Le defaut est `true`, et c'est le bon sens du defaut : une boutique dont
+ * la colonne n'aurait pas ete lue garde ses onglets plutot que de les voir
+ * disparaitre. Une page en cache ne doit pas faire croire a une vendeuse
+ * que son stock s'est volatilise.
+ *
+ * Et ce n'est PAS une autorisation : le drapeau decide de la forme de
+ * l'outil, pas de ce a quoi on a droit. Le forcer dans la console ferait
+ * reapparaitre des ecrans qui ecriraient dans le stock de SA propre
+ * boutique — rien ne fuit. La vraie barriere est ailleurs : la colonne est
+ * hors du `grant update` d'`authenticated`, donc personne ici ne peut la
+ * changer en base.
+ */
+function gereLeStock() {
+  var b = (typeof Auth !== 'undefined' && Auth.connecte()) ? Auth.boutique() : null;
+  return !b || b.gestion_stock !== false;
+}
+
 function peutAcceder(section) {
   const role = STATE.currentUser?.role;
   if (!role) return false;
+  // En edition simple, Stock et Sorties n'existent pas. On le dit ICI, au
+  // seul point qui gouverne la navigation : le bouton flottant recopie le
+  // bouton de la section ouverte, donc il disparait avec elle, sans une
+  // ligne de plus (§ 3).
+  if ((section === 'stocks' || section === 'sorties') && !gereLeStock()) return false;
   // Le profil boutique porte l'identité commerciale et fiscale de
   // l'entreprise. `all` ne doit pas l'ouvrir aux administrateurs, qui sont
   // des employés : seul le propriétaire y touche.
@@ -1623,6 +1652,37 @@ function prepNouvelleVente(){
   ['v-local','v-importe'].forEach(function(id){
     var el=document.getElementById(id); if(el) el.value='0';
   });
+
+  // Édition simple : on remplace le sélecteur d'article par une saisie libre.
+  // Les deux blocs ne coexistent jamais — sinon la vendeuse aurait deux
+  // façons de décrire la même marchandise, et deux vérités.
+  var stockGere = gereLeStock();
+  var bStock = document.getElementById('v-bloc-stock');
+  var bLibre = document.getElementById('v-bloc-libre');
+  if (bStock) bStock.style.display = stockGere ? '' : 'none';
+  if (bLibre) bLibre.style.display = stockGere ? 'none' : '';
+
+  if (!stockGere) {
+    peuplerTypeBijou('v-type-bijou-libre', '');
+    peuplerSelect('v-carat-libre', '');
+    var pl = document.getElementById('v-provenance-libre'); if (pl) pl.value = 'local';
+    onChangeTypeBijouLibre();
+  }
+
+  // Le nombre d'articles ne déduit plus rien en édition simple : il reste,
+  // purement informatif. Écrit dans LES DEUX SENS — ne le poser que pour le
+  // mode simple laisserait le mauvais libellé après une bascule, et c'est
+  // exactement le genre d'écart qu'on ne remarque jamais soi-même.
+  var hint = document.querySelector('#v-nb-articles + .form-hint');
+  if (hint) hint.textContent = stockGere ? 'Informatif / déduction stock' : 'Informatif';
+}
+
+/** Montre la provenance de l'or seulement pour les types qui en portent. */
+function onChangeTypeBijouLibre(){
+  var t = document.getElementById('v-type-bijou-libre');
+  var ligne = document.getElementById('v-ligne-or-libre');
+  if (!t || !ligne) return;
+  ligne.style.display = (TYPES_AVEC_OR_CODES.indexOf(t.value) >= 0) ? '' : 'none';
 }
 
 /**
@@ -1664,15 +1724,33 @@ async function _enregistrerVente(){
   const poids     = parseFloat(document.getElementById('v-poids-vente')&&document.getElementById('v-poids-vente').value)||0;
   const nbArticlesV = parseInt(document.getElementById('v-nb-articles')&&document.getElementById('v-nb-articles').value)||0;
 
-  // Infos depuis l'article stock
-  const typeBijou = stockItem ? (stockItem.typeBijou||'') : '';
-  const carat     = stockItem ? (stockItem.carat||'') : '';
-  const local     = stockItem && stockItem.provenance==='local'  ? poids : 0;
-  const importe   = stockItem && stockItem.provenance==='importe'? poids : 0;
+  // D'où vient la description de la marchandise : de l'article choisi, ou
+  // de ce que la vendeuse a saisi. Les colonnes de `ventes` sont les mêmes
+  // dans les deux cas — c'est la SOURCE qui change, pas le modèle.
+  const stockGere = gereLeStock();
+  let typeBijou, carat, local, importe;
+  if (stockGere) {
+    typeBijou = stockItem ? (stockItem.typeBijou||'') : '';
+    carat     = stockItem ? (stockItem.carat||'') : '';
+    local     = stockItem && stockItem.provenance==='local'  ? poids : 0;
+    importe   = stockItem && stockItem.provenance==='importe'? poids : 0;
+  } else {
+    typeBijou = document.getElementById('v-type-bijou-libre')?.value || '';
+    carat     = document.getElementById('v-carat-libre')?.value || '';
+    const prov = document.getElementById('v-provenance-libre')?.value || '';
+    const porteOr = TYPES_AVEC_OR_CODES.indexOf(typeBijou) >= 0;
+    local     = (porteOr && prov === 'local')   ? poids : 0;
+    importe   = (porteOr && prov === 'importe') ? poids : 0;
+  }
 
   // Validations
-  if(!date||!clientId||!stockRef||montant<=0){showToast('Date, client, article en stock et montant sont obligatoires.');return;}
-  if(poids<=0 && nbArticlesV<=0){showToast('Saisissez le poids vendu et/ou le nombre d\'articles.');return;}
+  if(!date||!clientId||montant<=0){showToast('Date, client et montant sont obligatoires.');return;}
+  if(stockGere && !stockRef){showToast('Choisissez l\'article en stock.');return;}
+  // En édition simple l'article est remplacé par sa description : sans elle,
+  // la facture remise à la cliente ne dirait pas ce qu'elle a acheté.
+  if(!stockGere && !desc){showToast('Décrivez le bijou vendu : c\'est ce qui s\'imprime sur la facture.');return;}
+  if(!stockGere && !typeBijou){showToast('Le type de bijou est obligatoire.');return;}
+  if(stockGere && poids<=0 && nbArticlesV<=0){showToast('Saisissez le poids vendu et/ou le nombre d\'articles.');return;}
   if(acompte>montant){showToast('Acompte ne peut pas depasser le montant.');return;}
   if(stockItem){
     if(poids>0 && poids>(stockItem.poidsTotalG||0)){showToast('Poids insuffisant (dispo: '+(stockItem.poidsTotalG||0).toFixed(2)+'g)');return;}
@@ -3962,6 +4040,12 @@ function stopAutoRefresh() {
 // DÉDUCTION/RESTITUTION STOCK CENTRALE
 // ============================================
 async function deduireStock(stockRef, poids, nbArticles) {
+  // En édition simple, il n'y a rien à déduire. La condition est ICI et non
+  // chez les trois appelants : recopiée, elle aurait fini par manquer au
+  // quatrième — c'est le motif que le § 3 décrit pour les cartes de liste.
+  // `true` et non `false` : rien à faire n'est pas un échec, et rendre
+  // `false` ferait avorter la vente qui vient d'être écrite.
+  if (!gereLeStock()) return true;
   var s = getStockItem(stockRef);
   if (!s) return true;
 
@@ -3992,6 +4076,7 @@ async function deduireStock(stockRef, poids, nbArticles) {
 }
 
 async function restituerStock(stockRef, poids, nbArticles) {
+  if (!gereLeStock()) return;   // même raison que `deduireStock()`
   var s = getStockItem(stockRef);
   if (!s) return;
   if (poids > 0)      s.poidsTotalG = (s.poidsTotalG||0) + poids;
