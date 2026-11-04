@@ -1217,6 +1217,89 @@ Trois règles de conception à tenir :
 incident — « qu'est-ce qui manque ? » — **sans rien écrire**, et ne rend que
 des comptes, jamais des lignes. C'est ce qui se lit en premier.
 
+### Télécharger : le compte opérateur devient la clé de tout
+
+Demandé le 2026-11-04. Migrations 039 et 040. C'est la pesée que le § 9
+exigeait, faite et assumée :
+
+- Un instantané contient **toutes les boutiques dans un seul objet**,
+  `clients.pin_hash` compris. Un jeton d'opérateur volé suffit désormais à
+  l'emporter en une requête. Avant, il y fallait le tableau de bord Supabase :
+  un autre mot de passe, un autre site. **L'élargissement est réel.**
+- Ce qui le rend acceptable : il n'y a **qu'un** opérateur, c'est le fondateur,
+  et il détient de toute façon les accès de la base. Le geste ne lui donne rien
+  de nouveau ; il lui évite l'éditeur SQL. La surface qui s'ouvre est celle du
+  **vol de son compte**.
+- Donc deux contreparties, qui ne sont pas décoratives : chaque export est
+  inscrit dans `journal_sauvegardes` — `INSERT` et `SELECT` seulement, comme
+  `connexions` au § 7 — et **la MFA du § 9 cesse d'être une bonne pratique
+  pour devenir la serrure de ce coffre.**
+- Le fichier est en clair et vaut la base entière. Il ne vit pas dans un
+  dossier de travail ordinaire.
+
+**À noter, et non encore tranché** : un code PIN à quatre chiffres haché par
+bcrypt se retrouve hors ligne en quelques minutes. Le fichier exporté expose
+donc les codes des clientes, pas seulement leurs empreintes. Le remède est un
+code plus long ou un hachage plus lent — une décision à part, à prendre avant
+qu'un export ne circule.
+
+**Pas de fenêtre de confirmation sur le téléchargement**, et c'est délibéré :
+un avertissement qui s'affiche à chaque clic s'apprend à cliquer sans le lire
+— la raison même qui interdit d'élargir `Verrou.confirmerRepetition()`. Le
+texte est en permanence sous le bouton.
+
+### Restaurer : le troisième geste, entre écraser et ne rien faire
+
+La 035 avait raison sur le principe et s'arrêtait trop tôt sur l'usage :
+`restaurer_table()` crée une table d'examen dans un schéma que l'application
+ne peut pas lire. Entre « restaurer en écrasant » et « ne pas restaurer », il
+existe le seul geste dont on ait besoin après un incident : **réinjecter ce
+qui manque**.
+
+`restaurer_lignes_manquantes()` (migration 039) **n'écrit que des lignes
+absentes**. Ni `UPDATE` ni `DELETE` nulle part — un `where not exists` puis un
+`on conflict do nothing`, deux remparts pour la même promesse. Le scénario que
+la 035 refusait — remplacer des données justes par celles d'hier — reste donc
+impossible.
+
+Quatre verrous, chacun pour un accident précis :
+
+1. opérateur du service, et personne d'autre ;
+2. **essai à blanc par défaut** (`p_appliquer` = false) : on voit ce qui
+   reviendrait avant que quoi que ce soit revienne ;
+3. **le nom de la table se retape**, comme le code boutique de
+   `supprimer_boutique()` — un clic dans une liste ne réinjecte rien ;
+4. `p_org_id` facultatif : un incident touche presque toujours une boutique.
+
+Et quatre choses à ne pas défaire :
+
+- **La fonction rend les clés primaires réellement insérées** (`returning`,
+  pas la liste des manquantes). C'est ce qui rend le geste défaisable : un
+  `delete` sur ces clés exactes l'annule. L'écran les affiche, et le compte
+  rendu s'écrit **après** la comparaison qui le suit — sinon elle l'effaçait.
+- **Les séquences sont recalées** (`setval`, jamais à la baisse). Une table
+  recréée après un `DROP` repart à 1 ; réinjecter les anciens identifiants
+  laisserait la séquence derrière eux, et **le prochain mouvement d'épargne
+  entrerait en collision** sur la clé primaire. Vérifié : séquence ramenée à
+  1, réinjection, séquence revenue à 138.
+- **Une clé étrangère qui proteste est un bon signe.** Réinjecter une vente
+  dont la cliente a disparu lève une erreur et annule tout — d'où l'ordre :
+  `organisations`, `clients`, puis ventes / comptes / reprises / arrhes, puis
+  les mouvements. Ne pas « réparer » cela en désactivant les contraintes.
+- **Un import n'écrit rien.** Le fichier redevient une ligne de
+  `public.sauvegardes`, et tout ce qui existe s'y applique sans une ligne de
+  plus. Un import qui écrirait aussitôt serait le geste le plus destructeur du
+  produit après `supprimer_boutique()`.
+
+**`faite_le` dit l'âge des données, jamais l'heure de l'import** (migration
+040). Le défaut ne se voyait pas dans la fonction, il se voyait dans l'écran
+qui la consomme : horodater l'import à `now()` plaçait un fichier vieux de
+huit jours en tête de liste et **éteignait l'alerte « plus de 48 h »** — la
+seule qui prévienne qu'un projet endormi n'a exécuté aucun cron. Corollaire
+côté navigateur : la fraîcheur se juge sur les instantanés **pris ici**, et un
+fichier importé n'y entre pas. Un fichier prouve qu'on a une copie, jamais que
+le travail planifié a tourné.
+
 Le schéma `restauration` reste fermé à `authenticated`, et doit le rester :
 l'examen ligne à ligne se fait dans l'éditeur SQL de Supabase. Une restauration
 n'est pas un geste de comptoir. Le premier message de `restaurer_table()`
@@ -1459,6 +1542,10 @@ reviendrait à constituer un fichier qu'on n'a aucune raison de détenir.
       public. `cgu.html` est la version publique, sans ce paragraphe — elle
       ne promet rien de faux sans dire pourquoi. Modifier les deux ensemble.
 - [ ] Activer la **MFA** (TOTP) et l'exiger des rôles `proprietaire` et `admin`.
+      **Et d'abord du compte opérateur** : depuis la migration 039, son jeton
+      exporte la base entière en une requête. Ce point n'est plus une bonne
+      pratique parmi d'autres, c'est la serrure du coffre — voir « Télécharger »
+      au § 6 bis.
 - [x] ~~Freiner le bourrage sur la connexion d'équipe~~ — fait le 2026-10-22
       par la limite native de Supabase Auth (30 → 10 / 5 min / IP). Un frein
       applicatif aurait été contournable et Turnstile aurait cassé la règle 6 :
@@ -1480,19 +1567,31 @@ reviendrait à constituer un fichier qu'on n'a aucune raison de détenir.
       est un problème secondaire. Voir § 6 bis.
 - [ ] **Sauvegarder les données HORS de la base.** Les migrations 035/036
       posent un instantané quotidien, mais il vit dans la base qu'il protège :
-      il ne survit pas à la perte du projet. Deux chemins, à trancher :
-      le **plan Pro** de Supabase (sauvegarde quotidienne de leur côté,
-      7 jours), ou un `pg_dump` planifié sur une machine toujours allumée —
-      ce qui suppose un dépôt git et le mot de passe de la base dans un coffre.
-      **Ne pas exposer d'export HTTP du contenu complet** sans avoir pesé que
-      le compte opérateur deviendrait alors la clé de tout le jeu de données.
+      il ne survit pas à la perte du projet.
+
+      **Un chemin existe depuis le 2026-11-04** (migrations 039/040) : la
+      console télécharge un instantané complet, et sait le remettre. L'export
+      HTTP du contenu complet a donc été ouvert — **la pesée que cette ligne
+      exigeait est écrite au § 6 bis**, et sa conséquence est que la MFA du
+      compte opérateur passe devant.
+
+      Ce qui reste à faire tient en un mot : **c'est manuel.** Un fichier
+      qu'on oublie de télécharger n'existe pas. Donc il faut encore trancher
+      entre le **plan Pro** de Supabase (quotidienne, 7 jours, de leur côté)
+      et un `pg_dump` planifié sur une machine toujours allumée — ce qui
+      suppose un dépôt git et le mot de passe de la base dans un coffre.
+      D'ici là, **prendre et ranger le fichier à date fixe**, et vérifier dans
+      le journal des exports qu'on l'a bien fait.
 - [ ] **Mettre le code dans un dépôt git.** Il n'y en a pas (`.git` absent).
       La seule copie hors du poste est l'archive de `backup_kayor.ps1` — si
       elle n'est pas partie, il n'y en a aucune.
 - [ ] **Rejouer une restauration pour de vrai.** `restaurer_table()` a été
-      éprouvée sur `ventes` le 2026-11-02 (17 lignes, sommes identiques), mais
-      jamais sur un incident réel. Tant que ce n'est pas fait, le § 10 des CGU
-      ne doit rien garantir.
+      éprouvée sur `ventes` le 2026-11-02 (17 lignes, sommes identiques), et
+      `restaurer_lignes_manquantes()` le 2026-11-04 dans des transactions
+      annulées — essai à blanc, refus sans le nom retapé, réinjection d'une
+      ligne, rejeu sans effet, séquence recalée. **Jamais sur un incident
+      réel.** Tant que ce n'est pas fait, le § 10 des CGU ne doit rien
+      garantir.
 - [ ] `README.md` décrit encore une application « sans serveur, dans le
       navigateur » — faux depuis le passage à Supabase.
 

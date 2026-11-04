@@ -2,11 +2,12 @@
 
 Mis à jour le 2026-11-02. À suivre dans l'ordre.
 
-> **Ce déploiement porte trois lots.** La vitrine et les CGU, prêts depuis le
-> 2026-10-31 et jamais mis en ligne ; le verrou des gestes ; et les sauvegardes
-> avec le garde-fou de suppression.
+> **Ce déploiement porte quatre lots.** La vitrine et les CGU, prêts depuis le
+> 2026-10-31 et jamais mis en ligne ; le verrou des gestes ; les sauvegardes
+> avec le garde-fou de suppression — et, depuis le 2026-11-04, leur
+> **téléchargement et leur restauration**, plus l'édition simple.
 >
-> Les migrations **032 à 036 sont appliquées et vérifiées**. La base accepte
+> Les migrations **032 à 040 sont appliquées et vérifiées**. La base accepte
 > déjà la clé de geste et l'ignore tant que le code en ligne ne l'envoie pas
 > (`p_cle` a une valeur par défaut). Rien n'est cassé en attendant.
 >
@@ -45,7 +46,7 @@ déployé n'appelle pas encore. Rien n'est cassé en production à cet instant.
 
 ---
 
-## 2. Les treize fichiers à déployer
+## 2. Les quatorze fichiers à déployer
 
 ```
 boutique.html          ← NOUVEAU
@@ -89,8 +90,11 @@ déjà `migrations/`, les `*.md`, `config_backup.json` et `.claude/`.
 
 Repères de version, pour vérifier que le déploiement a bien pris :
 
-- empreintes de cache : `?v=2026-11-04a`
-- `APP_VERSION` : `2026-11-04-edition-simple`
+- empreintes de cache : `?v=2026-11-04b`
+- `APP_VERSION` : `2026-11-04-sauvegardes`
+
+> `boutique.html` reste à `?v=2026-11-02a` : ni elle ni `js/boutique.js` ni
+> `js/qr.js` n'ont changé depuis. Ce n'est pas un oubli.
 
 ---
 
@@ -235,6 +239,61 @@ facturation seule » → Appliquer. Puis reconnectez-vous dans cette boutique
 > La contre-épreuve, à faire une fois : dans une boutique en édition
 > **complète**, « Nouvelle vente » doit toujours refuser sans article, et
 > déduire le stock après la vente.
+
+### c sexies. Télécharger une sauvegarde, et la remettre
+
+Carte **Sauvegardes et structure** de la console opérateur. Les migrations
+**039 et 040 sont appliquées** : la base sait déjà exporter, importer et
+réinjecter. Le déploiement n'ajoute que l'écran.
+
+**1. Télécharger.** Choisissez une sauvegarde dans la liste → **⤓ Télécharger**.
+
+> Attendu : un fichier `kayor-sauvegarde-<n°>-<date>.json` d'environ 500 Ko.
+> La date du nom est celle des **données**, pas celle du clic.
+>
+> **Rangez ce fichier comme la base elle-même** : il contient les données de
+> toutes les boutiques, empreintes de code PIN comprises. C'est la seule
+> copie qui survit à la perte du projet Supabase — et c'est aussi la raison
+> pour laquelle la MFA sur le compte opérateur n'est plus une bonne pratique
+> mais la serrure de ce coffre (§ 9).
+
+**2. Le remettre.** Choisissez ce même fichier dans « Remettre un fichier » →
+**⤒ Importer ce fichier**.
+
+> Attendu : il apparaît dans la liste, marqué **FICHIER IMPORTÉ**, à la date
+> de ses données. **Aucune donnée n'a bougé** — vérifiez-le : le nombre de
+> ventes à l'écran est inchangé.
+>
+> Et le point qui compte : **« Dernière sauvegarde » ne doit pas changer.**
+> La fraîcheur se juge sur les instantanés pris dans la base, jamais sur un
+> fichier remis — sinon importer une archive de la semaine dernière éteindrait
+> l'alerte des 48 h au moment précis où elle sert. C'est ce que ferme la
+> migration 040.
+
+**3. Restaurer ce qui manque — l'essai qui compte.** Supprimez une ligne sans
+conséquence (une sortie d'essai), puis **⚖ Comparer à la base** → la table
+passe à « des lignes manquent » → **Examiner**.
+
+> Attendu, dans cet ordre :
+>
+> - un encadré ambre qui **nomme les clés primaires** qui reviendraient, et
+>   rappelle que des lignes ont peut-être été supprimées volontairement ;
+> - **rien n'est écrit** à ce stade — l'essai à blanc est le défaut de la
+>   fonction serveur, pas une option de l'écran ;
+> - **Réinjecter** sans retaper le nom de la table : refusé par le serveur ;
+> - avec le nom retapé : la ligne revient, et le compte rendu vert donne
+>   **les clés exactes à supprimer pour défaire le geste** ;
+> - refaire **Examiner** : « Rien ne manque ».
+>
+> La contre-épreuve : une ligne **présente** ne doit jamais être modifiée.
+> Changez le montant d'une sortie existante, réinjectez la table, et vérifiez
+> que votre montant est toujours là. S'il est revenu à sa valeur d'hier, la
+> fonction écrase — ne plus s'en servir.
+
+**4. Le journal.** Sous la carte, « Journal des exports et restaurations »
+doit porter une ligne par geste, avec qui l'a fait. Il n'a ni `UPDATE` ni
+`DELETE` : personne ne peut l'effacer, pas même l'opérateur qu'il enregistre.
+C'est la contrepartie de l'export, pas une décoration.
 
 ### d. **Scanner le code avec un vrai téléphone**
 

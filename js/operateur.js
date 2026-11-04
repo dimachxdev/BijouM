@@ -237,6 +237,7 @@
       // Apres la liste, pas avant : si les sauvegardes sont illisibles, la
       // console doit quand meme s'ouvrir.
       chargerSauvegardes();
+      chargerJournalSauvegardes();
     } catch (e) { message(e.message, true); }
   }
 
@@ -605,6 +606,40 @@
          + 'h' + ('0' + d.getMinutes()).slice(-2);
   }
 
+  /** « 1 ligne », pas « 1 lignes ». Cet écran est lu, pas parcouru. */
+  function pluriel(n, mot) {
+    return n + ' ' + mot + (Math.abs(n) > 1 ? 's' : '');
+  }
+
+  /** La liste des instantanés, pour que les trois gestes sachent sur lequel ils portent. */
+  var SAUVS = [];
+
+  function sauvChoisie() {
+    var el = $('op-sauv-choix');
+    var v = el && el.value ? parseInt(el.value, 10) : NaN;
+    return isNaN(v) ? null : v;
+  }
+
+  function remplirChoixSauvegardes(liste) {
+    var el = $('op-sauv-choix');
+    if (!el) return;
+    var garde = el.value;
+    el.innerHTML = liste.map(function (d) {
+      // L'origine fait partie du libellé : une ligne « fichier » est un
+      // import, et on ne compare pas une base à un fichier sans le savoir.
+      var orig = d.declencheur === 'cron'      ? 'automatique'
+               : d.declencheur === 'fichier'   ? 'FICHIER IMPORTÉ'
+               : d.declencheur === 'operateur' ? 'à la main'
+               : d.declencheur;
+      return '<option value="' + d.id + '">n° ' + d.id + ' — '
+           + esc(jourHeure(d.faite_le)) + ' — ' + esc(orig)
+           + ' — ' + pluriel(d.nb_lignes, 'ligne') + '</option>';
+    }).join('');
+    // On garde le choix de l'opérateur s'il tient encore : recharger la liste
+    // après une restauration ne doit pas le ramener en silence sur la dernière.
+    if (garde && liste.some(function (d) { return String(d.id) === garde; })) el.value = garde;
+  }
+
   async function chargerSauvegardes() {
     var resume  = $('op-sauvegardes-resume');
     var bandeau = $('op-alerte-structure');
@@ -613,26 +648,43 @@
     try {
       var s = await rpc('sauvegardes_recentes', {});
       var liste = (s && s.sauvegardes) || [];
+      SAUVS = liste;
+      remplirChoixSauvegardes(liste);
 
       if (!liste.length) {
         resume.innerHTML = '<strong style="color:var(--danger-text)">'
           + 'Aucune sauvegarde.</strong> Le travail planifié n\'a encore jamais '
           + 'tourné, ou le projet dormait.';
       } else {
-        var d = liste[0];
-        // Au-dela de 48 h, l'instantane ne reflete plus la journee de travail :
-        // sur l'offre gratuite, un projet en veille n'execute aucun cron.
-        var heures = (Date.now() - new Date(d.faite_le).getTime()) / 3600000;
-        var vieux  = heures > 48;
-        resume.innerHTML =
-          '<div style="font-size:15px">Dernière sauvegarde : <strong'
-          + (vieux ? ' style="color:var(--danger-text)"' : '') + '>'
-          + esc(jourHeure(d.faite_le)) + '</strong>'
-          + (vieux ? ' — plus de 48 h, le projet a probablement dormi' : '')
-          + '</div>'
-          + '<div class="page-sub">' + d.nb_lignes + ' lignes · '
-          + d.nb_tables + ' tables · ' + octets(d.octets)
-          + ' · ' + liste.length + ' conservée(s) sur 14</div>';
+        // La fraîcheur se juge sur les instantanés PRIS ICI, jamais sur un
+        // fichier importé : importer une archive de la semaine dernière ne
+        // prouve pas que le travail planifié a tourné cette nuit. Confondre
+        // les deux éteindrait l'alerte au moment où elle sert.
+        var internes = liste.filter(function (x) { return x.declencheur !== 'fichier'; });
+        var fichiers = liste.length - internes.length;
+        var d = internes[0];
+
+        if (!d) {
+          resume.innerHTML = '<strong style="color:var(--danger-text)">'
+            + 'Aucun instantané pris dans la base.</strong> Seuls des fichiers '
+            + 'importés sont présents.';
+        } else {
+          // Au-dela de 48 h, l'instantane ne reflete plus la journee de travail :
+          // sur l'offre gratuite, un projet en veille n'execute aucun cron.
+          var heures = (Date.now() - new Date(d.faite_le).getTime()) / 3600000;
+          var vieux  = heures > 48;
+          resume.innerHTML =
+            '<div style="font-size:15px">Dernière sauvegarde : <strong'
+            + (vieux ? ' style="color:var(--danger-text)"' : '') + '>'
+            + esc(jourHeure(d.faite_le)) + '</strong>'
+            + (vieux ? ' — plus de 48 h, le projet a probablement dormi' : '')
+            + '</div>'
+            + '<div class="page-sub">' + d.nb_lignes + ' lignes · '
+            + d.nb_tables + ' tables · ' + octets(d.octets)
+            + ' · ' + internes.length + ' conservée(s) sur 14'
+            + (fichiers ? ' · ' + fichiers + ' fichier(s) importé(s)' : '')
+            + '</div>';
+        }
       }
     } catch (e) {
       resume.textContent = 'Sauvegardes illisibles : ' + e.message;
@@ -674,23 +726,120 @@
     var r = await rpc('sauvegarder_maintenant', {});
     if (!r || r.ok === false) throw new Error(r && r.erreur ? r.erreur : 'Refus du serveur.');
     await chargerSauvegardes();
+    await chargerJournalSauvegardes();
     message('✓ Sauvegarde prise — ' + r.lignes + ' lignes, ' + octets(r.octets) + '.');
+  }
+
+  /**
+   * TÉLÉCHARGER — la seule copie qui survit à la perte du projet.
+   *
+   * L'instantané quotidien vit DANS la base qu'il protège : il couvre
+   * l'erreur humaine, pas la disparition du projet Supabase. Un fichier sur
+   * une autre machine, lui, survit.
+   *
+   * Aucune fenêtre de confirmation ici, et c'est délibéré : un avertissement
+   * qui s'affiche à chaque clic s'apprend à cliquer sans le lire — la même
+   * raison qui interdit d'élargir `Verrou.confirmerRepetition()`. Le texte
+   * est donc en permanence sous le bouton, où il se lit.
+   */
+  async function telechargerSauvegarde() {
+    var id = sauvChoisie();
+    var r = await rpc('sauvegarde_exporter', id ? { p_id: id } : {});
+    if (!r || r.ok === false) throw new Error(r && r.erreur ? r.erreur : 'Refus du serveur.');
+
+    // Le fichier est l'enveloppe entière, métadonnées comprises : c'est ce que
+    // `sauvegarde_importer()` sait relire sans qu'on ait à l'ouvrir.
+    var blob = new Blob([JSON.stringify(r)], { type: 'application/json' });
+    var jour = new Date(r.faite_le);
+    var nom  = 'kayor-sauvegarde-' + r.id + '-'
+             + (isNaN(jour) ? 'sans-date' : jour.toISOString().slice(0, 10)) + '.json';
+
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url; a.download = nom;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    // Libérer tout de suite : un instantané pèse un demi-méga-octet, et la
+    // console reste ouverte toute la journée.
+    setTimeout(function () { URL.revokeObjectURL(url); }, 2000);
+
+    await chargerJournalSauvegardes();
+    message('⤓ ' + nom + ' — ' + r.nb_lignes + ' lignes, ' + octets(r.octets)
+          + '. Ce fichier vaut la base entière : rangez-le en conséquence.');
+  }
+
+  /**
+   * REMETTRE UN FICHIER — il ne redevient qu'un instantané.
+   *
+   * Une sauvegarde qu'on ne peut pas remettre n'est pas une sauvegarde. Mais
+   * un import qui écrirait aussitôt dans les tables serait le geste le plus
+   * destructeur du produit après `supprimer_boutique()` : il remplacerait des
+   * données justes par celles d'hier. D'où deux temps — le fichier devient
+   * une ligne de la liste, puis on restaure table par table.
+   */
+  async function importerFichier() {
+    var input = $('op-sauv-fichier');
+    var f = input && input.files && input.files[0];
+    if (!f) throw new Error('Choisissez d\'abord un fichier de sauvegarde.');
+    if (f.size > 64 * 1024 * 1024) {
+      throw new Error('Fichier trop volumineux (' + octets(f.size) + ', plafond 64 Mo).');
+    }
+
+    var obj;
+    try {
+      obj = JSON.parse(await f.text());
+    } catch (e) {
+      throw new Error('Ce fichier n\'est pas du JSON lisible : ' + e.message);
+    }
+
+    var r = await rpc('sauvegarde_importer', { p_contenu: obj, p_origine: f.name });
+    if (!r || r.ok === false) throw new Error(r && r.erreur ? r.erreur : 'Refus du serveur.');
+
+    input.value = '';
+    await chargerSauvegardes();
+    await chargerJournalSauvegardes();
+    // On se place sur la sauvegarde qui vient d'arriver : c'est celle dont on
+    // va se servir, et la laisser sur une autre ferait comparer la mauvaise.
+    var sel = $('op-sauv-choix');
+    if (sel) sel.value = String(r.id);
+    $('op-comparaison').innerHTML = '';
+    $('op-restauration').innerHTML = '';
+
+    var inconnues = r.tables_inconnues || [];
+    message('⤒ Sauvegarde n°' + r.id + ' — ' + pluriel(r.lignes, 'ligne') + ', '
+          + pluriel(r.tables, 'table') + '. Rien n\'a été écrit dans les données.'
+          + (inconnues.length
+              ? ' ⚠ ' + pluriel(inconnues.length, 'table') + ' du fichier n\'existe'
+                + (inconnues.length > 1 ? 'nt' : '') + ' plus en base ('
+                + inconnues.join(', ') + ') : il faut les recréer avant de restaurer leurs lignes.'
+              : ''));
   }
 
   async function comparerALaBase() {
     var cible = $('op-comparaison');
-    var r = await rpc('comparer_sauvegarde', {});
+    var id = sauvChoisie();
+    var r = await rpc('comparer_sauvegarde', id ? { p_sauvegarde: id } : {});
     if (!r || r.ok === false) throw new Error(r && r.erreur ? r.erreur : 'Refus du serveur.');
+
+    $('op-restauration').innerHTML = '';
 
     var ecarts = (r.tables || []).filter(function (t) { return t.etat !== 'identique'; });
     var lignes = ecarts.map(function (t) {
-      var grave = t.etat === 'TABLE DISPARUE' || t.etat === 'des lignes manquent';
+      var manque = t.etat === 'TABLE DISPARUE' || t.etat === 'des lignes manquent';
       return '<tr><td>' + esc(t.table) + '</td>'
            + '<td style="text-align:right">' + t.dans_sauvegarde + '</td>'
            + '<td style="text-align:right">'
            + (t.dans_la_base === null ? '—' : t.dans_la_base) + '</td>'
-           + '<td' + (grave ? ' style="color:var(--danger-text);font-weight:600"' : '')
-           + '>' + esc(t.etat) + '</td></tr>';
+           + '<td' + (manque ? ' style="color:var(--danger-text);font-weight:600"' : '')
+           + '>' + esc(t.etat) + '</td>'
+           // Le bouton n'apparaît que là où des lignes manquent. Sur « lignes
+           // ajoutées depuis », restaurer n'aurait rien à faire : c'est la
+           // base qui est en avance, et c'est normal.
+           + '<td>' + (t.etat === 'des lignes manquent'
+               ? '<button class="btn small" data-restaurer="' + esc(t.table) + '">'
+                 + 'Examiner</button>'
+               : '') + '</td></tr>';
     }).join('');
 
     cible.innerHTML =
@@ -699,14 +848,173 @@
       + (ecarts.length
           ? '<div class="table-wrap"><table><thead><tr><th>Table</th>'
             + '<th style="text-align:right">Sauvegarde</th>'
-            + '<th style="text-align:right">Base</th><th>Etat</th></tr></thead>'
+            + '<th style="text-align:right">Base</th><th>Etat</th><th></th></tr></thead>'
             + '<tbody>' + lignes + '</tbody></table></div>'
           : '');
   }
 
+  /**
+   * RESTAURER — en deux temps, et le premier n'écrit rien.
+   *
+   * L'essai à blanc est le défaut de la fonction serveur : personne ne
+   * restaure en découvrant ce qu'il restaure. Des lignes ont peut-être été
+   * supprimées volontairement — c'est exactement le cas de S-0004, effacée
+   * le 2026-11-03 parce qu'elle était un doublon. La faire revenir
+   * referait le dégât.
+   *
+   * Le nom de la table se retape, comme le code boutique de
+   * `supprimer_boutique()` : un clic dans une liste ne réinjecte rien. Le
+   * serveur l'exige de toute façon — ce champ ne protège rien, il prévient.
+   */
+  async function examinerRestauration(table) {
+    var id = sauvChoisie();
+    if (!id) throw new Error('Choisissez une sauvegarde.');
+
+    var r = await rpc('restaurer_lignes_manquantes', { p_sauvegarde: id, p_table: table });
+    if (!r || r.ok === false) throw new Error(r && r.erreur ? r.erreur : 'Refus du serveur.');
+
+    var cible = $('op-restauration');
+    if (!r.lignes_manquantes) {
+      cible.innerHTML = '<div class="page-sub">' + esc(r.avis) + '</div>';
+      return;
+    }
+
+    // Les clés sont montrées telles quelles, et lues par un humain : c'est
+    // elles qui permettent de reconnaître — ou non — ce qu'on va faire
+    // revenir. Un décompte seul ne le permettrait pas.
+    var cles = (r.exemples || []).map(function (k) {
+      return '<code>' + esc(k.join(' · ')) + '</code>';
+    }).join(' ');
+
+    cible.innerHTML =
+      '<div style="background:var(--warning-bg);color:var(--warning-text);'
+      + 'border:1px solid currentColor;border-radius:var(--radius-md);padding:12px 14px">'
+      + '<div style="font-weight:700;font-size:15px">'
+      + r.lignes_manquantes + ' ligne(s) de <strong>' + esc(table)
+      + '</strong> n\'existent plus en base</div>'
+      + '<div style="margin-top:6px">Clé primaire : <code>'
+      + esc((r.cle_primaire || []).join(' + ')) + '</code></div>'
+      + '<div style="margin-top:6px;line-height:1.9">' + cles
+      + (r.lignes_manquantes > (r.exemples || []).length
+          ? ' <span class="page-sub">(' + (r.lignes_manquantes - r.exemples.length)
+            + ' autre' + (r.lignes_manquantes - r.exemples.length > 1 ? 's' : '')
+            + ')</span>' : '')
+      + '</div>'
+      + '<div style="margin-top:10px">Rien n\'a été écrit. <strong>Des lignes ont '
+      + 'peut-être été supprimées volontairement</strong> — une sortie en double, '
+      + 'une vente annulée. Les faire revenir refait le dégât.</div>'
+      + '<div style="margin-top:6px">Aucune ligne présente ne sera modifiée ni '
+      + 'supprimée : seules les absentes reviennent.</div>'
+      + '<div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;margin-top:12px">'
+      + '<div class="form-group" style="margin:0;flex:1;min-width:200px">'
+      + '<label class="form-label" for="op-restaurer-nom">Retapez '
+      + '<code>' + esc(table) + '</code> pour confirmer</label>'
+      + '<input class="form-input" id="op-restaurer-nom" autocomplete="off" '
+      + 'data-table="' + esc(table) + '" placeholder="' + esc(table) + '" /></div>'
+      + '<button class="btn btn-danger" id="op-btn-restaurer-ok">↺ Réinjecter</button>'
+      + '<button class="btn btn-secondary" id="op-btn-restaurer-non">Annuler</button>'
+      + '</div></div>';
+
+    $('op-btn-restaurer-ok').onclick  = verrouille('restauration', appliquerRestauration);
+    $('op-btn-restaurer-non').onclick = function () { cible.innerHTML = ''; };
+  }
+
+  async function appliquerRestauration() {
+    var champ = $('op-restaurer-nom');
+    if (!champ) return;
+    var table = champ.getAttribute('data-table');
+    var id = sauvChoisie();
+
+    var r = await rpc('restaurer_lignes_manquantes', {
+      p_sauvegarde:   id,
+      p_table:        table,
+      p_appliquer:    true,
+      p_confirmation: champ.value.trim()
+    });
+    if (!r || r.ok === false) throw new Error(r && r.erreur ? r.erreur : 'Refus du serveur.');
+
+    // La comparaison D'ABORD : elle remet `op-restauration` à blanc, donc
+    // écrire le compte rendu avant elle l'effacerait. Trouvé en essai le
+    // 2026-11-04 — et ce compte rendu porte les clés exactes à supprimer pour
+    // défaire la réinjection. C'est la ligne la plus utile de l'écran.
+    await chargerJournalSauvegardes();
+    await comparerALaBase();
+
+    var cles = (r.exemples || []).map(function (k) {
+      return '<code>' + esc(k.join(' · ')) + '</code>';
+    }).join(' ');
+    $('op-restauration').innerHTML =
+      '<div style="background:var(--success-bg);color:var(--success-text);'
+      + 'border:1px solid currentColor;border-radius:var(--radius-md);padding:12px 14px">'
+      + '<div style="font-weight:700;font-size:15px">✓ ' + r.lignes_reinjectees
+      + ' ligne(s) réinjectée(s) dans ' + esc(table) + '</div>'
+      + '<div style="margin-top:6px">' + esc(r.avis) + '</div>'
+      + (cles ? '<div style="margin-top:6px;line-height:1.9">' + cles + '</div>' : '')
+      + '</div>';
+
+    message('✓ ' + r.lignes_reinjectees + ' ligne(s) réinjectée(s) dans ' + table + '.');
+  }
+
+  /**
+   * Le journal. Une trace que personne ne regarde ne prévient de rien — et
+   * c'est toute la contrepartie de l'export : il n'est ni modifiable ni
+   * effaçable, pas même par l'opérateur qu'il enregistre.
+   */
+  async function chargerJournalSauvegardes() {
+    var cible = $('op-journal-sauv');
+    if (!cible) return;
+    try {
+      var j = await rpc('journal_sauvegardes_recent', { p_limite: 15 });
+      var lignes = (j && j.lignes) || [];
+      if (!lignes.length) { cible.textContent = 'Aucun export ni restauration à ce jour.'; return; }
+
+      cible.innerHTML = '<div class="table-wrap"><table><thead><tr>'
+        + '<th>Quand</th><th>Geste</th><th>Sauvegarde</th><th>Table</th>'
+        + '<th style="text-align:right">Lignes</th><th>Par</th></tr></thead><tbody>'
+        + lignes.map(function (l) {
+            var fort = l.geste === 'reinjection';
+            return '<tr><td>' + esc(jourHeure(l.survenu_le)) + '</td>'
+                 + '<td' + (fort ? ' style="font-weight:600"' : '') + '>'
+                 + esc(l.geste) + '</td>'
+                 + '<td>' + (l.sauvegarde_id == null ? '—' : 'n°' + l.sauvegarde_id) + '</td>'
+                 + '<td>' + esc(l.table_cible || '—') + '</td>'
+                 + '<td style="text-align:right">'
+                 + (l.lignes == null ? '—' : l.lignes) + '</td>'
+                 + '<td>' + esc(l.acteur || '—') + '</td></tr>';
+          }).join('')
+        + '</tbody></table></div>';
+    } catch (e) {
+      // Comme `journal_structure` : son absence ne doit pas masquer le reste
+      // de la carte, qui est vital.
+      cible.textContent = 'Journal illisible : ' + e.message;
+    }
+  }
+
   document.addEventListener('DOMContentLoaded', function () {
-    $('op-btn-sauver').onclick   = verrouille('sauvegarde', sauverMaintenant);
-    $('op-btn-comparer').onclick = verrouille('comparaison', comparerALaBase);
+    $('op-btn-sauver').onclick      = verrouille('sauvegarde', sauverMaintenant);
+    $('op-btn-comparer').onclick    = verrouille('comparaison', comparerALaBase);
+    $('op-btn-telecharger').onclick = verrouille('export-sauvegarde', telechargerSauvegarde);
+    $('op-btn-importer').onclick    = verrouille('import-sauvegarde', importerFichier);
+
+    // Le bouton « Examiner » naît avec le tableau de comparaison : on écoute
+    // le conteneur, pas chaque bouton. Un `onclick` dans la chaîne HTML
+    // aurait exigé `escJs()`, que cette page ne charge pas — et une
+    // échappée oubliée dans un `onclick` est une faille, pas un défaut
+    // d'affichage (§ 3).
+    $('op-comparaison').addEventListener('click', function (e) {
+      var b = e.target.closest('[data-restaurer]');
+      if (!b) return;
+      verrouille('examen-restauration', function () {
+        return examinerRestauration(b.getAttribute('data-restaurer'));
+      })();
+    });
+
+    // Changer de sauvegarde invalide la comparaison affichée : la laisser
+    // sous les yeux ferait restaurer depuis une autre que celle qu'on lit.
+    $('op-sauv-choix').addEventListener('change', function () {
+      $('op-comparaison').innerHTML = '';
+      $('op-restauration').innerHTML = '';
+    });
     $('op-btn-login').onclick     = verrouille('connexion-op', connexion);
     $('op-btn-logout').onclick    = function () { deconnexion(); };
     $('op-btn-refresh').onclick   = rafraichir;

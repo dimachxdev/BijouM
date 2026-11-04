@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Console opérateur — Gestion Bijouterie</title>
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml" />
-  <link rel="stylesheet" href="css/style.css?v=2026-11-04a" />
+  <link rel="stylesheet" href="css/style.css?v=2026-11-04b" />
   <style>
     /* La console vit hors de l'application boutique : pas de sidebar. */
     .op-wrap { max-width: 1100px; margin: 0 auto; padding: 18px 16px 40px; }
@@ -249,19 +249,57 @@
       <div class="card-body">
         <div id="op-alerte-structure" style="display:none"></div>
         <div id="op-sauvegardes-resume" class="page-sub">Chargement…</div>
-        <div class="modal-actions" style="justify-content:flex-start;margin-top:12px">
-          <button class="btn small" id="op-btn-sauver">⤓ Sauvegarder maintenant</button>
+
+        <!-- Le choix de la sauvegarde gouverne les trois gestes qui suivent.
+             Sans lui, « comparer » et « restaurer » portaient toujours sur la
+             dernière — y compris quand c'est la dernière qui est fautive. -->
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:12px">
+          <select class="form-input" id="op-sauv-choix" style="max-width:340px"></select>
+          <button class="btn small" id="op-btn-sauver">+ Sauvegarder maintenant</button>
+          <button class="btn small" id="op-btn-telecharger">⤓ Télécharger</button>
           <button class="btn small" id="op-btn-comparer">⚖ Comparer à la base</button>
         </div>
-        <div id="op-comparaison" style="margin-top:12px"></div>
+        <div class="page-sub" style="margin-top:6px">
+          Le fichier téléchargé contient <strong>toutes les boutiques</strong>,
+          empreintes de code PIN comprises : il vaut la base entière, gardez-le
+          comme tel. C'est aussi la seule copie qui survit à la perte du projet.
+        </div>
+
+        <!-- Remettre un fichier. Il ne redevient qu'un instantané : une
+             sauvegarde qu'on ne peut pas remettre n'est pas une sauvegarde,
+             et un import qui écrirait tout de suite serait le geste le plus
+             destructeur du produit. -->
+        <div style="border-top:1px solid var(--border-light);margin-top:16px;padding-top:12px">
+          <div class="card-title" style="margin-bottom:4px">Remettre un fichier</div>
+          <div class="page-sub" style="margin-bottom:8px">
+            Le fichier redevient une sauvegarde dans la liste ci-dessus.
+            <strong>Rien n'est écrit dans les données</strong> : on compare,
+            puis on restaure table par table.
+          </div>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <input type="file" id="op-sauv-fichier" accept="application/json,.json" />
+            <button class="btn small" id="op-btn-importer">⤒ Importer ce fichier</button>
+          </div>
+        </div>
+
+        <div id="op-comparaison" style="margin-top:16px"></div>
+        <div id="op-restauration" style="margin-top:12px"></div>
+
+        <div style="border-top:1px solid var(--border-light);margin-top:16px;padding-top:12px">
+          <div class="card-title" style="margin-bottom:6px">Journal des exports et restaurations</div>
+          <div class="page-sub" style="margin-bottom:8px">
+            Ni modifiable ni effaçable, comme le journal des connexions.
+          </div>
+          <div id="op-journal-sauv" class="page-sub">—</div>
+        </div>
       </div>
     </div>
 
   </div>
 </div>
 
-<script src="js/verrou.js?v=2026-11-04a"></script>
-  <script src="js/supabase.js?v=2026-11-04a"></script>
-<script src="js/operateur.js?v=2026-11-04a"></script>
+<script src="js/verrou.js?v=2026-11-04b"></script>
+  <script src="js/supabase.js?v=2026-11-04b"></script>
+<script src="js/operateur.js?v=2026-11-04b"></script>
 </body>
 </html>
