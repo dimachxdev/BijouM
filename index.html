@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>KAYOR — Brillez sans effort</title>
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml" />
-  <link rel="stylesheet" href="css/style.css?v=2026-11-04b" />
+  <link rel="stylesheet" href="css/style.css?v=2026-11-12a" />
 </head>
 <body>
 
@@ -814,7 +814,10 @@
       </div>
     </div>
     <div class="form-row">
-      <div class="form-group" style="flex:2"><label class="form-label">Description *</label><input class="form-input" type="text" placeholder="Description..." id="v-description" /></div>
+      <!-- Masquée en édition complète : la description y VIENT de l'article
+           choisi plus bas, et une seconde saisie serait une seconde vérité.
+           Elle ne sert qu'en édition simple, où elle remplace l'article. -->
+      <div class="form-group" style="flex:2" id="v-bloc-description"><label class="form-label">Description *</label><input class="form-input" type="text" placeholder="Description..." id="v-description" /></div>
       <div class="form-group"><label class="form-label">Paiement</label>
         <select class="form-input" id="v-paiement" onchange="onChangePaiementVente()">
           <option value="especes">Especes</option>
@@ -1678,15 +1681,15 @@
 
 <div class="toast" id="toast"></div>
   <!-- Supabase SDK -->
-  <script src="js/verrou.js?v=2026-11-04b"></script>
-  <script src="js/security.js?v=2026-11-04b"></script>
-  <script src="js/auth.js?v=2026-11-04b"></script>
-  <script src="js/data.js?v=2026-11-04b"></script>
-  <script src="js/supabase.js?v=2026-11-04b"></script>
+  <script src="js/verrou.js?v=2026-11-12a"></script>
+  <script src="js/security.js?v=2026-11-12a"></script>
+  <script src="js/auth.js?v=2026-11-12a"></script>
+  <script src="js/data.js?v=2026-11-12a"></script>
+  <script src="js/supabase.js?v=2026-11-12a"></script>
   <!-- Encodeur QR local : la regle 6 interdit un CDN, et ce code est lu par
        la page ou vit le jeton de session. Doit precéder app.js. -->
-  <script src="js/qr.js?v=2026-11-04b"></script>
-  <script src="js/app.js?v=2026-11-04b"></script>
+  <script src="js/qr.js?v=2026-11-12a"></script>
+  <script src="js/app.js?v=2026-11-12a"></script>
 
 <!-- MODAL AJUSTER STOCK -->
 <div class="modal-backdrop" id="modal-ajust-stock">

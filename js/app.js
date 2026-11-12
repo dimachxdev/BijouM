@@ -20,7 +20,7 @@
  * qui « peut tout faire » alors que les droits sont restreints, c'est presque
  * toujours ça.
  */
-const APP_VERSION = '2026-11-04-sauvegardes';
+const APP_VERSION = '2026-11-12-facture';
 
 /**
  * Domaine de la vitrine publique, pour le QR imprime sur les factures.
@@ -1662,6 +1662,13 @@ function prepNouvelleVente(){
   if (bStock) bStock.style.display = stockGere ? '' : 'none';
   if (bLibre) bLibre.style.display = stockGere ? 'none' : '';
 
+  // La description suit la même règle que les deux blocs : en édition
+  // complète elle VIENT de l'article, donc la saisir serait une seconde
+  // vérité — et c'est celle qui s'imprimerait sur la facture. En édition
+  // simple elle remplace l'article, et reste obligatoire.
+  var bDesc = document.getElementById('v-bloc-description');
+  if (bDesc) bDesc.style.display = stockGere ? 'none' : '';
+
   if (!stockGere) {
     peuplerTypeBijou('v-type-bijou-libre', '');
     peuplerSelect('v-carat-libre', '');
@@ -1713,7 +1720,9 @@ async function _enregistrerVente(){
   // colonne `client`, qui est ce qui s'imprime sur la facture.
   const clientId= document.getElementById('v-client').value;
   const client  = nomClientParId(clientId);
-  const desc    = document.getElementById('v-description').value.trim();
+  // La saisie libre. Elle ne sert qu'en édition simple — en édition complète
+  // le champ est masqué et la description vient de l'article (plus bas).
+  const descSaisie = document.getElementById('v-description').value.trim();
   const paiement= (document.getElementById('v-paiement')&&document.getElementById('v-paiement').value)||'especes';
   const montant = parseInt(document.getElementById('v-montant').value)||0;
   let   acompte = parseInt(document.getElementById('v-acompte').value)||0;
@@ -1743,9 +1752,26 @@ async function _enregistrerVente(){
     importe   = (porteOr && prov === 'importe') ? poids : 0;
   }
 
+  // CE QUI S'IMPRIME DANS LA COLONNE « Description » DE LA FACTURE.
+  //
+  // En édition complète, c'est le nom de l'article, relu ICI et à chaque
+  // enregistrement. Le pré-remplissage d'avant ne recopiait le nom que si le
+  // champ était vide : changer d'article après coup laissait donc l'ancien
+  // nom en place, et la facture nommait un bijou que la cliente n'avait pas
+  // acheté. Le champ étant désormais masqué, personne n'aurait pu le voir.
+  const desc = stockGere ? (stockItem ? (stockItem.nom || '') : '') : descSaisie;
+
   // Validations
   if(!date||!clientId||montant<=0){showToast('Date, client et montant sont obligatoires.');return;}
   if(stockGere && !stockRef){showToast('Choisissez l\'article en stock.');return;}
+  // L'article choisi a disparu de l'inventaire pendant que la fenêtre était
+  // ouverte — `refreshAll()` recharge `STATE` toutes les quelques minutes.
+  // Sans ce refus, la vente partait avec description, carat et type VIDES,
+  // et sans déduction de stock : une facture muette sur ce qui a été vendu.
+  if(stockGere && stockRef && !stockItem){
+    showToast('Cet article n\'est plus dans l\'inventaire. Rouvrez la fenêtre et choisissez-en un.');
+    return;
+  }
   // En édition simple l'article est remplacé par sa description : sans elle,
   // la facture remise à la cliente ne dirait pas ce qu'elle a acheté.
   if(!stockGere && !desc){showToast('Décrivez le bijou vendu : c\'est ce qui s\'imprime sur la facture.');return;}
@@ -3974,9 +4000,9 @@ function onSelectStockVente(prefix) {
     document.getElementById('v-provenance').value  = s.provenance || '';
     document.getElementById('v-local').value       = s.provenance==='local'?(s.poidsTotalG||0):0;
     document.getElementById('v-importe').value     = s.provenance==='importe'?(s.poidsTotalG||0):0;
-    // Pré-remplir description si vide
-    var desc = document.getElementById('v-description');
-    if (desc && !desc.value) desc.value = s.nom;
+    // Plus de pré-remplissage de la description : elle est relue sur
+    // l'article au moment d'enregistrer. Recopier ici « si le champ est
+    // vide » gardait l'ancien nom quand on changeait d'article.
   }
 }
 
@@ -4837,15 +4863,32 @@ function _styleFacture() {
   document.head.appendChild(st);
 }
 
+/**
+ * Le carat tel qu'il se lit sur une facture : « 18 carats », rien de plus.
+ *
+ * `CARATS_LIST` porte « 18 carats - Importé », et c'est juste pour les écrans
+ * de gestion : la provenance décide du prix d'achat et du suivi du stock.
+ * Elle ne dit rien à la cliente, qui a acheté de l'or à dix-huit carats — et
+ * la facture est le document qu'elle emporte. Même raison que le titre en
+ * millièmes (750/1000), retiré le 2026-10-23.
+ *
+ * Le libellé est dérivé du CODE, pas découpé dans le label : réécrire un
+ * libellé de `CARATS_LIST` ne doit pas changer ce qui s'imprime.
+ */
+function caratFacture(code) {
+  if (!code) return '—';
+  const m = String(code).match(/^(\d+)\s*k/i);
+  if (m) return m[1] + ' carats';
+  // Repli pour une vente ancienne dont le code ne suit pas ce format.
+  return String(code).replace(/-(local|importe|importé)$/i, '').toUpperCase();
+}
+
 function afficherFacture(id) {
   _styleFacture();
   calculerCumuls();
   const v=STATE.ventes.find(x=>x.id===id); if(!v)return;
-  const c=getCarat(v.carat);
   const numFac=genNumFacture(v.id);
-  // Le titre en millièmes (750/1000) a été retiré de la facture le
-  // 2026-10-23 : il alourdissait la colonne sans parler à la cliente.
-  const caratLabel=c?c.label:v.carat?.toUpperCase()||'—';
+  const caratLabel=caratFacture(v.carat);
   const cl=clientParId(v.clientId)||{};
   // Un seul poids sur la facture : c'est le total qui engage la boutique,
   // avec le carat. La distinction local / importé reste au journal, elle

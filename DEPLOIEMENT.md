@@ -90,18 +90,23 @@ déjà `migrations/`, les `*.md`, `config_backup.json` et `.claude/`.
 
 Repères de version, pour vérifier que le déploiement a bien pris :
 
-- empreintes de cache : `?v=2026-11-04b`
-- `APP_VERSION` : `2026-11-04-sauvegardes`
+- `index.html` : `?v=2026-11-12a`
+- `APP_VERSION` : `2026-11-12-facture`
+- `operateur.html` et `client.html` : `?v=2026-11-04b`
+- `boutique.html` : `?v=2026-11-02a`
 
-> `boutique.html` reste à `?v=2026-11-02a` : ni elle ni `js/boutique.js` ni
-> `js/qr.js` n'ont changé depuis. Ce n'est pas un oubli.
+> **Les empreintes ne sont pas toutes identiques, et ce n'est pas un oubli** :
+> chacune suit les fichiers que sa page charge. Seuls `index.html` et
+> `js/app.js` ont changé le 2026-11-12 ; `operateur.js`, `client.js`,
+> `boutique.js` et `qr.js` sont restés tels quels. Ce qui doit être juste,
+> c'est qu'une page qui charge un fichier modifié porte une empreinte neuve.
 
 ---
 
 ## 3. Juste après le déploiement
 
 **Rechargez avec Ctrl + Maj + R**, puis regardez la version sous l'écran de
-connexion. Tant qu'elle n'affiche pas `2026-11-04-edition-simple`, rien de ce
+connexion. Tant qu'elle n'affiche pas `2026-11-12-facture`, rien de ce
 qui suit n'a de sens : c'est le cache, pas un bug. C'est la première chose à
 vérifier devant tout comportement incohérent.
 
@@ -239,6 +244,24 @@ facturation seule » → Appliquer. Puis reconnectez-vous dans cette boutique
 > La contre-épreuve, à faire une fois : dans une boutique en édition
 > **complète**, « Nouvelle vente » doit toujours refuser sans article, et
 > déduire le stock après la vente.
+
+### c septies. La facture : plus de description à saisir, plus de provenance
+
+En édition **complète**, « Nouvelle vente » ne doit **plus afficher de champ
+Description** : c'est l'article choisi qui la fournit.
+
+> L'essai qui compte, parce qu'il portait un vrai défaut : choisissez un
+> article, puis **changez-en** avant d'enregistrer. La facture doit nommer le
+> **second**. Avant le 2026-11-12 elle gardait le nom du premier, pendant que
+> carat et poids suivaient le second — elle nommait donc un bijou que la
+> cliente n'avait pas acheté.
+>
+> En édition **simple**, le champ Description est toujours là et toujours
+> obligatoire.
+
+Puis ouvrez la facture : la colonne **Carat** doit lire « 18 carats », sans
+« - Importé » ni « - Local ». Les écrans de gestion, eux, gardent le libellé
+complet — c'est voulu, la provenance regarde le stock, pas la cliente.
 
 ### c sexies. Télécharger une sauvegarde, et la remettre
 

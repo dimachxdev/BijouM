@@ -656,6 +656,18 @@ Le **titre en millièmes** (`750/1000`) a été retiré de la colonne Carat le
 2026-10-23 : il alourdissait sans parler à la cliente. Il reste dans
 `CARATS_LIST`, pour les écrans de gestion.
 
+**La provenance aussi** (2026-11-12). La colonne Carat affichait
+« 18 carats - Importé » ; elle affiche **« 18 carats »**, rien de plus. Local
+ou importé décide du prix d'achat et du suivi du stock — cela ne dit rien à
+une cliente qui a acheté de l'or à dix-huit carats, et la facture est le
+document qu'elle emporte. Le poids total suivait déjà cette règle.
+
+`caratFacture()` est le seul endroit où ce libellé se fabrique, et il le
+**dérive du code** (`18k-importe` → `18 carats`), jamais en découpant
+`c.label` : réécrire un libellé de `CARATS_LIST` ne doit pas changer ce qui
+s'imprime. Les écrans de gestion gardent le libellé complet — ne pas
+« harmoniser » les deux.
+
 Le **moyen de paiement** figure dans le bloc des totaux. Il passe par
 `libellePaiement()`, jamais par `PAIEMENT_LABELS` en direct : une vente
 réglée pour partie sur l'épargne porte un code composé (`compte+wave`) que
@@ -1373,6 +1385,31 @@ volatilisé parce qu'un champ manquait.
 
 En édition simple, la **description devient obligatoire** — elle remplace
 l'article, et c'est elle qui s'imprime sur la facture remise à la cliente.
+
+### Et en édition complète, la description ne se saisit pas
+
+Décidé le 2026-11-12. Le champ « Description » existait dans les deux
+éditions. En édition complète il était **une seconde vérité sur la même
+marchandise** : l'article en porte déjà le nom, et c'est ce nom qui doit
+s'imprimer. Le champ est donc masqué (`v-bloc-description`), par la même
+règle que les deux blocs — ils ne coexistent jamais.
+
+**La description est relue sur l'article à l'enregistrement**, pas
+pré-remplie à la sélection. L'ancien `if (desc && !desc.value)` ne recopiait
+le nom que si le champ était vide : **changer d'article après coup laissait
+l'ancien nom**, pendant que carat, type et provenance suivaient le nouveau.
+La facture nommait alors un bijou que la cliente n'avait pas acheté. Le
+défaut se voyait tant que le champ était visible ; une fois masqué, plus
+personne ne l'aurait vu — d'où la réécriture plutôt que le simple masquage.
+
+Corollaire du même raisonnement : si l'article choisi **a disparu de
+l'inventaire** pendant que la fenêtre était ouverte (`refreshAll()` recharge
+`STATE` en continu), la vente est désormais refusée. Elle partait auparavant
+avec description, carat et type **vides**, et sans déduction de stock.
+
+La fenêtre « Modifier une vente » garde son champ, et c'est voulu : c'est
+l'écran de correction, le seul endroit où rattraper le libellé d'une facture
+déjà remise.
 
 ---
 
