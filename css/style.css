@@ -864,6 +864,51 @@ tbody tr:hover td { background: #f3eedf; }
 .paiement-livraison{background:var(--bg-secondary);color:var(--text-secondary);border:0.5px solid var(--border-light)}
 .paiement-compte{background:var(--local-bg);color:var(--local-text)}
 
+/* ===== CHOIX DU PAIEMENT — tuiles, plus de liste déroulante =====
+   Six moyens repliés derrière un menu, c'est un geste de plus et un coup
+   d'œil de moins au comptoir. Les tuiles réutilisent les couleurs des
+   pastilles ci-dessus : la vendeuse doit retrouver au journal la couleur
+   qu'elle a choisie à la vente — deux palettes pour la même chose auraient
+   divergé.
+   Au repos la tuile est neutre et ne porte que son pictogramme en couleur :
+   six aplats colorés côte à côte feraient un nuancier, et plus rien ne
+   signalerait celui qui est choisi. */
+.paiement-choix { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+@media (min-width: 560px) { .paiement-choix { grid-template-columns: repeat(3, 1fr); } }
+@media (min-width: 900px) { .paiement-choix { grid-template-columns: repeat(6, 1fr); } }
+
+/* NI `background` NI `color` ICI, et c'est la clef de tout le bloc : les
+   classes `.paiement-*` ci-dessus ont la même spécificité (une classe) et
+   sont écrites AVANT, donc les poser ici les écraserait — la tuile choisie
+   restait blanche et le pictogramme gris. Mesuré dans le navigateur, pas
+   relu : les six états « choisi » rendaient tous exactement 5,56:1, signe
+   qu'aucun n'avait pris sa couleur. */
+.paiement-tuile {
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  padding: 10px 6px; cursor: pointer; text-align: center;
+  border: 1px solid var(--border-light); border-radius: var(--radius-md);
+  /* La bordure de l'état choisi fait 2 px : la réserver dès le repos évite
+     que la tuile ne saute d'un pixel au clic. */
+  outline: 1px solid transparent; outline-offset: -2px;
+  transition: background .12s, border-color .12s;
+}
+.paiement-tuile:hover { background: var(--bg-muted); }
+.paiement-tuile svg { width: 24px; height: 24px; }
+.paiement-tuile-nom  { font-size: 12px; font-weight: 600; line-height: 1.2; }
+.paiement-tuile-aide { font-size: 10px; color: var(--text-tertiary); line-height: 1.2; }
+
+/* Choisi : le fond et le texte prennent la couleur du service, et la
+   bordure la rend visible même pour qui distingue mal les teintes. */
+.paiement-tuile.est-choisi { border-color: currentColor; outline-color: currentColor; }
+.paiement-tuile.est-choisi .paiement-tuile-nom  { font-weight: 700; }
+.paiement-tuile.est-choisi .paiement-tuile-aide { color: inherit; opacity: .75; }
+
+/* Au repos : fond neutre, et seul le pictogramme garde la couleur du
+   service. `:not()` donne deux classes de spécificité, assez pour battre
+   `.paiement-wave` sans avoir à réécrire les six. */
+.paiement-tuile:not(.est-choisi) { background: var(--bg-primary); }
+.paiement-tuile:not(.est-choisi) .paiement-tuile-nom { color: var(--text-primary); }
+
 /* ===== CHARTE KAYOR ===== */
 :root {
   --kayor-or:        #C9A84C;

@@ -20,7 +20,7 @@
  * qui « peut tout faire » alors que les droits sont restreints, c'est presque
  * toujours ça.
  */
-const APP_VERSION = '2026-11-12-stock-articles';
+const APP_VERSION = '2026-11-12-paiement-marques';
 
 /**
  * Domaine de la vitrine publique, pour le QR imprime sur les factures.
@@ -1952,6 +1952,7 @@ function prepNouvelleVente(){
   var vAc=document.getElementById('v-acompte'); if(vAc) vAc.value='';
   var vRest=document.getElementById('v-restant-disp'); if(vRest) vRest.value='—';
   var vp=document.getElementById('v-paiement'); if(vp) vp.value='especes';
+  rendrePaiementChoix();
   var cb=document.getElementById('v-compte-bloc'); if(cb) cb.style.display='none';
 
   // On repart d'une facture d'un seul article : c'est le cas de loin le plus
@@ -3974,6 +3975,112 @@ function imprimerCompteClient(id){
   win.document.close();
   setTimeout(function(){win.focus();win.print();},500);
 }
+
+/**
+ * Les six moyens de paiement, avec leur pictogramme.
+ *
+ * DES PICTOGRAMMES DESSINÉS ICI, PAS DES LOGOS DE MARQUE. Un vrai logo Wave
+ * ou Orange Money voudrait dire soit un fichier image dans `assets/` — la
+ * marque d'autrui embarquée dans notre produit — soit un chargement distant,
+ * que la règle 6 interdit dans une page qui porte un jeton de session. Une
+ * vague bleue et une pièce orange sont des pictogrammes ordinaires : ils se
+ * reconnaissent sans rien emprunter.
+ *
+ * Les couleurs sont CELLES DES PASTILLES du journal (`.paiement-*` dans
+ * `css/style.css`), pas une seconde palette : la vendeuse doit retrouver au
+ * journal la couleur qu'elle a choisie à la vente.
+ */
+var PAIEMENTS = [
+  { code:'especes', label:'Espèces', aide:'Au comptoir',
+    svg:'<rect x="1.5" y="5" width="21" height="14" rx="2.5"/><circle cx="12" cy="12" r="3.2"/><path d="M5.5 9v6M18.5 9v6"/>' },
+  // LES DEUX MARQUES PORTENT `marque` AU LIEU DE `svg` : elles ont leurs
+  // propres couleurs et ne suivent donc pas `currentColor` comme les
+  // pictogrammes ordinaires. Une marque ne change pas de teinte selon qu'on
+  // l'a choisie ou non — c'est ce qui la rend reconnaissable.
+  //
+  // Dessinées d'après les logos fournis le 2026-11-12, pas d'après mon
+  // souvenir : j'avais commencé par chercher à quoi ils ressemblaient, et
+  // c'était la bonne réaction. Un CSS « écrit de mémoire » a déjà coûté une
+  // demi-journée à ce projet (§ 2).
+  { code:'wave', label:'Wave', aide:'Mobile', marque:
+    '<svg viewBox="0 0 24 24" aria-hidden="true">'
+    + '<rect width="24" height="24" rx="4.5" fill="#1EC7F2"/>'
+    + '<path d="M9.4 12.6 6.2 8.4a1.55 1.55 0 1 1 2.45-1.9l2.6 3.3z" fill="#000"/>'
+    + '<ellipse cx="13.3" cy="12.5" rx="4.6" ry="6.2" fill="#000"/>'
+    + '<ellipse cx="13.5" cy="14" rx="2.85" ry="4.05" fill="#fff"/>'
+    + '<circle cx="11.95" cy="9.5" r=".78" fill="#fff"/>'
+    + '<circle cx="14.75" cy="9.5" r=".78" fill="#fff"/>'
+    + '<path d="M12.25 11.1h2.5l-1.25 1.6z" fill="#F7901E"/>'
+    + '<ellipse cx="11.4" cy="19" rx="1.6" ry=".95" fill="#F7901E"/>'
+    + '<ellipse cx="15.3" cy="19" rx="1.6" ry=".95" fill="#F7901E"/>'
+    + '</svg>' },
+  { code:'orange-money', label:'Orange Money', aide:'Mobile', marque:
+    '<svg viewBox="0 0 24 24" fill="none" stroke-width="2.9"'
+    + ' stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+    + '<path d="M3 17 10 10M5.6 10H10v4.4" stroke="#000"/>'
+    + '<path d="M21 7 14 14M18.4 14H14V9.6" stroke="#FF7900"/>'
+    + '</svg>' },
+  { code:'carte', label:'Carte', aide:'Bancaire',
+    svg:'<rect x="1.5" y="4.5" width="21" height="15" rx="2.5"/><path d="M1.5 9.5h21M5 15h4"/>' },
+  { code:'livraison', label:'À la livraison', aide:'Payée plus tard',
+    svg:'<path d="M1.5 7.5h11v9h-11z"/><path d="M12.5 10.5h4.6l3.4 3.2v2.8h-8z"/><circle cx="6" cy="18" r="1.8"/><circle cx="16.5" cy="18" r="1.8"/>' },
+  // Une pièce au-dessus d'une fente, pas un coffre : le coffre que j'avais
+  // dessiné — un rectangle avec un cercle dedans — était le jumeau du billet
+  // d'Espèces à 24 px. Deux pictogrammes qu'on confond ne valent pas mieux
+  // qu'un seul. Regardé à l'écran, à la taille réelle.
+  { code:'compte', label:'Épargne', aide:'Son compte',
+    svg:'<path d="M3.5 10.5h17v8a2 2 0 01-2 2h-13a2 2 0 01-2-2z"/><path d="M9 7.6h6"/><circle cx="12" cy="3.8" r="2.1"/>' }
+];
+
+/**
+ * Peint les tuiles d'après la valeur de `v-paiement`.
+ *
+ * Toujours DEPUIS le champ caché, jamais depuis ce qu'on vient de cliquer :
+ * `onChangePaiementVente()` remet « especes » quand la cliente n'a pas de
+ * compte épargne, et une tuile peinte sur l'intention afficherait alors
+ * « Épargne » pour une vente réglée en espèces.
+ */
+function rendrePaiementChoix() {
+  var hote = document.getElementById('v-paiement-choix');
+  var champ = document.getElementById('v-paiement');
+  if (!hote || !champ) return;
+  var actif = champ.value || 'especes';
+  hote.innerHTML = PAIEMENTS.map(function (p) {
+    return '<button type="button" class="paiement-tuile paiement-' + p.code
+         + (p.code === actif ? ' est-choisi' : '') + '" data-paiement="' + p.code + '"'
+         + ' aria-pressed="' + (p.code === actif) + '">'
+         // Une marque arrive entière, avec ses couleurs ; un pictogramme
+         // ordinaire n'est qu'un tracé, qu'on habille ici de `currentColor`
+         // pour qu'il suive la teinte du service.
+         + (p.marque ? p.marque
+             : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"'
+               + ' stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+               + p.svg + '</svg>')
+         + '<span class="paiement-tuile-nom">' + esc(p.label) + '</span>'
+         + '<span class="paiement-tuile-aide">' + esc(p.aide) + '</span>'
+         + '</button>';
+  }).join('');
+}
+
+/** Un clic sur une tuile. La valeur passe par le champ, comme avant. */
+function choisirPaiement(code) {
+  var champ = document.getElementById('v-paiement');
+  if (!champ) return;
+  champ.value = code;
+  // `onChangePaiementVente()` peut REFUSER le compte épargne et remettre
+  // « especes » dans le champ. On repeint donc après elle, pas avant.
+  onChangePaiementVente();
+  rendrePaiementChoix();
+}
+
+// Un seul écouteur, sur le conteneur : `rendrePaiementChoix()` réécrit les
+// six tuiles à chaque choix, et un écouteur posé sur une tuile disparaîtrait
+// avec elle au premier clic. Même discipline que le tableau de comparaison
+// de la console opérateur.
+document.getElementById('v-paiement-choix')?.addEventListener('click', function (e) {
+  var b = e.target.closest('[data-paiement]');
+  if (b) choisirPaiement(b.getAttribute('data-paiement'));
+});
 
 function onChangePaiementVente(){
   var paiement=document.getElementById('v-paiement')&&document.getElementById('v-paiement').value;

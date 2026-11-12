@@ -90,8 +90,8 @@ déjà `migrations/`, les `*.md`, `config_backup.json` et `.claude/`.
 
 Repères de version, pour vérifier que le déploiement a bien pris :
 
-- `index.html` et `operateur.html` : `?v=2026-11-12d`
-- `APP_VERSION` : `2026-11-12-stock-articles`
+- `index.html` : `?v=2026-11-12f` · `operateur.html` : `?v=2026-11-12d`
+- `APP_VERSION` : `2026-11-12-paiement-marques`
 - `client.html` : `?v=2026-11-04b`
 - `boutique.html` : `?v=2026-11-02a`
 
@@ -107,7 +107,7 @@ Repères de version, pour vérifier que le déploiement a bien pris :
 ## 3. Juste après le déploiement
 
 **Rechargez avec Ctrl + Maj + R**, puis regardez la version sous l'écran de
-connexion. Tant qu'elle n'affiche pas `2026-11-12-stock-articles`, rien de ce
+connexion. Tant qu'elle n'affiche pas `2026-11-12-paiement-marques`, rien de ce
 qui suit n'a de sens : c'est le cache, pas un bug. C'est la première chose à
 vérifier devant tout comportement incohérent.
 
@@ -331,6 +331,29 @@ sur les lignes, pas sur le mode de la boutique.
 **Et le droit** : sous l'identité d'une propriétaire, `stock_par_poids` doit
 être refusé à l'écriture directe **et** son adresse doit toujours passer —
 sans ce second essai, le premier ne prouve rien.
+
+### c decies. Le paiement en tuiles
+
+« Nouvelle vente » n'a plus de liste déroulante pour le paiement : **six
+tuiles visibles d'un coup**, trois par rangée sur un écran large, deux sur un
+téléphone.
+
+> Attendu : la tuile choisie prend la couleur de son service — la même qu'au
+> journal — et les cinq autres restent sur fond neutre avec leur pictogramme
+> en couleur. **Wave** montre son manchot sur carré cyan et **Orange Money**
+> ses deux flèches : ces deux-là gardent leurs couleurs de marque quel que
+> soit l'état de la tuile.
+>
+> **L'essai qui compte**, parce qu'il porte un vrai piège : choisissez
+> **Épargne** pour une cliente **qui n'a pas de compte**. Le serveur refuse,
+> le message le dit, et la tuile doit **retomber sur Espèces** — pas rester
+> sur Épargne. Même chose sans cliente choisie du tout.
+>
+> Puis avec une cliente qui a un compte : le bloc vert du solde apparaît.
+
+**Sur la facture imprimée, le paiement reste du texte** — pas de pictogramme.
+Un code composé (`compte+wave`) n'a pas d'icône unique, et une facture
+s'imprime souvent en noir et blanc.
 
 ### c sexies. Télécharger une sauvegarde, et la remettre
 

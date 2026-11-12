@@ -673,6 +673,76 @@ Le **moyen de paiement** figure dans le bloc des totaux. Il passe par
 réglée pour partie sur l'épargne porte un code composé (`compte+wave`) que
 la table des libellés ne connaît pas, et la facture afficherait le code brut.
 
+**Sur la facture il reste du TEXTE**, sans pictogramme (décidé le
+2026-11-12, en même temps que les tuiles de saisie). Deux raisons : un code
+composé comme `compte+wave` n'a pas d'icône unique, et la facture s'imprime
+souvent en noir et blanc, où un pictogramme coloré devient une tache grise.
+
+### Le paiement se choisit à vue, plus dans une liste déroulante
+
+Demandé le 2026-11-12. Six moyens repliés derrière un menu, c'est un geste de
+plus et un coup d'œil de moins au comptoir. `rendrePaiementChoix()` peint six
+tuiles ; **`v-paiement` reste un champ caché et le seul porteur de la
+valeur**, pour que `onChangePaiementVente()`, `_enregistrerVente()` et
+`ouvrirComplementCC()` ne changent pas d'une ligne.
+
+- **On repeint DEPUIS le champ, jamais depuis la tuile cliquée.**
+  `onChangePaiementVente()` remet « especes » quand la cliente n'a pas de
+  compte épargne : une tuile peinte sur l'intention afficherait « Épargne »
+  pour une vente réglée en espèces. Les deux chemins de refus sont éprouvés.
+- **Wave et Orange Money portent leur vraie marque**, les quatre autres un
+  pictogramme ordinaire. Montrer le logo d'un prestataire en face de son nom,
+  dans l'écran où l'on choisit de payer avec lui, est l'usage courant d'un
+  point de vente — c'est ce qui le rend reconnaissable d'un coup d'œil.
+
+  **Dessinées en SVG inline, jamais chargées.** La règle 6 interdit un appel
+  distant dans une page qui porte un jeton de session, et un fichier d'image
+  serait un octet de plus à servir pour deux icônes de 24 px.
+
+  Elles portent **`marque` au lieu de `svg`** dans `PAIEMENTS` : une marque
+  arrive entière, avec ses couleurs, et ne suit donc pas `currentColor`. Une
+  marque ne change pas de teinte selon qu'on l'a choisie ou non — c'est
+  précisément ce qui la rend reconnaissable. Les quatre autres ne sont qu'un
+  tracé, habillé de `currentColor` au moment du rendu.
+
+  **Elles ont été dessinées d'après les logos fournis le 2026-11-12, pas de
+  mémoire.** La première réaction — chercher à quoi ils ressemblent avant de
+  tracer — était la bonne : ce projet a déjà payé un sélecteur CSS « écrit de
+  mémoire » qui ne correspondait à rien.
+- **Les couleurs sont celles des pastilles du journal** (`.paiement-*`), pas
+  une seconde palette : la vendeuse doit retrouver au journal la couleur
+  qu'elle a choisie à la vente.
+- **Ni `background` ni `color` sur `.paiement-tuile`.** Les classes
+  `.paiement-*` ont la même spécificité et sont écrites avant : les poser sur
+  la tuile les écrasait, et la tuile choisie restait blanche. Le défaut ne se
+  voyait pas en lisant le CSS — il s'est vu parce que **les six états
+  « choisi » mesuraient tous exactement 5,56:1**, signe qu'aucun n'avait pris
+  sa couleur.
+
+Contrastes **mesurés dans le navigateur**, état choisi, nom et sous-titre :
+
+| | |
+|---|---|
+| Carte | 6,00:1 |
+| Orange Money | 5,87:1 |
+| Wave | 5,70:1 |
+| Épargne | 5,57:1 |
+| À la livraison | 5,07:1 |
+| Espèces | **4,56:1** |
+
+Espèces est le plus juste du lot — l'or de la charte sur son fond sable.
+Au repos, le fond est neutre et seul le pictogramme garde sa couleur : six
+aplats colorés côte à côte feraient un nuancier, et plus rien ne signalerait
+le choix.
+
+**Deux pictogrammes qu'on confond ne valent pas mieux qu'un seul.** La
+première Épargne était une tirelire qui se lisait comme une tache verte ; la
+seconde, un coffre — jumeau du billet d'Espèces. C'est une pièce au-dessus
+d'une fente. Regardé à 24 px, pas imaginé.
+
+La fenêtre « Modifier une vente » garde sa liste déroulante : c'est l'écran de
+correction, pas celui du comptoir.
+
 **Ce qui est imprimé est lu par une cliente** : accents compris. « Especes »
 et « Importe » ont traîné des mois dans `PAIEMENT_LABELS` et `CARATS_LIST`.
 
