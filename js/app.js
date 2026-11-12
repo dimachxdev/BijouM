@@ -20,7 +20,7 @@
  * qui « peut tout faire » alors que les droits sont restreints, c'est presque
  * toujours ça.
  */
-const APP_VERSION = '2026-11-12-multi-articles';
+const APP_VERSION = '2026-11-12-articles-inventaire';
 
 /**
  * Domaine de la vitrine publique, pour le QR imprime sur les factures.
@@ -1640,9 +1640,14 @@ document.getElementById('filtre-carat')?.addEventListener('input',renderJournal)
  * Une facture porte plusieurs articles et UN total.
  *
  * Toutes les lignes sortent de la même fabrique, et il n'y a qu'elle : une
- * ligne d'inventaire et une ligne libre ne sont pas deux formulaires, c'est
- * le même avec un bloc de plus. Deux fabriques auraient divergé — la facture
- * avait déjà payé cette faute avec ses deux feuilles de style (§ 3).
+ * ligne d'inventaire et une ligne décrite à la main ne sont pas deux
+ * formulaires, c'est le même avec un bloc à la place d'un autre. Deux
+ * fabriques auraient divergé — la facture avait déjà payé cette faute avec
+ * ses deux feuilles de style (§ 3).
+ *
+ * Ce qu'une ligne a le droit d'être tient au MODE de la boutique, jamais au
+ * choix de la vendeuse : inventaire en édition complète, saisie à la main en
+ * édition simple (migration 043). Le serveur refuse l'autre cas.
  *
  * Le numéro interne d'une ligne ne se réutilise jamais : supprimer la ligne 2
  * puis en ajouter une lui donne le numéro 4. Recycler les numéros ferait
@@ -1670,28 +1675,32 @@ function ajouterLigneVente() {
     +   '<span class="vente-ligne-num"></span>'
     +   '<button type="button" class="vente-ligne-suppr" title="Retirer cet article">✕</button>'
     + '</div>'
+    // ÉDITION COMPLÈTE : rien d'autre que le sélecteur. Toute ligne vient de
+    // l'inventaire (migration 043), donc pas de saisie libre à côté.
     + (stockGere
         ? '<div class="form-group" style="margin-bottom:8px">'
-          + '<label class="form-label">Article</label>'
+          + '<label class="form-label">Article *</label>'
           + '<select class="form-input" id="' + p + 'ref"></select>'
           + '<span class="form-hint" id="' + p + 'dispo"></span></div>'
-        : '')
-    + '<div id="' + p + 'libre">'
-    +   '<div class="form-group" style="margin-bottom:8px">'
-    +     '<label class="form-label">Description *</label>'
-    +     '<input class="form-input" id="' + p + 'desc" autocomplete="off" '
-    +            'placeholder="Bague, gravure, frais de façon…" /></div>'
-    +   '<div class="form-row">'
-    +     '<div class="form-group"><label class="form-label">Type de bijou</label>'
-    +       '<select class="form-input" id="' + p + 'type"></select></div>'
-    +     '<div class="form-group"><label class="form-label">Carat</label>'
-    +       '<select class="form-input" id="' + p + 'carat"></select></div></div>'
-    +   '<div class="form-row" id="' + p + 'or"><div class="form-group">'
-    +     '<label class="form-label">Provenance de l\'or</label>'
-    +     '<select class="form-input" id="' + p + 'prov">'
-    +       '<option value="local">Or local</option>'
-    +       '<option value="importe">Or importé</option></select></div></div>'
-    + '</div>'
+    // ÉDITION SIMPLE : il n'y a pas d'inventaire du tout, donc toute ligne
+    // s'y décrit à la main — sans quoi ces boutiques ne pourraient plus
+    // rien facturer. C'est la même règle, lue dans l'autre sens.
+        : '<div id="' + p + 'libre">'
+          +   '<div class="form-group" style="margin-bottom:8px">'
+          +     '<label class="form-label">Description *</label>'
+          +     '<input class="form-input" id="' + p + 'desc" autocomplete="off" '
+          +            'placeholder="Bague, chaîne, bracelet…" /></div>'
+          +   '<div class="form-row">'
+          +     '<div class="form-group"><label class="form-label">Type de bijou</label>'
+          +       '<select class="form-input" id="' + p + 'type"></select></div>'
+          +     '<div class="form-group"><label class="form-label">Carat</label>'
+          +       '<select class="form-input" id="' + p + 'carat"></select></div></div>'
+          +   '<div class="form-row" id="' + p + 'or"><div class="form-group">'
+          +     '<label class="form-label">Provenance de l\'or</label>'
+          +     '<select class="form-input" id="' + p + 'prov">'
+          +       '<option value="local">Or local</option>'
+          +       '<option value="importe">Or importé</option></select></div></div>'
+          + '</div>')
     + '<div class="form-row-3" style="margin-bottom:0">'
     +   '<div class="form-group"><label class="form-label">Poids (g)</label>'
     +     '<input class="form-input" type="number" step="0.01" min="0" placeholder="0,00" id="' + p + 'poids" /></div>'
@@ -1705,17 +1714,13 @@ function ajouterLigneVente() {
   if (stockGere) {
     peuplerStockSelect(p + 'ref');
     var sel = document.getElementById(p + 'ref');
-    // Choisir « rien », c'est choisir une ligne libre : gravure, frais de
-    // façon, bijou hors inventaire. Le libellé doit le dire, sinon la
-    // vendeuse croit avoir oublié de choisir.
-    if (sel && sel.options.length) {
-      sel.options[0].textContent = '— Ligne libre (gravure, façon, hors stock) —';
-      sel.addEventListener('change', function () { majLigneVente(n); });
-    }
+    if (sel) sel.addEventListener('change', function () { majLigneVente(n); });
+  } else {
+    peuplerTypeBijou(p + 'type', '');
+    peuplerSelect(p + 'carat', '');
+    document.getElementById(p + 'type')
+            .addEventListener('change', function () { majLigneVente(n); });
   }
-  peuplerTypeBijou(p + 'type', '');
-  peuplerSelect(p + 'carat', '');
-  document.getElementById(p + 'type').addEventListener('change', function () { majLigneVente(n); });
   ['poids', 'nb', 'montant'].forEach(function (c) {
     document.getElementById(p + c).addEventListener('input', function () { majLigneVente(n); });
   });
@@ -1758,12 +1763,8 @@ function majLigneVente(n) {
   var ref = sel ? sel.value : '';
   var s   = ref ? getStockItem(ref) : null;
 
-  // Les deux blocs ne coexistent jamais : l'article porte déjà son type, son
-  // carat et sa provenance, et les redemander donnerait deux vérités sur la
-  // même marchandise (§ 6 ter).
-  var libre = document.getElementById(p + 'libre');
-  if (libre) libre.style.display = ref ? 'none' : '';
-
+  // Le bloc de saisie libre n'existe qu'en édition simple (migration 043) :
+  // là où il y a un inventaire, il n'y a rien à décrire à la main.
   // La provenance de l'or ne concerne que les types qui en portent.
   var t  = document.getElementById(p + 'type');
   var or = document.getElementById(p + 'or');
@@ -1962,8 +1963,13 @@ async function _enregistrerVente(){
   // ligne fautive, ce que le serveur fait moins bien.
   if(!date||!clientId){showToast('Date et client sont obligatoires.');return;}
   if(!lignes.length){showToast('Ajoutez au moins un article.');return;}
+  const stockGere = gereLeStock();
   for(let i=0;i<lignes.length;i++){
     const l=lignes[i], num='Article '+(i+1)+' : ';
+    // Toute ligne vient de l'inventaire là où il y en a un (migration 043).
+    if(stockGere && !l.stockRef){
+      showToast(num+'choisissez un article de l\'inventaire.');return;
+    }
     if(l.stockRef && !getStockItem(l.stockRef)){
       // L'article a disparu de l'inventaire pendant que la fenêtre était
       // ouverte — `refreshAll()` recharge `STATE` en continu.

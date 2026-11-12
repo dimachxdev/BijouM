@@ -1457,8 +1457,25 @@ comptes. **Ne pas y revenir.**
   lecture seule, et **formaté** (`505 000 F`) : c'est le chiffre qu'on
   annonce à la cliente. Du coup `calcRestant()` ne peut plus le relire —
   `recalcTotalVente()` calcule le restant sur le nombre, jamais sur le texte.
-- **Une ligne peut être libre** (`stock_ref` à NULL) : gravure, frais de
-  façon, bijou hors inventaire. Elle exige alors une description.
+- **Ce qu'une ligne a le droit d'être tient au MODE de la boutique**, jamais
+  au choix de la vendeuse (migration 043, qui revient sur la 041 le jour
+  même). `gestion_stock = true` → chaque ligne **doit** porter un
+  `stock_ref` ; `gestion_stock = false` → aucune ne le peut, et chacune
+  exige sa description.
+
+  « Plus de ligne libre » ne pouvait pas valoir partout : **en édition
+  simple il n'y a pas d'inventaire du tout** (§ 6 ter), donc l'imposer y
+  rendrait la facturation impossible. C'est le même drapeau que
+  `peutAcceder()`, `deduireStock()` et le formulaire — un quatrième point de
+  bascule, pas une quatrième vérité.
+
+  **Conséquence assumée** : une gravure ou des frais de façon ne peuvent
+  plus figurer sur une facture d'édition complète sans exister comme article
+  d'inventaire.
+
+  La contrainte est **dans la fonction, pas sur la table** : une contrainte
+  de colonne aurait refusé l'historique, dont les 23 lignes sans `stock_ref`
+  reprises par la 041.
 - **Pour une ligne d'inventaire, type, carat et provenance sont pris SUR
   L'ARTICLE**, jamais sur ce qu'envoie le navigateur. Même règle que
   `vente_sur_compte_epargne()`, qui prend le `client_id` sur le compte : une

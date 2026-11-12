@@ -90,8 +90,8 @@ déjà `migrations/`, les `*.md`, `config_backup.json` et `.claude/`.
 
 Repères de version, pour vérifier que le déploiement a bien pris :
 
-- `index.html` : `?v=2026-11-12b`
-- `APP_VERSION` : `2026-11-12-multi-articles`
+- `index.html` : `?v=2026-11-12c`
+- `APP_VERSION` : `2026-11-12-articles-inventaire`
 - `operateur.html` et `client.html` : `?v=2026-11-04b`
 - `boutique.html` : `?v=2026-11-02a`
 
@@ -106,7 +106,7 @@ Repères de version, pour vérifier que le déploiement a bien pris :
 ## 3. Juste après le déploiement
 
 **Rechargez avec Ctrl + Maj + R**, puis regardez la version sous l'écran de
-connexion. Tant qu'elle n'affiche pas `2026-11-12-multi-articles`, rien de ce
+connexion. Tant qu'elle n'affiche pas `2026-11-12-articles-inventaire`, rien de ce
 qui suit n'a de sens : c'est le cache, pas un bug. C'est la première chose à
 vérifier devant tout comportement incohérent.
 
@@ -253,21 +253,26 @@ complet — c'est voulu, la provenance regarde le stock, pas la cliente.
 
 ### c octies. Plusieurs articles sur une facture
 
-Migrations **041 et 042 appliquées et vérifiées** : la base sait déjà écrire
-une facture à plusieurs lignes. Le déploiement n'apporte que l'écran.
+Migrations **041, 042 et 043 appliquées et vérifiées** : la base sait déjà
+écrire une facture à plusieurs lignes. Le déploiement n'apporte que l'écran.
 
 « Nouvelle vente » n'a **plus de champ Description en en-tête** : chaque
 article porte le sien. Le **Total est en lecture seule** — il est la somme
 des lignes.
 
-**1. Trois articles, dont un libre.** Choisissez un article, « + Ajouter un
-article », un second, puis un troisième laissé sur « — Ligne libre — » avec
-la description « Gravure » et son montant.
+**1. Deux articles.** Choisissez un article, « + Ajouter un article », un
+second, chacun avec son montant.
 
 > Attendu : le Total suit chaque frappe, en **francs formatés**. La facture
-> imprime **trois lignes** et un pied « 3 articles · poids total · total ».
+> imprime **deux lignes** et un pied « 2 articles · poids total · total ».
 > Sur une facture d'un seul article, **pas de pied** — il répéterait le
 > total qui figure déjà en dessous.
+>
+> En édition **complète**, une ligne n'offre **que** le sélecteur d'article :
+> plus de saisie libre (migration 043). En édition **simple**, l'inverse —
+> aucun sélecteur, tout se décrit à la main. Vérifiez les deux : c'est la
+> même règle lue dans les deux sens, et se tromper de sens rendrait la
+> facturation impossible dans l'une des deux éditions.
 
 **2. Le piège du multi-articles, et c'est l'essai qui compte.** Mettez
 **deux lignes sur le même article**, dont les poids cumulés dépassent son
@@ -281,8 +286,9 @@ stock — par exemple 6 g + 6 g sur un article qui en a 11.
 > Retirez une ligne : l'autre doit **retrouver sa disponibilité pleine**
 > immédiatement.
 
-**3. Ce qui doit refuser**, chacun avec son message : une ligne libre sans
-description, un montant à zéro, un acompte supérieur au total, un article
+**3. Ce qui doit refuser**, chacun avec son message et **sa ligne nommée** :
+une ligne sans article en édition complète, une ligne sans description en
+édition simple, un montant à zéro, un acompte supérieur au total, un article
 disparu de l'inventaire — et **l'épargne dès la deuxième ligne** (« une
 vente réglée sur l'épargne ne porte qu'un article pour l'instant »).
 
