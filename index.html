@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>KAYOR — Brillez sans effort</title>
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml" />
-  <link rel="stylesheet" href="css/style.css?v=2026-11-12a" />
+  <link rel="stylesheet" href="css/style.css?v=2026-11-12b" />
 </head>
 <body>
 
@@ -814,10 +814,9 @@
       </div>
     </div>
     <div class="form-row">
-      <!-- Masquée en édition complète : la description y VIENT de l'article
-           choisi plus bas, et une seconde saisie serait une seconde vérité.
-           Elle ne sert qu'en édition simple, où elle remplace l'article. -->
-      <div class="form-group" style="flex:2" id="v-bloc-description"><label class="form-label">Description *</label><input class="form-input" type="text" placeholder="Description..." id="v-description" /></div>
+      <!-- Plus de Description ici : depuis la migration 041 chaque ARTICLE
+           porte la sienne, plus bas. Une description de facture entière
+           aurait été une seconde vérité sur ce qui a été vendu. -->
       <div class="form-group"><label class="form-label">Paiement</label>
         <select class="form-input" id="v-paiement" onchange="onChangePaiementVente()">
           <option value="especes">Especes</option>
@@ -836,64 +835,16 @@
       </div>
       <div style="font-size:11px;color:var(--text-secondary);margin-top:4px">Le montant sera automatiquement deduit du compte epargne.</div>
     </div>
-    <!-- Sélecteur article stock — masqué en édition simple (migration 038),
-         où la marchandise se décrit à la main juste en dessous. -->
-    <div class="form-group" style="margin-bottom:8px" id="v-bloc-stock">
-      <label class="form-label">Article en stock *</label>
-      <select class="form-input" id="v-stock-ref" onchange="onSelectStockVente('v')">
-        <option value="">— Choisir un article en stock —</option>
-      </select>
-    </div>
-
-    <!-- ÉDITION SIMPLE : la marchandise se saisit, elle ne se choisit pas.
-         Les mêmes informations qu'une vente ordinaire — elles ont toujours
-         eu leurs colonnes dans `ventes`, elles étaient seulement recopiées
-         depuis l'article. Ce sont elles qui s'impriment sur la facture. -->
-    <div id="v-bloc-libre" style="display:none">
-      <div class="form-row">
-        <div class="form-group">
-          <label class="form-label">Type de bijou *</label>
-          <select class="form-input" id="v-type-bijou-libre"
-                  onchange="onChangeTypeBijouLibre()"></select>
-        </div>
-        <div class="form-group">
-          <label class="form-label">Carat</label>
-          <select class="form-input" id="v-carat-libre"></select>
-        </div>
-      </div>
-      <div class="form-row" id="v-ligne-or-libre">
-        <div class="form-group">
-          <label class="form-label">Provenance de l'or</label>
-          <select class="form-input" id="v-provenance-libre">
-            <option value="local">Or local</option>
-            <option value="importe">Or importé</option>
-          </select>
-        </div>
-      </div>
-    </div>
-    <!-- Info stock sélectionné (jamais affiché en édition simple) -->
-    <div id="v-stock-info" style="display:none;margin-bottom:12px;padding:10px 14px;background:var(--bg-secondary);border-radius:var(--radius-md)">
-      <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px;margin-bottom:6px">
-        <span style="font-size:12px;color:var(--text-secondary)" id="v-stock-label">—</span>
-        <span style="font-size:13px;font-weight:700;color:var(--success-text)" id="v-stock-dispo">—</span>
-      </div>
-      <div style="display:flex;gap:16px;font-size:11px;color:var(--text-tertiary)">
-        <span>Poids dispo : <strong id="v-stock-poids-dispo" style="color:var(--text-primary)">—</strong></span>
-        <span>Articles dispo : <strong id="v-stock-qty-dispo" style="color:var(--text-primary)">—</strong></span>
-      </div>
-    </div>
-    <!-- Poids + Nombre articles vendus -->
-    <div class="form-row">
-      <div class="form-group">
-        <label class="form-label">Poids vendu (g)</label>
-        <input class="form-input" type="number" step="0.01" min="0" placeholder="0,00" id="v-poids-vente" oninput="checkPoidsVente()" />
-        <span class="form-hint">Laisser vide si inconnu</span>
-      </div>
-      <div class="form-group">
-        <label class="form-label">Nombre d'articles</label>
-        <input class="form-input" type="number" min="0" placeholder="0" id="v-nb-articles" oninput="checkPoidsVente()" />
-        <span class="form-hint">Informatif / déduction stock</span>
-      </div>
+    <!-- LES ARTICLES DE LA FACTURE (migration 041).
+         Une facture porte plusieurs marchandises et UN seul total : chaque
+         ligne porte son prix, le total en est la somme et ne se saisit pas.
+         Les lignes sont construites par `ajouterLigneVente()` — une seule
+         fabrique, pour que les deux éditions ne divergent pas. -->
+    <div class="form-group" style="margin-bottom:10px">
+      <label class="form-label">Articles de la facture *</label>
+      <div id="v-lignes"></div>
+      <button type="button" class="btn small" style="margin-top:8px"
+              onclick="ajouterLigneVente()">+ Ajouter un article</button>
     </div>
     <!-- Champs cachés pour compatibilité -->
     <input type="hidden" id="v-type-bijou" value="" />
@@ -904,8 +855,11 @@
     <input type="hidden" id="v-poids-simple-input" value="" />
     <input type="hidden" id="v-provenance" value="" />
     <div class="form-row-3">
-      <div class="form-group"><label class="form-label">Montant (F CFA) *</label><input class="form-input" type="number" min="0" placeholder="0" id="v-montant" oninput="calcRestant('v-montant','v-acompte','v-restant-disp',true)" /></div>
-      <div class="form-group"><label class="form-label">Acompte (F CFA)</label><input class="form-input" type="number" min="0" placeholder="Laisser vide = soldé" id="v-acompte" oninput="calcRestant('v-montant','v-acompte','v-restant-disp',true)" /></div>
+      <!-- Le total ne se saisit plus : il est la somme des lignes, et le
+           serveur le recalcule de toute façon. Le laisser modifiable
+           donnerait deux vérités sur le même chiffre. -->
+      <div class="form-group"><label class="form-label">Total (F CFA)</label><input class="form-input" type="text" id="v-montant" readonly placeholder="0" style="font-weight:700" /></div>
+      <div class="form-group"><label class="form-label">Acompte (F CFA)</label><input class="form-input" type="number" min="0" placeholder="Laisser vide = soldé" id="v-acompte" oninput="recalcTotalVente()" /></div>
       <div class="form-group"><label class="form-label">Restant dû</label><input class="form-input restant-display" type="text" id="v-restant-disp" readonly placeholder="—" /></div>
     </div>
     <div class="modal-actions">
@@ -1681,15 +1635,15 @@
 
 <div class="toast" id="toast"></div>
   <!-- Supabase SDK -->
-  <script src="js/verrou.js?v=2026-11-12a"></script>
-  <script src="js/security.js?v=2026-11-12a"></script>
-  <script src="js/auth.js?v=2026-11-12a"></script>
-  <script src="js/data.js?v=2026-11-12a"></script>
-  <script src="js/supabase.js?v=2026-11-12a"></script>
+  <script src="js/verrou.js?v=2026-11-12b"></script>
+  <script src="js/security.js?v=2026-11-12b"></script>
+  <script src="js/auth.js?v=2026-11-12b"></script>
+  <script src="js/data.js?v=2026-11-12b"></script>
+  <script src="js/supabase.js?v=2026-11-12b"></script>
   <!-- Encodeur QR local : la regle 6 interdit un CDN, et ce code est lu par
        la page ou vit le jeton de session. Doit precéder app.js. -->
-  <script src="js/qr.js?v=2026-11-12a"></script>
-  <script src="js/app.js?v=2026-11-12a"></script>
+  <script src="js/qr.js?v=2026-11-12b"></script>
+  <script src="js/app.js?v=2026-11-12b"></script>
 
 <!-- MODAL AJUSTER STOCK -->
 <div class="modal-backdrop" id="modal-ajust-stock">

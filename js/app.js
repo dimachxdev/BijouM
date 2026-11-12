@@ -20,7 +20,7 @@
  * qui « peut tout faire » alors que les droits sont restreints, c'est presque
  * toujours ça.
  */
-const APP_VERSION = '2026-11-12-facture';
+const APP_VERSION = '2026-11-12-multi-articles';
 
 /**
  * Domaine de la vitrine publique, pour le QR imprime sur les factures.
@@ -1633,63 +1633,292 @@ function renderJournal(){
 document.getElementById('filtre-carat')?.addEventListener('change',renderJournal);
 document.getElementById('filtre-carat')?.addEventListener('input',renderJournal);
 
+// ============================================================
+// LES LIGNES D'UNE FACTURE  (migration 041)
+// ============================================================
+/**
+ * Une facture porte plusieurs articles et UN total.
+ *
+ * Toutes les lignes sortent de la même fabrique, et il n'y a qu'elle : une
+ * ligne d'inventaire et une ligne libre ne sont pas deux formulaires, c'est
+ * le même avec un bloc de plus. Deux fabriques auraient divergé — la facture
+ * avait déjà payé cette faute avec ses deux feuilles de style (§ 3).
+ *
+ * Le numéro interne d'une ligne ne se réutilise jamais : supprimer la ligne 2
+ * puis en ajouter une lui donne le numéro 4. Recycler les numéros ferait
+ * pointer un écouteur sur le champ d'une autre ligne.
+ */
+var _ligneSeq = 0;
+
+function ajouterLigneVente() {
+  var hote = document.getElementById('v-lignes');
+  if (!hote) return;
+  if (hote.children.length >= 50) {
+    showToast('Cinquante articles au maximum sur une facture.'); return;
+  }
+  var n = ++_ligneSeq;
+  var stockGere = gereLeStock();
+  var p = 'v-l' + n + '-';
+
+  var div = document.createElement('div');
+  div.className = 'vente-ligne';
+  div.id = 'v-l' + n;
+  // Aucune donnée saisie n'entre ici : les noms d'articles passent par
+  // `peuplerStockSelect()`, qui écrit en `textContent`.
+  div.innerHTML =
+      '<div class="vente-ligne-tete">'
+    +   '<span class="vente-ligne-num"></span>'
+    +   '<button type="button" class="vente-ligne-suppr" title="Retirer cet article">✕</button>'
+    + '</div>'
+    + (stockGere
+        ? '<div class="form-group" style="margin-bottom:8px">'
+          + '<label class="form-label">Article</label>'
+          + '<select class="form-input" id="' + p + 'ref"></select>'
+          + '<span class="form-hint" id="' + p + 'dispo"></span></div>'
+        : '')
+    + '<div id="' + p + 'libre">'
+    +   '<div class="form-group" style="margin-bottom:8px">'
+    +     '<label class="form-label">Description *</label>'
+    +     '<input class="form-input" id="' + p + 'desc" autocomplete="off" '
+    +            'placeholder="Bague, gravure, frais de façon…" /></div>'
+    +   '<div class="form-row">'
+    +     '<div class="form-group"><label class="form-label">Type de bijou</label>'
+    +       '<select class="form-input" id="' + p + 'type"></select></div>'
+    +     '<div class="form-group"><label class="form-label">Carat</label>'
+    +       '<select class="form-input" id="' + p + 'carat"></select></div></div>'
+    +   '<div class="form-row" id="' + p + 'or"><div class="form-group">'
+    +     '<label class="form-label">Provenance de l\'or</label>'
+    +     '<select class="form-input" id="' + p + 'prov">'
+    +       '<option value="local">Or local</option>'
+    +       '<option value="importe">Or importé</option></select></div></div>'
+    + '</div>'
+    + '<div class="form-row-3" style="margin-bottom:0">'
+    +   '<div class="form-group"><label class="form-label">Poids (g)</label>'
+    +     '<input class="form-input" type="number" step="0.01" min="0" placeholder="0,00" id="' + p + 'poids" /></div>'
+    +   '<div class="form-group"><label class="form-label">Nb articles</label>'
+    +     '<input class="form-input" type="number" min="0" placeholder="0" id="' + p + 'nb" /></div>'
+    +   '<div class="form-group"><label class="form-label">Montant (F) *</label>'
+    +     '<input class="form-input" type="number" min="0" placeholder="0" id="' + p + 'montant" /></div>'
+    + '</div>';
+  hote.appendChild(div);
+
+  if (stockGere) {
+    peuplerStockSelect(p + 'ref');
+    var sel = document.getElementById(p + 'ref');
+    // Choisir « rien », c'est choisir une ligne libre : gravure, frais de
+    // façon, bijou hors inventaire. Le libellé doit le dire, sinon la
+    // vendeuse croit avoir oublié de choisir.
+    if (sel && sel.options.length) {
+      sel.options[0].textContent = '— Ligne libre (gravure, façon, hors stock) —';
+      sel.addEventListener('change', function () { majLigneVente(n); });
+    }
+  }
+  peuplerTypeBijou(p + 'type', '');
+  peuplerSelect(p + 'carat', '');
+  document.getElementById(p + 'type').addEventListener('change', function () { majLigneVente(n); });
+  ['poids', 'nb', 'montant'].forEach(function (c) {
+    document.getElementById(p + c).addEventListener('input', function () { majLigneVente(n); });
+  });
+  div.querySelector('.vente-ligne-suppr')
+     .addEventListener('click', function () { supprimerLigneVente(n); });
+
+  majLigneVente(n);
+  renumeroterLignesVente();
+  return n;
+}
+
+/**
+ * Ce que les AUTRES lignes prennent déjà au même article.
+ *
+ * C'est le piège propre au multi-articles : deux lignes de 6 g sur un article
+ * qui n'en a que 10 passent chacune le contrôle et se font refuser ensemble.
+ * Le serveur vérifie sur le total (migration 041) ; l'écran doit le montrer
+ * avant d'y arriver.
+ */
+function prisParLesAutresLignes(n, ref) {
+  var cumul = { poids: 0, nb: 0 };
+  if (!ref) return cumul;
+  var hote = document.getElementById('v-lignes');
+  if (!hote) return cumul;
+  Array.prototype.forEach.call(hote.children, function (d) {
+    var m = d.id.replace('v-l', '');
+    if (m === String(n)) return;
+    var s = document.getElementById('v-l' + m + '-ref');
+    if (!s || s.value !== ref) return;
+    cumul.poids += parseFloat(document.getElementById('v-l' + m + '-poids').value) || 0;
+    cumul.nb    += parseInt(document.getElementById('v-l' + m + '-nb').value) || 0;
+  });
+  return cumul;
+}
+
+function majLigneVente(n) {
+  var p = 'v-l' + n + '-';
+  if (!document.getElementById('v-l' + n)) return;
+  var sel = document.getElementById(p + 'ref');
+  var ref = sel ? sel.value : '';
+  var s   = ref ? getStockItem(ref) : null;
+
+  // Les deux blocs ne coexistent jamais : l'article porte déjà son type, son
+  // carat et sa provenance, et les redemander donnerait deux vérités sur la
+  // même marchandise (§ 6 ter).
+  var libre = document.getElementById(p + 'libre');
+  if (libre) libre.style.display = ref ? 'none' : '';
+
+  // La provenance de l'or ne concerne que les types qui en portent.
+  var t  = document.getElementById(p + 'type');
+  var or = document.getElementById(p + 'or');
+  if (t && or) or.style.display = (TYPES_AVEC_OR_CODES.indexOf(t.value) >= 0) ? '' : 'none';
+
+  // Les disponibilités se recalculent TOUTES, pas seulement celle de la
+  // ligne touchée : deux lignes qui visent le même article se partagent son
+  // stock, et la première affichait encore « Reste 6 g » pendant que la
+  // seconde en prenait 4. Mesuré dans le navigateur, pas relu.
+  majDisposLignes();
+  recalcTotalVente();
+}
+
+/** Écrit la disponibilité de chaque ligne. Ne touche à rien d'autre : c'est
+ *  ce qui lui permet d'être appelée depuis `majLigneVente()` sans boucler. */
+function majDisposLignes() {
+  var hote = document.getElementById('v-lignes');
+  if (!hote) return;
+  Array.prototype.forEach.call(hote.children, function (d) {
+    var m    = d.id.replace('v-l', '');
+    var hint = document.getElementById('v-l' + m + '-dispo');
+    if (!hint) return;
+    var sel = document.getElementById('v-l' + m + '-ref');
+    var ref = sel ? sel.value : '';
+    var s   = ref ? getStockItem(ref) : null;
+    if (!s) { hint.textContent = ''; hint.style.color = ''; return; }
+    var autres = prisParLesAutresLignes(m, ref);
+    var resteP = (s.poidsTotalG || 0) - autres.poids
+               - (parseFloat(document.getElementById('v-l' + m + '-poids').value) || 0);
+    var resteA = (s.qty || 0) - autres.nb
+               - (parseInt(document.getElementById('v-l' + m + '-nb').value) || 0);
+    hint.textContent = 'Reste ' + resteP.toFixed(2) + ' g / ' + resteA + ' article(s)'
+      + ((autres.poids || autres.nb) ? ' — autres lignes comprises' : '');
+    hint.style.color = (resteP < 0 || resteA < 0) ? 'var(--danger-text)' : '';
+  });
+}
+
+function majToutesLignesVente() {
+  var hote = document.getElementById('v-lignes');
+  if (!hote) return;
+  Array.prototype.forEach.call(hote.children, function (d) {
+    majLigneVente(d.id.replace('v-l', ''));
+  });
+}
+
+function supprimerLigneVente(n) {
+  var hote = document.getElementById('v-lignes');
+  if (!hote) return;
+  if (hote.children.length <= 1) {
+    showToast('Une facture porte au moins un article.'); return;
+  }
+  var div = document.getElementById('v-l' + n);
+  if (div) div.remove();
+  renumeroterLignesVente();
+  // Une ligne qui disparaît rend sa part de stock aux autres : leur
+  // disponibilité affichée doit suivre.
+  majToutesLignesVente();
+}
+
+function renumeroterLignesVente() {
+  var hote = document.getElementById('v-lignes');
+  if (!hote) return;
+  var seule = hote.children.length <= 1;
+  Array.prototype.forEach.call(hote.children, function (d, i) {
+    var num = d.querySelector('.vente-ligne-num');
+    if (num) num.textContent = 'Article ' + (i + 1);
+    var sup = d.querySelector('.vente-ligne-suppr');
+    // Pas de croix quand il ne reste qu'une ligne : un bouton qui refuse
+    // toujours est un bouton qui ment.
+    if (sup) sup.style.visibility = seule ? 'hidden' : '';
+  });
+}
+
+/**
+ * Le total ne se saisit pas : il est la somme des lignes.
+ *
+ * Il est FORMATÉ — « 505 000 F », pas « 505000 » : c'est le chiffre que la
+ * vendeuse annonce à la cliente, et elle le lit d'un coup d'œil. Du coup
+ * `calcRestant()` ne peut plus servir ici (elle relit le champ avec
+ * `parseFloat`, qui s'arrêterait à 505). Le restant se calcule donc ici, sur
+ * le nombre, jamais sur le texte affiché.
+ */
+function recalcTotalVente() {
+  var total = 0;
+  lireLignesVente().forEach(function (l) { total += l.montant; });
+
+  var m = document.getElementById('v-montant');
+  if (m) m.value = total ? fmt(total) : '';
+
+  var a    = document.getElementById('v-acompte');
+  var brut = ((a && a.value) || '').trim();
+  // Acompte vide = vente soldée, comme à la saisie : la même règle que
+  // `_enregistrerVente()` applique avant d'envoyer.
+  var acompte = brut === '' ? total : (parseFloat(brut) || 0);
+  var reste   = Math.max(0, total - acompte);
+
+  var el = document.getElementById('v-restant-disp');
+  if (!el) return;
+  el.value = total > 0 ? (reste === 0 ? 'Soldé ✓' : fmt(reste)) : '—';
+  el.style.color = (reste === 0 && total > 0) ? 'var(--success-text)'
+                 : (reste > 0)                ? 'var(--warning-text)' : '';
+}
+
+/** Les lignes telles que le serveur les attend. */
+function lireLignesVente() {
+  var out  = [];
+  var hote = document.getElementById('v-lignes');
+  if (!hote) return out;
+  Array.prototype.forEach.call(hote.children, function (d) {
+    var p = d.id + '-';
+    var g = function (suf) { return document.getElementById(p + suf); };
+    var sel = g('ref');
+    var ref = sel ? (sel.value || null) : null;
+    var or  = g('or');
+    out.push({
+      stockRef:    ref,
+      // Pour une ligne d'inventaire, type, carat et provenance sont pris SUR
+      // L'ARTICLE par le serveur : les envoyer d'ici serait une seconde
+      // vérité, et c'est celle du navigateur qui gagnerait.
+      description: ref ? '' : (g('desc') ? g('desc').value.trim() : ''),
+      typeBijou:   ref ? null : ((g('type') && g('type').value) || null),
+      carat:       ref ? null : ((g('carat') && g('carat').value) || null),
+      provenance:  (ref || !or || or.style.display === 'none') ? null
+                     : ((g('prov') && g('prov').value) || null),
+      poids:       parseFloat(g('poids').value) || 0,
+      nbArticles:  parseInt(g('nb').value) || 0,
+      montant:     parseInt(g('montant').value) || 0
+    });
+  });
+  return out;
+}
+
+/** Une empreinte lisible par un humain, pour la fenêtre de confirmation. */
+function empreinteLignesVente(lignes) {
+  return lignes.map(function (l) {
+    var s = l.stockRef ? getStockItem(l.stockRef) : null;
+    return (s ? s.nom : (l.description || 'article'))
+         + (l.poids ? ' ' + l.poids + ' g' : '')
+         + ' · ' + fmt(l.montant);
+  }).join(' + ');
+}
+
 function prepNouvelleVente(){
   peuplerClientSelect('v-client');
-  peuplerStockSelect('v-stock-ref');
   var vDate=document.getElementById('v-date'); if(vDate) vDate.value=today();
-  var vDesc=document.getElementById('v-description'); if(vDesc) vDesc.value='';
   var vMont=document.getElementById('v-montant'); if(vMont) vMont.value='';
   var vAc=document.getElementById('v-acompte'); if(vAc) vAc.value='';
-  var vPoids=document.getElementById('v-poids-vente'); if(vPoids) vPoids.value='';
-  var vNb=document.getElementById('v-nb-articles'); if(vNb) vNb.value='';
   var vRest=document.getElementById('v-restant-disp'); if(vRest) vRest.value='—';
   var vp=document.getElementById('v-paiement'); if(vp) vp.value='especes';
   var cb=document.getElementById('v-compte-bloc'); if(cb) cb.style.display='none';
-  var si=document.getElementById('v-stock-info'); if(si) si.style.display='none';
-  ['v-type-bijou','v-carat','v-provenance'].forEach(function(id){
-    var el=document.getElementById(id); if(el) el.value='';
-  });
-  ['v-local','v-importe'].forEach(function(id){
-    var el=document.getElementById(id); if(el) el.value='0';
-  });
 
-  // Édition simple : on remplace le sélecteur d'article par une saisie libre.
-  // Les deux blocs ne coexistent jamais — sinon la vendeuse aurait deux
-  // façons de décrire la même marchandise, et deux vérités.
-  var stockGere = gereLeStock();
-  var bStock = document.getElementById('v-bloc-stock');
-  var bLibre = document.getElementById('v-bloc-libre');
-  if (bStock) bStock.style.display = stockGere ? '' : 'none';
-  if (bLibre) bLibre.style.display = stockGere ? 'none' : '';
-
-  // La description suit la même règle que les deux blocs : en édition
-  // complète elle VIENT de l'article, donc la saisir serait une seconde
-  // vérité — et c'est celle qui s'imprimerait sur la facture. En édition
-  // simple elle remplace l'article, et reste obligatoire.
-  var bDesc = document.getElementById('v-bloc-description');
-  if (bDesc) bDesc.style.display = stockGere ? 'none' : '';
-
-  if (!stockGere) {
-    peuplerTypeBijou('v-type-bijou-libre', '');
-    peuplerSelect('v-carat-libre', '');
-    var pl = document.getElementById('v-provenance-libre'); if (pl) pl.value = 'local';
-    onChangeTypeBijouLibre();
-  }
-
-  // Le nombre d'articles ne déduit plus rien en édition simple : il reste,
-  // purement informatif. Écrit dans LES DEUX SENS — ne le poser que pour le
-  // mode simple laisserait le mauvais libellé après une bascule, et c'est
-  // exactement le genre d'écart qu'on ne remarque jamais soi-même.
-  var hint = document.querySelector('#v-nb-articles + .form-hint');
-  if (hint) hint.textContent = stockGere ? 'Informatif / déduction stock' : 'Informatif';
-}
-
-/** Montre la provenance de l'or seulement pour les types qui en portent. */
-function onChangeTypeBijouLibre(){
-  var t = document.getElementById('v-type-bijou-libre');
-  var ligne = document.getElementById('v-ligne-or-libre');
-  if (!t || !ligne) return;
-  ligne.style.display = (TYPES_AVEC_OR_CODES.indexOf(t.value) >= 0) ? '' : 'none';
+  // On repart d'une facture d'un seul article : c'est le cas de loin le plus
+  // fréquent, et l'écran ne doit pas demander un geste de plus pour lui.
+  var hote=document.getElementById('v-lignes');
+  if(hote){ hote.innerHTML=''; ajouterLigneVente(); }
 }
 
 /**
@@ -1720,76 +1949,80 @@ async function _enregistrerVente(){
   // colonne `client`, qui est ce qui s'imprime sur la facture.
   const clientId= document.getElementById('v-client').value;
   const client  = nomClientParId(clientId);
-  // La saisie libre. Elle ne sert qu'en édition simple — en édition complète
-  // le champ est masqué et la description vient de l'article (plus bas).
-  const descSaisie = document.getElementById('v-description').value.trim();
   const paiement= (document.getElementById('v-paiement')&&document.getElementById('v-paiement').value)||'especes';
-  const montant = parseInt(document.getElementById('v-montant').value)||0;
   let   acompte = parseInt(document.getElementById('v-acompte').value)||0;
 
-  // Lecture depuis le sélecteur d'article stock
-  const stockRef  = document.getElementById('v-stock-ref')&&document.getElementById('v-stock-ref').value||'';
-  const stockItem = getStockItem(stockRef);
-  const poids     = parseFloat(document.getElementById('v-poids-vente')&&document.getElementById('v-poids-vente').value)||0;
-  const nbArticlesV = parseInt(document.getElementById('v-nb-articles')&&document.getElementById('v-nb-articles').value)||0;
+  // LES ARTICLES DE LA FACTURE. Le total est leur somme — jamais une saisie,
+  // et le serveur le recalcule de toute façon (migration 041).
+  const lignes  = lireLignesVente();
+  const montant = lignes.reduce(function(s,l){ return s + l.montant; }, 0);
 
-  // D'où vient la description de la marchandise : de l'article choisi, ou
-  // de ce que la vendeuse a saisi. Les colonnes de `ventes` sont les mêmes
-  // dans les deux cas — c'est la SOURCE qui change, pas le modèle.
-  const stockGere = gereLeStock();
-  let typeBijou, carat, local, importe;
-  if (stockGere) {
-    typeBijou = stockItem ? (stockItem.typeBijou||'') : '';
-    carat     = stockItem ? (stockItem.carat||'') : '';
-    local     = stockItem && stockItem.provenance==='local'  ? poids : 0;
-    importe   = stockItem && stockItem.provenance==='importe'? poids : 0;
-  } else {
-    typeBijou = document.getElementById('v-type-bijou-libre')?.value || '';
-    carat     = document.getElementById('v-carat-libre')?.value || '';
-    const prov = document.getElementById('v-provenance-libre')?.value || '';
-    const porteOr = TYPES_AVEC_OR_CODES.indexOf(typeBijou) >= 0;
-    local     = (porteOr && prov === 'local')   ? poids : 0;
-    importe   = (porteOr && prov === 'importe') ? poids : 0;
+  // Validations d'écran. Elles ne protègent rien — `enregistrer_vente()` les
+  // refait toutes — elles évitent seulement un aller-retour et nomment la
+  // ligne fautive, ce que le serveur fait moins bien.
+  if(!date||!clientId){showToast('Date et client sont obligatoires.');return;}
+  if(!lignes.length){showToast('Ajoutez au moins un article.');return;}
+  for(let i=0;i<lignes.length;i++){
+    const l=lignes[i], num='Article '+(i+1)+' : ';
+    if(l.stockRef && !getStockItem(l.stockRef)){
+      // L'article a disparu de l'inventaire pendant que la fenêtre était
+      // ouverte — `refreshAll()` recharge `STATE` en continu.
+      showToast(num+'cet article n\'est plus dans l\'inventaire.');return;
+    }
+    if(!l.stockRef && !l.description){
+      showToast(num+'décrivez le bijou — c\'est ce qui s\'imprime sur la facture.');return;
+    }
+    if(l.montant<=0){showToast(num+'indiquez son montant.');return;}
   }
+  // Le cumul par article, pas ligne par ligne : deux lignes de 6 g sur un
+  // article qui n'en a que 10 passent chacune le contrôle, et se font
+  // refuser ensemble par le serveur.
+  const cumul={};
+  lignes.forEach(function(l){
+    if(!l.stockRef) return;
+    const c=cumul[l.stockRef]=cumul[l.stockRef]||{poids:0,nb:0};
+    c.poids+=l.poids; c.nb+=l.nbArticles;
+  });
+  for(const ref in cumul){
+    const s=getStockItem(ref);
+    if(cumul[ref].poids>(s.poidsTotalG||0)){
+      showToast('Poids insuffisant pour '+s.nom+' (dispo : '+(s.poidsTotalG||0).toFixed(2)+' g)');return;
+    }
+    if(cumul[ref].nb>(s.qty||0)){
+      showToast('Articles insuffisants pour '+s.nom+' (dispo : '+(s.qty||0)+')');return;
+    }
+  }
+  if(montant<=0){showToast('Le total de la facture doit être supérieur à zéro.');return;}
+  if(acompte>montant){showToast('L\'acompte ne peut pas dépasser le total.');return;}
 
-  // CE QUI S'IMPRIME DANS LA COLONNE « Description » DE LA FACTURE.
-  //
-  // En édition complète, c'est le nom de l'article, relu ICI et à chaque
-  // enregistrement. Le pré-remplissage d'avant ne recopiait le nom que si le
-  // champ était vide : changer d'article après coup laissait donc l'ancien
-  // nom en place, et la facture nommait un bijou que la cliente n'avait pas
-  // acheté. Le champ étant désormais masqué, personne n'aurait pu le voir.
-  const desc = stockGere ? (stockItem ? (stockItem.nom || '') : '') : descSaisie;
-
-  // Validations
-  if(!date||!clientId||montant<=0){showToast('Date, client et montant sont obligatoires.');return;}
-  if(stockGere && !stockRef){showToast('Choisissez l\'article en stock.');return;}
-  // L'article choisi a disparu de l'inventaire pendant que la fenêtre était
-  // ouverte — `refreshAll()` recharge `STATE` toutes les quelques minutes.
-  // Sans ce refus, la vente partait avec description, carat et type VIDES,
-  // et sans déduction de stock : une facture muette sur ce qui a été vendu.
-  if(stockGere && stockRef && !stockItem){
-    showToast('Cet article n\'est plus dans l\'inventaire. Rouvrez la fenêtre et choisissez-en un.');
+  // La vente réglée sur l'épargne reste à UN article : `enregistrer_vente()`
+  // la refuse et `vente_sur_compte_epargne()` ne sait écrire qu'une ligne.
+  // Mieux vaut un refus clair qu'une facture dont deux articles sur trois
+  // auraient disparu.
+  if(paiement==='compte' && lignes.length>1){
+    showToast('Une vente réglée sur l\'épargne ne porte qu\'un article pour l\'instant.');
     return;
-  }
-  // En édition simple l'article est remplacé par sa description : sans elle,
-  // la facture remise à la cliente ne dirait pas ce qu'elle a acheté.
-  if(!stockGere && !desc){showToast('Décrivez le bijou vendu : c\'est ce qui s\'imprime sur la facture.');return;}
-  if(!stockGere && !typeBijou){showToast('Le type de bijou est obligatoire.');return;}
-  if(stockGere && poids<=0 && nbArticlesV<=0){showToast('Saisissez le poids vendu et/ou le nombre d\'articles.');return;}
-  if(acompte>montant){showToast('Acompte ne peut pas depasser le montant.');return;}
-  if(stockItem){
-    if(poids>0 && poids>(stockItem.poidsTotalG||0)){showToast('Poids insuffisant (dispo: '+(stockItem.poidsTotalG||0).toFixed(2)+'g)');return;}
-    if(nbArticlesV>0 && nbArticlesV>(stockItem.qty||0)){showToast('Nombre d\'articles insuffisant (dispo: '+(stockItem.qty||0)+')');return;}
   }
 
   // Apres les validations, avant toute ecriture — y compris avant la
   // reservation du numero, qui est deja une ecriture serveur.
   if(!Verrou.confirmerRepetition('vente',
-      client+' · '+desc+' · '+fmt(montant)+' · '+libellePaiement(paiement))) return;
+      client+' · '+empreinteLignesVente(lignes)+' · '+libellePaiement(paiement))) return;
 
-  let compteClientId=null;
-  let payeParCompte=0;   // part réglée avec le solde épargne, hors caisse
+  // Le chemin épargne ne connaît qu'un article : on lui prépare ses champs
+  // plats depuis la ligne unique.
+  const l0        = lignes[0];
+  const stockItem = l0.stockRef ? getStockItem(l0.stockRef) : null;
+  const stockRef  = l0.stockRef || '';
+  const poids     = l0.poids;
+  const nbArticlesV = l0.nbArticles;
+  const desc      = stockItem ? (stockItem.nom||'') : l0.description;
+  const carat     = stockItem ? (stockItem.carat||'')     : (l0.carat||'');
+  const typeBijou = stockItem ? (stockItem.typeBijou||'') : (l0.typeBijou||'');
+  const prov0     = stockItem ? (stockItem.provenance||'') : (l0.provenance||'');
+  const local     = prov0==='local'   ? poids : 0;
+  const importe   = prov0==='importe' ? poids : 0;
+
   if(paiement==='compte'){
     const cc=STATE.comptesClients.find(c=>c.clientId===clientId&&c.actif!==false);
     if(!cc){showToast('Aucun compte epargne actif pour ce client.');return;}
@@ -1834,26 +2067,26 @@ async function _enregistrerVente(){
     if(!acompteRaw || acompteRaw === '0') acompte = montant;
   }
 
-  const num = await prochainsIdsVente();
-  const id = num.id;
-  var numFacture = num.numFacture;
-  // Déduire poids ET nombre d'articles du stock (article exact via stockRef)
-  const poidsVente = poids||0;
-  if(stockRef && (poidsVente>0 || nbArticlesV>0)){
-    var ok = await deduireStock(stockRef, poidsVente, nbArticlesV);
-    if(!ok) return;
-  }
-  const venteObj={id,date,client,clientId,description:desc,local,importe,poids:poidsVente,carat,typeBijou,paiement,montant,acompte,restant:montant-acompte,compteClientId,numFacture,payeParCompte};
+  // UNE SEULE REQUÊTE, UNE SEULE TRANSACTION.
+  //
+  // Avant la migration 041 il y en avait trois, que rien ne liait : réserver
+  // les numéros, déduire le stock, écrire la vente. Une panne au milieu
+  // laissait du stock déduit sans vente — et avec plusieurs articles, une
+  // facture à deux lignes sur trois. Les numéros sont maintenant réservés
+  // par le serveur DANS la transaction, donc un échec n'en consomme plus.
+  const res = await enregistrerVenteServeur(
+    { date: date, clientId: clientId, paiement: paiement, acompte: acompte },
+    lignes);
 
-  // ATTENDU, et attendu AVANT d'afficher quoi que ce soit. L'etat local ne
-  // recoit la vente qu'une fois la base d'accord : sinon un echec laissait
-  // une vente a l'ecran qui n'existait nulle part, et le rechargement
-  // suivant la faisait disparaitre sans explication.
-  await saveAndSyncVente(venteObj);
-
-  STATE.ventes.unshift(venteObj);
-  closeModal('modal-nouvelle-vente');renderJournal();renderDashboard();renderStocks();
-  showToast(paiement==='compte'?('Vente '+id+' — '+fmt(montant)+' deduit compte '+client):('Vente '+id+' — '+fmt(montant)));
+  // L'état local après la base, jamais avant. On recharge au lieu d'insérer
+  // à la main : la vente, ses lignes, le stock et les compteurs ont tous
+  // bougé côté serveur, et les recopier ici serait quatre occasions de
+  // diverger.
+  await chargerDonnees();
+  closeModal('modal-nouvelle-vente');
+  renderJournal(); renderDashboard(); renderStocks();
+  showToast('Vente '+res.id+' — '+fmt(res.montant)
+          + (res.lignes>1 ? ' · '+res.lignes+' articles' : ''));
 }
 
 function ouvrirEditVente(id){
@@ -1865,6 +2098,16 @@ function ouvrirEditVente(id){
   // dans Arrhes & Commandes, qui passe par une opération dédiée.
   if(!admin){
     showToast('⛔ Modification réservée à l\'administrateur.');return;
+  }
+  // Cette fenêtre modifie les colonnes de marchandise de `ventes`, qui sont
+  // désormais un RÉSUMÉ calculé depuis les lignes (migration 041). Sur une
+  // facture à plusieurs articles, y toucher ferait diverger le résumé de ses
+  // lignes — et la prochaine écriture serveur écraserait la correction sans
+  // rien dire. Mieux vaut refuser que mentir.
+  if((v.lignes||[]).length > 1){
+    showToast('Cette facture porte ' + v.lignes.length + ' articles : sa modification '
+            + 'n\'est pas encore possible. Annulez-la et ressaisissez-la.');
+    return;
   }
   peuplerSelect('edit-v-carat',v.carat);peuplerTypeBijou('edit-v-type-bijou',v.typeBijou||'');peuplerClientSelect('edit-v-client',v.clientId||'');
   document.getElementById('edit-v-id').value=id;
@@ -4791,6 +5034,9 @@ const FACTURE_CSS = `
 .facture-table{width:100%;min-width:0;border-collapse:collapse;font-size:13px;table-layout:fixed}
 .facture-table th{background:#1a1916;color:#fff;padding:9px 10px;text-align:left;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px}
 .facture-table td{padding:10px;border-bottom:1px solid #f0f0f0;vertical-align:top;overflow-wrap:anywhere}
+/* Le pied ne parait qu'au-dela d'un article : sur une facture d'une ligne il
+   repeterait le total, qui figure deja dans le bloc des totaux. */
+.facture-table tfoot td{border-top:1.5px solid #1a1916;border-bottom:0;background:#faf9f6}
 /* Largeurs explicites : sans elles, table-layout:fixed donne quatre colonnes
    égales, et la description — seule colonne vraiment longue — se replie sur
    six lignes pendant que « Poids » garde la même place qu'elle. */
@@ -4883,22 +5129,46 @@ function caratFacture(code) {
   return String(code).replace(/-(local|importe|importé)$/i, '').toUpperCase();
 }
 
+/**
+ * Les lignes à imprimer, avec un repli qui n'en est pas vraiment un.
+ *
+ * Les 23 ventes antérieures au 2026-11-12 ont reçu leur ligne n° 1 par la
+ * migration 041, donc toutes en ont. Le repli couvre deux cas réels : une
+ * vente arrivée par le canal temps réel (`mapVente()` ne porte pas les
+ * lignes), et une lecture faite avant que `vente_lignes` ne soit chargée.
+ * Il reconstruit alors la ligne depuis le résumé — qui dit la même chose.
+ */
+function lignesFacture(v) {
+  if (v && v.lignes && v.lignes.length) return v.lignes;
+  return [{ description: v.description || '', carat: v.carat || null,
+            poids: (parseFloat(v.poids)||0) > 0 ? parseFloat(v.poids)
+                   : (parseFloat(v.local)||0) + (parseFloat(v.importe)||0),
+            montant: v.montant || 0 }];
+}
+
 function afficherFacture(id) {
   _styleFacture();
   calculerCumuls();
   const v=STATE.ventes.find(x=>x.id===id); if(!v)return;
   const numFac=genNumFacture(v.id);
-  const caratLabel=caratFacture(v.carat);
   const cl=clientParId(v.clientId)||{};
-  // Un seul poids sur la facture : c'est le total qui engage la boutique,
-  // avec le carat. La distinction local / importé reste au journal, elle
-  // regarde la gestion du stock, pas la cliente.
-  // `poids` est la saisie ; `local` et `importe` en découlent par provenance
-  // (l'un des deux vaut toujours zéro). Le repli couvre les ventes anciennes
-  // où seul le couple local/importé avait été renseigné.
-  const poidsFacture = (parseFloat(v.poids)||0) > 0
-    ? parseFloat(v.poids)
-    : (parseFloat(v.local)||0) + (parseFloat(v.importe)||0);
+  // Une ligne par article, et le poids total en pied de colonne. Les deux
+  // sortent du MÊME tableau : les recalculer chacun de son côté est la
+  // garantie qu'ils divergeront (§ 3).
+  const lignesFac = lignesFacture(v);
+  const poidsTotalFac = lignesFac.reduce(function(s,l){ return s+(parseFloat(l.poids)||0); }, 0);
+  const corpsFacture = lignesFac.map(function(l){
+    const pl = parseFloat(l.poids)||0;
+    return '<tr>'
+      + '<td>'+esc(l.description||'')+'</td>'
+      + '<td>'+esc(caratFacture(l.carat))+'</td>'
+      + '<td class="fa-nowrap" style="text-align:center">'+(pl>0?fmtG(pl):'—')+'</td>'
+      + '<td class="fa-nowrap" style="text-align:right;font-weight:600">'+fmt(l.montant||0)+'</td>'
+      + '</tr>';
+  }).join('');
+  // Le poids porté par la facture : celui des lignes, pas celui du résumé.
+  // La distinction local / importé reste au journal — elle regarde la
+  // gestion du stock, pas la cliente.
   const restant=v.restant||0;
   // Identité de la boutique connectée, plus celle codée en dur : en SaaS,
   // chaque bijouterie imprime la sienne.
@@ -4939,14 +5209,12 @@ function afficherFacture(id) {
   </div>
   <table class="facture-table">
     <thead><tr><th>Description</th><th>Carat</th><th style="text-align:center">Poids</th><th style="text-align:right">Montant</th></tr></thead>
-    <tbody>
-      <tr>
-        <td>${esc(v.description)}</td>
-        <td>${esc(caratLabel)}</td>
-        <td class="fa-nowrap" style="text-align:center">${poidsFacture>0?fmtG(poidsFacture):'—'}</td>
-        <td class="fa-nowrap" style="text-align:right;font-weight:600">${fmt(v.montant)}</td>
-      </tr>
-    </tbody>
+    <tbody>${corpsFacture}</tbody>
+    ${lignesFac.length > 1 ? `<tfoot><tr>
+        <td colspan="2" style="font-weight:600">${lignesFac.length} articles</td>
+        <td class="fa-nowrap" style="text-align:center;font-weight:600">${poidsTotalFac>0?fmtG(poidsTotalFac):'—'}</td>
+        <td class="fa-nowrap" style="text-align:right;font-weight:700">${fmt(v.montant)}</td>
+      </tr></tfoot>` : ''}
   </table>
   <div class="facture-sep"></div>
   <div class="facture-totaux">

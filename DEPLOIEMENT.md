@@ -90,8 +90,8 @@ déjà `migrations/`, les `*.md`, `config_backup.json` et `.claude/`.
 
 Repères de version, pour vérifier que le déploiement a bien pris :
 
-- `index.html` : `?v=2026-11-12a`
-- `APP_VERSION` : `2026-11-12-facture`
+- `index.html` : `?v=2026-11-12b`
+- `APP_VERSION` : `2026-11-12-multi-articles`
 - `operateur.html` et `client.html` : `?v=2026-11-04b`
 - `boutique.html` : `?v=2026-11-02a`
 
@@ -106,7 +106,7 @@ Repères de version, pour vérifier que le déploiement a bien pris :
 ## 3. Juste après le déploiement
 
 **Rechargez avec Ctrl + Maj + R**, puis regardez la version sous l'écran de
-connexion. Tant qu'elle n'affiche pas `2026-11-12-facture`, rien de ce
+connexion. Tant qu'elle n'affiche pas `2026-11-12-multi-articles`, rien de ce
 qui suit n'a de sens : c'est le cache, pas un bug. C'est la première chose à
 vérifier devant tout comportement incohérent.
 
@@ -245,23 +245,57 @@ facturation seule » → Appliquer. Puis reconnectez-vous dans cette boutique
 > **complète**, « Nouvelle vente » doit toujours refuser sans article, et
 > déduire le stock après la vente.
 
-### c septies. La facture : plus de description à saisir, plus de provenance
+### c septies. La colonne Carat de la facture
 
-En édition **complète**, « Nouvelle vente » ne doit **plus afficher de champ
-Description** : c'est l'article choisi qui la fournit.
-
-> L'essai qui compte, parce qu'il portait un vrai défaut : choisissez un
-> article, puis **changez-en** avant d'enregistrer. La facture doit nommer le
-> **second**. Avant le 2026-11-12 elle gardait le nom du premier, pendant que
-> carat et poids suivaient le second — elle nommait donc un bijou que la
-> cliente n'avait pas acheté.
->
-> En édition **simple**, le champ Description est toujours là et toujours
-> obligatoire.
-
-Puis ouvrez la facture : la colonne **Carat** doit lire « 18 carats », sans
+Ouvrez une facture : la colonne **Carat** doit lire « 18 carats », sans
 « - Importé » ni « - Local ». Les écrans de gestion, eux, gardent le libellé
 complet — c'est voulu, la provenance regarde le stock, pas la cliente.
+
+### c octies. Plusieurs articles sur une facture
+
+Migrations **041 et 042 appliquées et vérifiées** : la base sait déjà écrire
+une facture à plusieurs lignes. Le déploiement n'apporte que l'écran.
+
+« Nouvelle vente » n'a **plus de champ Description en en-tête** : chaque
+article porte le sien. Le **Total est en lecture seule** — il est la somme
+des lignes.
+
+**1. Trois articles, dont un libre.** Choisissez un article, « + Ajouter un
+article », un second, puis un troisième laissé sur « — Ligne libre — » avec
+la description « Gravure » et son montant.
+
+> Attendu : le Total suit chaque frappe, en **francs formatés**. La facture
+> imprime **trois lignes** et un pied « 3 articles · poids total · total ».
+> Sur une facture d'un seul article, **pas de pied** — il répéterait le
+> total qui figure déjà en dessous.
+
+**2. Le piège du multi-articles, et c'est l'essai qui compte.** Mettez
+**deux lignes sur le même article**, dont les poids cumulés dépassent son
+stock — par exemple 6 g + 6 g sur un article qui en a 11.
+
+> Attendu : les **deux** lignes affichent « Reste −1.00 g … — autres lignes
+> comprises » en rouge, et l'enregistrement est refusé. Vérifiées une par
+> une, ces deux lignes passent chacune : c'est tout l'intérêt du contrôle
+> agrégé, côté serveur comme à l'écran.
+>
+> Retirez une ligne : l'autre doit **retrouver sa disponibilité pleine**
+> immédiatement.
+
+**3. Ce qui doit refuser**, chacun avec son message : une ligne libre sans
+description, un montant à zéro, un acompte supérieur au total, un article
+disparu de l'inventaire — et **l'épargne dès la deuxième ligne** (« une
+vente réglée sur l'épargne ne porte qu'un article pour l'instant »).
+
+**4. La vente sur épargne et la commande avec acompte** doivent continuer de
+fonctionner comme avant, à un article.
+
+> Et les ventes **antérieures** : ouvrez une facture de la semaine dernière.
+> La migration 041 leur a donné leur ligne n° 1 ; elle doit s'imprimer
+> exactement comme avant.
+
+**5. Modifier une facture à plusieurs articles doit être refusé** — ses
+colonnes de marchandise sont un résumé, et les corriger les ferait diverger
+de ses lignes.
 
 ### c sexies. Télécharger une sauvegarde, et la remettre
 

@@ -598,6 +598,22 @@ tbody tr:hover td { background: #f3eedf; }
 
 /* Toujours 1 colonne sur mobile */
 .form-row, .form-row-3 { display: grid; grid-template-columns: 1fr; gap: 10px; margin-bottom: 10px; }
+/* Les articles d'une facture (migration 041).
+   Une ligne doit se voir comme un bloc : sans cadre, trois articles d'affilée
+   font une colonne de champs où l'on ne sait plus lequel appartient à quoi.
+   `--bg-muted` est la bande interne d'une carte, le troisième plan du § 3 —
+   pas de blanc ici, la modale est déjà blanche. */
+.vente-ligne { background: var(--bg-muted); border: 1px solid var(--border-light);
+               border-radius: var(--radius-md); padding: 10px 12px; margin-bottom: 8px; }
+.vente-ligne-tete { display: flex; align-items: center; justify-content: space-between;
+                    margin-bottom: 8px; }
+.vente-ligne-num  { font-size: 11px; font-weight: 700; letter-spacing: 1px;
+                    text-transform: uppercase; color: var(--text-tertiary); }
+.vente-ligne-suppr { background: none; border: 0; cursor: pointer; font-size: 15px;
+                     line-height: 1; padding: 2px 6px; border-radius: var(--radius-sm);
+                     color: var(--danger-text); }
+.vente-ligne-suppr:hover { background: var(--danger-bg); }
+
 .form-group  { display: flex; flex-direction: column; gap: 4px; }
 .form-label  { font-size: 12px; font-weight: 500; color: var(--text-secondary); }
 .form-hint   { font-size: 11px; color: var(--text-tertiary); }

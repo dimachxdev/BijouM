@@ -1386,30 +1386,132 @@ volatilisé parce qu'un champ manquait.
 En édition simple, la **description devient obligatoire** — elle remplace
 l'article, et c'est elle qui s'imprime sur la facture remise à la cliente.
 
-### Et en édition complète, la description ne se saisit pas
+### La description ne se saisit pas pour toute une facture
 
-Décidé le 2026-11-12. Le champ « Description » existait dans les deux
-éditions. En édition complète il était **une seconde vérité sur la même
-marchandise** : l'article en porte déjà le nom, et c'est ce nom qui doit
-s'imprimer. Le champ est donc masqué (`v-bloc-description`), par la même
-règle que les deux blocs — ils ne coexistent jamais.
+Décidé le 2026-11-12, puis **dépassé le même jour** par le multi-articles
+(§ 6 quater). Le champ « Description » de l'en-tête a d'abord été masqué en
+édition complète, puis **retiré** : depuis la migration 041, c'est chaque
+**ligne** qui porte sa description.
 
-**La description est relue sur l'article à l'enregistrement**, pas
-pré-remplie à la sélection. L'ancien `if (desc && !desc.value)` ne recopiait
-le nom que si le champ était vide : **changer d'article après coup laissait
-l'ancien nom**, pendant que carat, type et provenance suivaient le nouveau.
-La facture nommait alors un bijou que la cliente n'avait pas acheté. Le
-défaut se voyait tant que le champ était visible ; une fois masqué, plus
-personne ne l'aurait vu — d'où la réécriture plutôt que le simple masquage.
+Le raisonnement reste, et c'est lui qui compte : en édition complète la
+description **vient de l'article**, donc la saisir à côté serait une seconde
+vérité sur la même marchandise — et c'est elle qui s'imprimerait.
 
-Corollaire du même raisonnement : si l'article choisi **a disparu de
-l'inventaire** pendant que la fenêtre était ouverte (`refreshAll()` recharge
-`STATE` en continu), la vente est désormais refusée. Elle partait auparavant
-avec description, carat et type **vides**, et sans déduction de stock.
+**Elle est relue sur l'article à l'enregistrement**, pas pré-remplie à la
+sélection. L'ancien `if (desc && !desc.value)` ne recopiait le nom que si le
+champ était vide : **changer d'article après coup laissait l'ancien nom**,
+pendant que carat, type et provenance suivaient le nouveau. La facture
+nommait alors un bijou que la cliente n'avait pas acheté. Le défaut se voyait
+tant que le champ était visible ; une fois masqué, plus personne ne l'aurait
+vu — d'où la réécriture plutôt que le simple masquage.
 
-La fenêtre « Modifier une vente » garde son champ, et c'est voulu : c'est
-l'écran de correction, le seul endroit où rattraper le libellé d'une facture
-déjà remise.
+Corollaire du même raisonnement : si un article **a disparu de l'inventaire**
+pendant que la fenêtre était ouverte (`refreshAll()` recharge `STATE` en
+continu), la vente est refusée. Elle partait auparavant avec description,
+carat et type **vides**, et sans déduction de stock.
+
+---
+
+## 6 quater. Plusieurs articles sur une facture
+
+Demandé le 2026-11-12. Migrations 041 et 042.
+
+### Ce qui a décidé du modèle : où vit l'argent
+
+Les 26 colonnes de `ventes` se séparent en deux familles — **l'argent**
+(`montant`, `acompte`, `restant`, `paiement`, `compte_client_id`,
+`paye_par_compte`, `annulee`, `num_facture`) et **la marchandise**
+(`description`, `type_bijou`, `carat`, `poids`, `local`, `importe`).
+
+Une facture a **un** total, **un** acompte, **un** restant. Elle a
+**plusieurs** marchandises. La marchandise sort donc dans `vente_lignes` ;
+l'argent reste sur `ventes`.
+
+**La voie courte a été examinée et écartée : plusieurs lignes de `ventes`
+partageant un numéro de facture.** Elle éclate l'argent. Un acompte de
+200 000 F sur trois articles n'a aucune répartition naturelle,
+`enregistrer_paiement_vente()` vise **une** vente,
+`vente_sur_compte_epargne()` débite **une** vente, et le « restant dû » par
+ligne — qui sert de preuve de créance dans `supprimer_boutique()` — devient
+une fiction. C'est la voie la moins chère à écrire et la seule qui fausse les
+comptes. **Ne pas y revenir.**
+
+### Trois défauts fermés au passage
+
+- **`ventes` ne portait aucune référence d'article.** On déduisait le stock
+  et on ne savait plus, après coup, de quel article venait la vente.
+  `vente_lignes.stock_ref` le trace.
+- **Trois écritures que rien ne liait** : `prochain_id()`, puis
+  `deduireStock()`, puis l'upsert de la vente. Une panne au milieu laissait
+  du stock déduit sans vente ; avec trois articles, une facture à deux lignes
+  sur trois. Tout passe par `enregistrer_vente()`, donc une transaction.
+- **Un échec ne consomme plus de numéro** : `prochain_id()` est appelée dans
+  la transaction, et un rollback lui rend sa valeur. Deux postes simultanés
+  ne se marchent pas dessus pour autant — le `update compteurs` pose un
+  verrou de ligne.
+
+### Les règles à tenir
+
+- **Le total est la somme des lignes, calculée par le serveur.** Celui
+  qu'envoie le navigateur n'est pas lu. Le champ « Total » de l'écran est en
+  lecture seule, et **formaté** (`505 000 F`) : c'est le chiffre qu'on
+  annonce à la cliente. Du coup `calcRestant()` ne peut plus le relire —
+  `recalcTotalVente()` calcule le restant sur le nombre, jamais sur le texte.
+- **Une ligne peut être libre** (`stock_ref` à NULL) : gravure, frais de
+  façon, bijou hors inventaire. Elle exige alors une description.
+- **Pour une ligne d'inventaire, type, carat et provenance sont pris SUR
+  L'ARTICLE**, jamais sur ce qu'envoie le navigateur. Même règle que
+  `vente_sur_compte_epargne()`, qui prend le `client_id` sur le compte : une
+  identité qui se propage ne se re-saisit pas.
+- **La disponibilité du stock se vérifie AGRÉGÉE PAR ARTICLE.** Deux lignes
+  de 6 g sur un article qui n'en a que 10 passent chacune un contrôle fait
+  ligne par ligne. C'est le piège propre au multi-articles, et il est
+  présent côté serveur comme à l'écran, où chaque ligne affiche « Reste …
+  — autres lignes comprises ». L'écran recalcule **toutes** les lignes à
+  chaque frappe : ne refresher que celle qu'on touche laissait la première
+  afficher « Reste 6 g » pendant que la seconde en prenait 4.
+- **La déduction du stock met la disponibilité dans le `where`** du
+  `update`, pas dans un `if` au-dessus : la vérification et l'écriture sont
+  alors le même geste, et rien ne peut se glisser entre les deux.
+
+### `ventes` garde un résumé, et ce n'est pas une seconde vérité
+
+Environ 75 lectures dans `js/` dépendent de `v.carat`, `v.poids`,
+`v.description` — journal, tableau de bord, export, portail cliente. Les
+basculer toutes d'un coup serait la meilleure façon de casser un écran sans
+s'en apercevoir. Les colonnes de marchandise de `ventes` deviennent donc un
+**résumé calculé depuis les lignes** : même statut que `restant = montant -
+acompte`, déjà stocké. Jamais saisi, toujours écrit par
+**`app.vente_resumer()`**, qui est le seul endroit où ce calcul existe.
+
+**Le carat du résumé est celui de la ligne la plus lourde PARMI CELLES QUI EN
+PORTENT UN** (migration 042). La règle « la plus lourde », seule, oubliait le
+cas le plus banal de cette boutique : toutes les lignes n'ont pas de carat.
+Mesuré sur les données réelles — `STK-0001` (« bracelet », ndiakhass) n'en a
+pas, `STK-0002` (« bague ») est en 18k. Une facture de 5 g de bracelet et 3 g
+de bague se résumait en `carat = NULL` et **sortait entièrement** du
+graphique de répartition, alors qu'elle contient 3 g d'or 18 k.
+
+**À faire le jour où la fenêtre « Modifier une vente » passera par une
+fonction** : retirer ces colonnes du `grant update` d'`authenticated`, comme
+la 027 l'a fait pour `plan` et `actif`. Les verrouiller aujourd'hui
+casserait le seul écran de correction. En attendant, cette fenêtre
+**refuse** une facture à plusieurs articles : y modifier le résumé le ferait
+diverger de ses lignes, et la prochaine écriture serveur écraserait la
+correction sans rien dire.
+
+### Ce qui n'est PAS fait
+
+- **La vente réglée sur l'épargne reste à un article.**
+  `enregistrer_vente()` refuse `paiement = 'compte'`, et l'écran refuse
+  l'épargne dès la deuxième ligne. Un refus clair vaut mieux qu'une facture
+  dont deux articles sur trois auraient disparu.
+- **Journal, tableau de bord, export CSV et portail cliente lisent encore le
+  résumé**, pas les lignes. C'est voulu, et c'est exactement ce que le résumé
+  sert à rendre possible.
+- `restituerStock()` **n'a aucun appelant** — vérifié le 2026-11-12. Annuler
+  une vente ne rend donc pas son or au stock, et ce n'était déjà pas le cas
+  avant le multi-articles. À traiter à part.
 
 ---
 

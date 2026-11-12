@@ -173,13 +173,16 @@ async function chargerDonnees() {
       _supa.select('bijoux_arrhes'),
       _supa.select('mouvements_arrhes'),
       _supa.select('connexions',      'order=id.desc&limit=100'),
-      _supa.select('compteurs')
+      _supa.select('compteurs'),
+      // La marchandise d'une facture, une ligne par article (migration 041).
+      // En lecture seule : seule `enregistrer_vente()` y écrit.
+      _supa.select('vente_lignes',    'order=vente_id.asc,ligne.asc')
     ]);
 
     var clients=res[0], ventes=res[1], stock=res[2],
         sorties=res[3], decaissements=res[4], comptes=res[5], mouvements=res[6],
         reprises=res[7], arrhes=res[8], mvtArrhes=res[9], connexions=res[10],
-        compteurs=res[11];
+        compteurs=res[11], venteLignes=res[12];
 
     // Injecter mouvements dans comptes
     comptes.forEach(function(cc) {
@@ -199,8 +202,17 @@ async function chargerDonnees() {
     compteurs.forEach(function(c){ countersObj[c.cle] = c.valeur; });
 
     // Mettre STATE à jour
+    // Les lignes rejoignent leur vente, comme les mouvements rejoignent leur
+    // compte juste au-dessus. Regroupées en une passe : une recherche par
+    // vente ferait N parcours du tableau sur une liste qui grossit chaque jour.
+    var lignesParVente = {};
+    (venteLignes || []).forEach(function (l) {
+      (lignesParVente[l.vente_id] = lignesParVente[l.vente_id] || []).push(mapVenteLigne(l));
+    });
+
     STATE.clients        = clients;
     STATE.ventes         = ventes.map(mapVente);
+    STATE.ventes.forEach(function (v) { v.lignes = lignesParVente[v.id] || []; });
     STATE.stock          = stock.map(mapStock);
     STATE.sorties        = sorties.map(mapSortie);
     STATE.decaissements  = decaissements.map(mapDecaiss);
@@ -560,7 +572,15 @@ function applyChange(arr, event, item, oldId, key) {
     if(i>=0) arr.splice(i,1);
   } else {
     var j=arr.findIndex(function(x){return x[key]===item[key];});
-    if(j>=0) arr[j]=item; else arr.unshift(item);
+    if(j>=0) {
+      // Les lignes d'une facture n'arrivent pas par ce canal : `vente_lignes`
+      // n'est pas écoutée, et `mapVente()` ne les porte pas. Les laisser
+      // tomber ferait réimprimer la facture d'une vente à trois articles sur
+      // une seule ligne — la ligne du résumé. On les reprend donc de l'objet
+      // qu'on remplace, et `chargerDonnees()` les rafraîchira pour de bon.
+      if (arr[j].lignes && !item.lignes) item.lignes = arr[j].lignes;
+      arr[j]=item;
+    } else arr.unshift(item);
   }
 }
 
@@ -576,6 +596,12 @@ function mapVente(v) {
     noteComplement:v.note_complement,
     annulee:v.annulee===true, annuleeLe:v.annulee_le, annuleeMotif:v.annulee_motif,
     payeParCompte:v.paye_par_compte||0, creePar:v.created_by||null };
+}
+function mapVenteLigne(l) {
+  return { ligne:l.ligne, stockRef:l.stock_ref||null, description:l.description||'',
+    typeBijou:l.type_bijou||null, carat:l.carat||null,
+    poids:l.poids||0, local:l.local||0, importe:l.importe||0,
+    nbArticles:l.nb_articles||0, montant:l.montant||0 };
 }
 function mapStock(s) {
   return { ref:s.ref, nom:s.nom, typeBijou:s.type_bijou, carat:s.carat,
@@ -1065,6 +1091,35 @@ async function _erreurRpc(r, prefixe) {
  * serveur. Les enchaîner depuis le navigateur laissait passer le retrait
  * quand la vente échouait — une cliente y a perdu 40 000 F d'épargne.
  */
+/**
+ * Enregistrer une vente — la vente, ses lignes et la déduction du stock en
+ * UNE transaction (migration 041).
+ *
+ * Avant, le navigateur enchaînait `prochainsIdsVente()`, puis une déduction
+ * de stock par article, puis l'upsert de la vente : trois allers-retours que
+ * rien ne liait. Une panne au milieu laissait du stock déduit sans vente.
+ * Avec plusieurs articles, ce serait une vente à deux lignes sur trois.
+ *
+ * Les numéros ne sont plus demandés ici : le serveur les réserve DANS la
+ * transaction, donc un échec ne consomme plus de numéro.
+ */
+async function enregistrerVenteServeur(vente, lignes) {
+  return Verrou.requete('enregistrement de la vente', async function () {
+    var r = await fetch(SUPABASE_URL + '/rest/v1/rpc/enregistrer_vente', {
+      method: 'POST', headers: H(),
+      body: JSON.stringify({
+        p_cle:    Verrou.cleCourante(),
+        p_vente:  vente,
+        p_lignes: lignes
+      })
+    });
+    if (!r.ok) throw await _erreurRpc(r, 'Vente refusée');
+    var d = await r.json();
+    if (d && d.ok === false) throw new Error(d.erreur || 'Vente refusée.');
+    return d;
+  });
+}
+
 async function venteSurCompteEpargne(p) {
  return Verrou.requete('vente sur épargne', async function () {
   var r = await fetch(SUPABASE_URL + '/rest/v1/rpc/vente_sur_compte_epargne', {
