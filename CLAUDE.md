@@ -1320,7 +1320,7 @@ lire la table — corrigé par la 036.
 
 ---
 
-## 6 ter. Deux éditions : avec ou sans stock
+## 6 ter. Trois formes de l'outil : avec stock pesé, compté, ou sans stock
 
 Demandé le 2026-11-04, pour les boutiques d'essai : « le plus simple de
 facturer sans gestion de stock derrière », tout le volet argent restant
@@ -1385,6 +1385,55 @@ volatilisé parce qu'un champ manquait.
 
 En édition simple, la **description devient obligatoire** — elle remplace
 l'article, et c'est elle qui s'imprime sur la facture remise à la cliente.
+
+### Un stock qui se compte en pièces (migration 044)
+
+Demandé le 2026-11-12. Trois formes, **deux colonnes** :
+
+| | `gestion_stock` | `stock_par_poids` |
+|---|---|---|
+| Complète | `true` | `true` |
+| **Articles** | `true` | `false` |
+| Simple | `false` | *sans objet* |
+
+**Deux colonnes et non un enum, et c'est un choix.** « Y a-t-il un
+inventaire ? » et « cet inventaire pèse-t-il ? » sont deux questions, pas une
+valeur à trois états. En changer le type aurait rouvert d'un coup les quatre
+points de bascule de `gestion_stock`. La contrepartie — une quatrième
+combinaison qui ne veut rien dire — est neutralisée par une règle écrite :
+**`stock_par_poids` n'est jamais lue quand `gestion_stock` est faux**, et
+`suitLesPoids()` le dit en une ligne (`if (!gereLeStock()) return true`).
+
+Pas de contrainte `CHECK` pour l'interdire : elle obligerait à remettre
+`stock_par_poids` à `true` en basculant en mode simple, donc à **perdre le
+réglage** d'une boutique qui repasserait ensuite en mode complet.
+
+**On refuse un poids, on ne l'ignore pas.** `enregistrer_vente()` rejette une
+ligne qui en porte dans ce mode. L'ignorer aurait écrit une facture où la
+cliente lit « 7,5 g » pendant que l'inventaire n'en sait rien — l'écart qu'on
+ne remarque qu'à l'inventaire annuel.
+
+**Ce que la bascule fige.** Rien n'est effacé, mais plus aucune vente ne
+diminue `stock.poids_total_g` : les poids **restent à leur dernière valeur**.
+Une boutique revenue au mode complet retrouverait des grammes datant du jour
+de la bascule. C'est une conséquence du mode, pas un défaut.
+
+**Le défaut que seul l'essai montre** : `peuplerStockSelect()` filtrait sur le
+seul poids (`poidsTotalG > 0`). En mode pièces aucun article n'en a — **la
+liste était vide et le mode entier inutilisable**. Le filtre avait l'air
+juste ; il mesurait simplement la mauvaise grandeur. Il porte désormais sur
+`qty` dans ce mode, et le libellé des options cesse d'afficher des grammes.
+
+**La colonne Poids de la facture disparaît quand aucune ligne ne pèse** — la
+condition porte sur les **lignes**, jamais sur le mode : une facture ancienne
+imprimée après une bascule garde les poids qu'elle portait vraiment. Les
+largeurs de colonnes sont posées par rang (`nth-child`), donc en retirer une
+les décale toutes : d'où la classe `.sans-poids` et son second jeu de
+largeurs, sans quoi le Montant tombait à 14 %.
+
+Un détail non tranché : le pied de facture promet encore « Poids et titres
+garantis » même sur une facture sans poids. C'est du texte de conditions —
+à décider par la boutique, pas par le code.
 
 ### La description ne se saisit pas pour toute une facture
 

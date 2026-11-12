@@ -268,7 +268,13 @@
     // La valeur en base fait foi. Le plan ne la décide pas : il la SUGGÈRE
     // seulement à la création — une boutique d'essai qui paie ne doit pas
     // voir la forme de son produit changer sous ses doigts (migration 038).
-    $('e-gestion-stock').value = (b.gestion_stock === false) ? 'non' : 'oui';
+    // Trois modes, deux colonnes (migration 044) : `stock_par_poids` ne veut
+    // rien dire sans inventaire, donc elle n'est lue que si `gestion_stock`
+    // est vrai.
+    $('e-gestion-stock').value =
+        (b.gestion_stock === false)   ? 'aucun'
+      : (b.stock_par_poids === false) ? 'articles'
+                                      : 'complet';
     $('e-edition-avis').textContent = '';
 
     $('e-titre').textContent = '« ' + (b.nom || '') + ' »';
@@ -568,21 +574,30 @@
   }
 
   /**
-   * Basculer une boutique entre l'édition complète et l'édition simple.
+   * Basculer une boutique entre les trois formes de l'outil.
    *
    * Rien n'est effacé : la fonction serveur rend le nombre d'articles qui
    * restent en base, et on l'affiche. Un opérateur qui croirait effacer en
    * basculant prendrait la décision inverse.
+   *
+   * Le libellé affiché vient de `r`, pas du choix fait ici : c'est la base
+   * qui dit ce qu'elle a retenu. En mode simple elle garde `stock_par_poids`
+   * tel quel, donc l'écran doit rendre sa valeur, pas celle qu'on a envoyée.
    */
   async function appliquerEdition() {
-    var id = $('e-id').value;
-    var actif = $('e-gestion-stock').value === 'oui';
-    var r = await rpc('basculer_gestion_stock', { p_org_id: id, p_actif: actif });
+    var id    = $('e-id').value;
+    var mode  = $('e-gestion-stock').value;
+    var actif = mode !== 'aucun';
+    var r = await rpc('basculer_gestion_stock', {
+      p_org_id: id, p_actif: actif, p_par_poids: mode !== 'articles'
+    });
     if (!r || r.ok === false) throw new Error(r && r.erreur ? r.erreur : 'Refus du serveur.');
     $('e-edition-avis').textContent = r.avis || '';
     await rafraichir();
     message('✓ « ' + r.boutique + ' » : '
-          + (actif ? 'édition complète.' : 'édition simple.'));
+          + (!r.gestion_stock           ? 'édition simple, sans stock.'
+           : r.stock_par_poids === false ? 'stock compté en pièces seulement.'
+                                         : 'stock suivi en grammes et en pièces.'));
   }
 
   // ------------------------------------------------- sauvegardes et structure

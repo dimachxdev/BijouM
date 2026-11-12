@@ -20,7 +20,7 @@
  * qui « peut tout faire » alors que les droits sont restreints, c'est presque
  * toujours ça.
  */
-const APP_VERSION = '2026-11-12-articles-inventaire';
+const APP_VERSION = '2026-11-12-stock-articles';
 
 /**
  * Domaine de la vitrine publique, pour le QR imprime sur les factures.
@@ -296,6 +296,30 @@ function geste(nom, fn) {
 function gereLeStock() {
   var b = (typeof Auth !== 'undefined' && Auth.connecte()) ? Auth.boutique() : null;
   return !b || b.gestion_stock !== false;
+}
+
+/**
+ * Cet inventaire se pèse-t-il, ou se compte-t-il seulement en pièces ?
+ *
+ * Migration 044. C'est une SECONDE question, pas une troisième valeur de la
+ * première : « y a-t-il un inventaire ? » et « cet inventaire pèse-t-il ? »
+ * ne se répondent pas ensemble, et les fondre dans un seul drapeau à trois
+ * états aurait rouvert d'un coup les quatre points de bascule de
+ * `gereLeStock()`.
+ *
+ * Elle ne veut rien dire sans inventaire : en édition simple le poids reste
+ * saisissable, parce qu'il s'imprime sur la facture et qu'aucun stock ne le
+ * contredit. D'où le `gereLeStock() &&` — sans lui, une boutique sans stock
+ * perdrait ses grammes pour un réglage qui ne la concerne pas.
+ *
+ * Défaut `true`, comme sa voisine et pour la même raison : une colonne qu'on
+ * n'aurait pas lue ne doit pas faire croire à une bijoutière que son suivi
+ * du poids a disparu.
+ */
+function suitLesPoids() {
+  if (!gereLeStock()) return true;
+  var b = (typeof Auth !== 'undefined' && Auth.connecte()) ? Auth.boutique() : null;
+  return !b || b.stock_par_poids !== false;
 }
 
 function peutAcceder(section) {
@@ -1154,7 +1178,7 @@ document.getElementById('fab')?.addEventListener('click', function () {
 // ============================================
 function openModal(id) {
   if(id==='modal-nouvelle-vente')   prepNouvelleVente();
-  if(id==='modal-add-produit') { peuplerTypeBijou('p-type-bijou'); var orf2=document.getElementById('p-or-fields');if(orf2)orf2.style.display='none'; var sf2=document.getElementById('p-poids-simple');if(sf2)sf2.style.display='none'; STATE.counters.stk++; var refEl=document.getElementById('p-ref');if(refEl)refEl.value='ART-'+String(STATE.counters.stk).padStart(4,'0'); }
+  if(id==='modal-add-produit') { peuplerTypeBijou('p-type-bijou'); var orf2=document.getElementById('p-or-fields');if(orf2)orf2.style.display='none'; var sf2=document.getElementById('p-poids-simple');if(sf2)sf2.style.display='none'; majChampsPoids(['p-poids','p-poids-s']); STATE.counters.stk++; var refEl=document.getElementById('p-ref');if(refEl)refEl.value='ART-'+String(STATE.counters.stk).padStart(4,'0'); }
   if(id==='modal-add-sortie')       prepSortie();
   if(id==='modal-add-achat-client') { peuplerClientSelect('ac-client'); peuplerTypeBijou('ac-type-bijou'); document.getElementById('ac-date').value=today(); var orf=document.getElementById('ac-or-fields');if(orf)orf.style.display='none'; var sf=document.getElementById('ac-poids-simple');if(sf)sf.style.display='none'; }
   if(id==='modal-add-decaiss')      { prepDecaiss(); }
@@ -1662,7 +1686,8 @@ function ajouterLigneVente() {
     showToast('Cinquante articles au maximum sur une facture.'); return;
   }
   var n = ++_ligneSeq;
-  var stockGere = gereLeStock();
+  var stockGere  = gereLeStock();
+  var poidsSuivi = suitLesPoids();
   var p = 'v-l' + n + '-';
 
   var div = document.createElement('div');
@@ -1701,10 +1726,18 @@ function ajouterLigneVente() {
           +       '<option value="local">Or local</option>'
           +       '<option value="importe">Or importé</option></select></div></div>'
           + '</div>')
-    + '<div class="form-row-3" style="margin-bottom:0">'
-    +   '<div class="form-group"><label class="form-label">Poids (g)</label>'
-    +     '<input class="form-input" type="number" step="0.01" min="0" placeholder="0,00" id="' + p + 'poids" /></div>'
-    +   '<div class="form-group"><label class="form-label">Nb articles</label>'
+    // Le poids disparaît quand la boutique compte son stock en pièces
+    // (migration 044). Il reste dans le DOM, en `hidden` et à zéro : les
+    // lecteurs de la ligne — `lireLignesVente()`, `majDisposLignes()` — le
+    // trouvent alors sans une condition de plus chez chacun d'eux. Le
+    // serveur REFUSE un poids dans ce mode, donc il doit valoir zéro.
+    + '<div class="' + (poidsSuivi ? 'form-row-3' : 'form-row') + '" style="margin-bottom:0">'
+    +   (poidsSuivi
+        ? '<div class="form-group"><label class="form-label">Poids (g)</label>'
+          + '<input class="form-input" type="number" step="0.01" min="0" placeholder="0,00" id="' + p + 'poids" /></div>'
+        : '<input type="hidden" id="' + p + 'poids" value="0" />')
+    +   '<div class="form-group"><label class="form-label">Nb articles'
+    +     (poidsSuivi ? '' : ' *') + '</label>'
     +     '<input class="form-input" type="number" min="0" placeholder="0" id="' + p + 'nb" /></div>'
     +   '<div class="form-group"><label class="form-label">Montant (F) *</label>'
     +     '<input class="form-input" type="number" min="0" placeholder="0" id="' + p + 'montant" /></div>'
@@ -1796,9 +1829,14 @@ function majDisposLignes() {
                - (parseFloat(document.getElementById('v-l' + m + '-poids').value) || 0);
     var resteA = (s.qty || 0) - autres.nb
                - (parseInt(document.getElementById('v-l' + m + '-nb').value) || 0);
-    hint.textContent = 'Reste ' + resteP.toFixed(2) + ' g / ' + resteA + ' article(s)'
-      + ((autres.poids || autres.nb) ? ' — autres lignes comprises' : '');
-    hint.style.color = (resteP < 0 || resteA < 0) ? 'var(--danger-text)' : '';
+    // Une boutique qui compte en pièces ne doit pas lire de grammes : le
+    // chiffre existe encore en base mais ne bouge plus, donc l'afficher
+    // serait montrer une disponibilité qui ne veut plus rien dire.
+    hint.textContent = (suitLesPoids() ? 'Reste ' + resteP.toFixed(2) + ' g / ' + resteA
+                                       : 'Reste ' + resteA)
+      + ' article(s)' + ((autres.poids || autres.nb) ? ' — autres lignes comprises' : '');
+    hint.style.color = ((suitLesPoids() && resteP < 0) || resteA < 0)
+      ? 'var(--danger-text)' : '';
   });
 }
 
@@ -2487,7 +2525,15 @@ async function _ajouterProduit(){
   var qty=parseInt(document.getElementById('p-qty')&&document.getElementById('p-qty').value)||1;
   var seuil=parseFloat(document.getElementById('p-seuil')&&document.getElementById('p-seuil').value)||50;
   var ref=''; var prix=0; var type=hasOrP?prov:(typeBijouP||'autre');
-  if(!nom||!typeBijouP||poids<=0){showToast('Designation, type de bijou et poids sont obligatoires.');return;}
+  // Le poids n'est obligatoire que là où l'inventaire se pèse. En mode
+  // « articles » c'est le NOMBRE qui le remplace : exiger un poids y
+  // rendrait l'ajout d'un article impossible, et l'accepter à zéro sans
+  // exiger de quantité ferait entrer en stock un article qui n'existe en
+  // aucune unité.
+  var poidsSuivi = suitLesPoids();
+  if(!nom||!typeBijouP){showToast('Designation et type de bijou sont obligatoires.');return;}
+  if(poidsSuivi && poids<=0){showToast('Le poids est obligatoire.');return;}
+  if(!poidsSuivi && qty<=0){showToast('Indiquez le nombre d\'articles.');return;}
 
   // La reference vient du SERVEUR. Elle sortait de `STATE.counters.stk`, un
   // compteur local — exactement ce que « La numerotation vient du serveur »
@@ -2495,7 +2541,7 @@ async function _ajouterProduit(){
   // article en meme temps fabriquaient le meme STK-0004, et l'upsert ecrasait
   // le premier article par le second.
   if(!Verrou.confirmerRepetition('article',
-      nom+' · '+typeBijouP+' · '+poids+' g · '+qty+' art')) return;
+      nom+' · '+typeBijouP+(poidsSuivi?' · '+poids+' g':'')+' · '+qty+' art')) return;
 
   ref = await prochainId('stk','STK',4);
 
@@ -2554,6 +2600,10 @@ function prepSortie(){
   ['s-type-bijou','s-carat','s-provenance'].forEach(function(id){
     var el=document.getElementById(id); if(el) el.value='';
   });
+  // Une sortie se compte en pièces quand l'inventaire se compte en pièces
+  // (migration 044) : laisser le champ de poids ferait retirer des grammes
+  // d'un stock que plus aucune vente ne diminue.
+  majChampsPoids(['s-poids']);
 }
 
 function onChangeSortieType(){
@@ -3959,6 +4009,29 @@ function _getFieldIds(prefix) {
   return m[prefix] || m['v'];
 }
 
+/**
+ * Les champs de poids des écrans de stock, quand la boutique compte en pièces.
+ *
+ * On masque le GROUPE parent, pas le champ : son libellé « Poids global (g) * »
+ * resterait sinon seul au-dessus du vide. Et on vide la valeur — un poids
+ * saisi avant une bascule, puis simplement masqué, partirait quand même en
+ * base et fausserait un inventaire que plus rien ne met à jour.
+ *
+ * Une seule fonction pour les trois écrans : recopiée chez chacun, elle
+ * aurait fini par manquer au quatrième — c'est le motif de `deduireStock()`
+ * au § 6 ter.
+ */
+function majChampsPoids(ids) {
+  var suivi = suitLesPoids();
+  ids.forEach(function (id) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    if (!suivi) el.value = '';
+    var grp = el.closest('.form-group');
+    if (grp) grp.style.display = suivi ? '' : 'none';
+  });
+}
+
 function onChangeTypeBijou(prefix) {
   var ids = _getFieldIds(prefix);
   var typeEl = document.getElementById(ids.type);
@@ -4007,6 +4080,15 @@ function onChangeTypeBijou(prefix) {
       var provEl2 = document.getElementById(ids.prov);
       if (provEl2) provEl2.disabled = false;
     }
+  }
+
+  // APRÈS les bascules ci-dessus, jamais avant : elles viennent de poser un
+  // `display:block` sur le bloc de poids simple, qu'il faut pouvoir
+  // recouvrir. L'ordre inverse laissait le champ réapparaître.
+  if (prefix === 'p') {
+    majChampsPoids(['p-poids', 'p-poids-s']);
+    var blocSimple = document.getElementById('p-poids-simple');
+    if (blocSimple && !suitLesPoids()) blocSimple.style.display = 'none';
   }
 }
 
@@ -4187,8 +4269,19 @@ function peuplerStockSelect(selId, filtreDispoMin) {
   var curVal = sel.value;
   sel.innerHTML = '<option value="">— Choisir un article en stock —</option>';
   var minPoids = filtreDispoMin || 0;
+  // CE QUI REND UN ARTICLE DISPONIBLE DÉPEND DE L'UNITÉ DE L'INVENTAIRE.
+  //
+  // Le filtre portait sur le seul poids. Dans une boutique qui compte en
+  // pièces (migration 044), aucun article n'en a — donc la liste était
+  // VIDE, et le mode entier inutilisable. Trouvé en l'essayant, pas en le
+  // relisant : le filtre avait l'air juste, il mesurait simplement la
+  // mauvaise grandeur.
+  var poidsSuivi = suitLesPoids();
   STATE.stock
-    .filter(function(s){ return (s.poidsTotalG||0) > minPoids; })
+    .filter(function(s){
+      return poidsSuivi ? (s.poidsTotalG||0) > minPoids
+                        : (s.qty||0) > 0;
+    })
     .sort(function(a,b){ return (a.nom||'').localeCompare(b.nom||''); })
     .forEach(function(s) {
       var o = document.createElement('option');
@@ -4197,8 +4290,8 @@ function peuplerStockSelect(selId, filtreDispoMin) {
       var label = s.nom
         + ' — ' + (typeLbl?typeLbl.label:(s.typeBijou||''))
         + (s.carat?' '+s.carat.toUpperCase():'')
-        + ' — ' + (s.poidsTotalG||0).toFixed(2)+'g'
-        + ' / ' + (s.qty||0)+' art.';
+        + ' — ' + (poidsSuivi ? (s.poidsTotalG||0).toFixed(2)+'g / ' : '')
+        + (s.qty||0)+' art.';
       o.textContent = label;
       if(s.ref === curVal) o.selected = true;
       sel.appendChild(o);
@@ -5050,6 +5143,12 @@ const FACTURE_CSS = `
 .facture-table th:nth-child(2){width:24%}
 .facture-table th:nth-child(3){width:14%}
 .facture-table th:nth-child(4){width:20%}
+/* Sans la colonne Poids, le Montant tomberait a 14% — trop etroit pour
+   « 505 000 F ». Les largeurs sont posees par rang, donc retirer une
+   colonne les decale toutes : il faut un second jeu, pas un ajustement. */
+.facture-table.sans-poids th:nth-child(1){width:50%}
+.facture-table.sans-poids th:nth-child(2){width:24%}
+.facture-table.sans-poids th:nth-child(3){width:26%}
 /* Seuls les nombres restent insécables. Le libellé de carat, lui, doit
    pouvoir se replier : « 18 carats - Local (750/1000) » tenu d'une pièce
    poussait tout le tableau hors de l'écran.
@@ -5088,6 +5187,9 @@ const FACTURE_CSS = `
   .facture-table th:nth-child(2){width:25%}
   .facture-table th:nth-child(3){width:16%}
   .facture-table th:nth-child(4){width:23%}
+  .facture-table.sans-poids th:nth-child(1){width:45%}
+  .facture-table.sans-poids th:nth-child(2){width:25%}
+  .facture-table.sans-poids th:nth-child(3){width:30%}
   .facture-totaux{align-items:stretch}
   .facture-total-row{width:100%}
 }
@@ -5163,12 +5265,22 @@ function afficherFacture(id) {
   // garantie qu'ils divergeront (§ 3).
   const lignesFac = lignesFacture(v);
   const poidsTotalFac = lignesFac.reduce(function(s,l){ return s+(parseFloat(l.poids)||0); }, 0);
+  // LA COLONNE POIDS NE S'IMPRIME QUE SI QUELQUE CHOSE PÈSE.
+  //
+  // Une boutique qui compte son stock en pièces (migration 044) ne saisit
+  // aucun gramme : la colonne serait une file de tirets sur le document que
+  // la cliente emporte. La condition porte sur les LIGNES, pas sur le mode
+  // de la boutique — ainsi une facture ancienne, imprimée après une
+  // bascule, garde les poids qu'elle portait vraiment.
+  const avecPoids = poidsTotalFac > 0;
   const corpsFacture = lignesFac.map(function(l){
     const pl = parseFloat(l.poids)||0;
     return '<tr>'
       + '<td>'+esc(l.description||'')+'</td>'
       + '<td>'+esc(caratFacture(l.carat))+'</td>'
-      + '<td class="fa-nowrap" style="text-align:center">'+(pl>0?fmtG(pl):'—')+'</td>'
+      + (avecPoids
+          ? '<td class="fa-nowrap" style="text-align:center">'+(pl>0?fmtG(pl):'—')+'</td>'
+          : '')
       + '<td class="fa-nowrap" style="text-align:right;font-weight:600">'+fmt(l.montant||0)+'</td>'
       + '</tr>';
   }).join('');
@@ -5213,12 +5325,12 @@ function afficherFacture(id) {
       ? `<span class="facture-client-info">${esc([cl.tel, cl.email, cl.adresse].filter(Boolean).join(' · '))}</span>`
       : ''}
   </div>
-  <table class="facture-table">
-    <thead><tr><th>Description</th><th>Carat</th><th style="text-align:center">Poids</th><th style="text-align:right">Montant</th></tr></thead>
+  <table class="facture-table ${avecPoids?'':'sans-poids'}">
+    <thead><tr><th>Description</th><th>Carat</th>${avecPoids?'<th style="text-align:center">Poids</th>':''}<th style="text-align:right">Montant</th></tr></thead>
     <tbody>${corpsFacture}</tbody>
     ${lignesFac.length > 1 ? `<tfoot><tr>
         <td colspan="2" style="font-weight:600">${lignesFac.length} articles</td>
-        <td class="fa-nowrap" style="text-align:center;font-weight:600">${poidsTotalFac>0?fmtG(poidsTotalFac):'—'}</td>
+        ${avecPoids?`<td class="fa-nowrap" style="text-align:center;font-weight:600">${fmtG(poidsTotalFac)}</td>`:''}
         <td class="fa-nowrap" style="text-align:right;font-weight:700">${fmt(v.montant)}</td>
       </tr></tfoot>` : ''}
   </table>

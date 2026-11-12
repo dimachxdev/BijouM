@@ -90,15 +90,16 @@ déjà `migrations/`, les `*.md`, `config_backup.json` et `.claude/`.
 
 Repères de version, pour vérifier que le déploiement a bien pris :
 
-- `index.html` : `?v=2026-11-12c`
-- `APP_VERSION` : `2026-11-12-articles-inventaire`
-- `operateur.html` et `client.html` : `?v=2026-11-04b`
+- `index.html` et `operateur.html` : `?v=2026-11-12d`
+- `APP_VERSION` : `2026-11-12-stock-articles`
+- `client.html` : `?v=2026-11-04b`
 - `boutique.html` : `?v=2026-11-02a`
 
 > **Les empreintes ne sont pas toutes identiques, et ce n'est pas un oubli** :
-> chacune suit les fichiers que sa page charge. Seuls `index.html` et
-> `js/app.js` ont changé le 2026-11-12 ; `operateur.js`, `client.js`,
-> `boutique.js` et `qr.js` sont restés tels quels. Ce qui doit être juste,
+> chacune suit les fichiers que sa page charge. Le 2026-11-12 ont changé
+> `index.html`, `js/app.js`, `js/auth.js`, `js/supabase.js`, `css/style.css`,
+> `operateur.html` et `js/operateur.js` ; `client.js`, `boutique.js` et
+> `qr.js` sont restés tels quels. Ce qui doit être juste,
 > c'est qu'une page qui charge un fichier modifié porte une empreinte neuve.
 
 ---
@@ -106,7 +107,7 @@ Repères de version, pour vérifier que le déploiement a bien pris :
 ## 3. Juste après le déploiement
 
 **Rechargez avec Ctrl + Maj + R**, puis regardez la version sous l'écran de
-connexion. Tant qu'elle n'affiche pas `2026-11-12-articles-inventaire`, rien de ce
+connexion. Tant qu'elle n'affiche pas `2026-11-12-stock-articles`, rien de ce
 qui suit n'a de sens : c'est le cache, pas un bug. C'est la première chose à
 vérifier devant tout comportement incohérent.
 
@@ -302,6 +303,34 @@ fonctionner comme avant, à un article.
 **5. Modifier une facture à plusieurs articles doit être refusé** — ses
 colonnes de marchandise sont un résumé, et les corriger les ferait diverger
 de ses lignes.
+
+### c nonies. Le stock compté en pièces
+
+Migration **044 appliquée et vérifiée**. Console opérateur → une boutique →
+**Édition** → « Articles — comptage en pièces seulement » → Appliquer, puis
+reconnectez-vous dans cette boutique (le réglage est lu à la connexion).
+
+> Attendu, et **c'est l'essai qui compte** : la liste des articles d'une
+> nouvelle vente **n'est pas vide**. Le filtre portait sur le seul poids, et
+> dans ce mode aucun article n'en a — la liste l'était, et le mode entier
+> était inutilisable. Le défaut ne se voyait pas en relisant le filtre, qui
+> avait l'air juste.
+>
+> Puis : plus aucun champ « Poids » — ni sur la ligne de vente, ni sur la
+> fiche article, ni sur une sortie de stock. La disponibilité se lit
+> « Reste N article(s) », et passe en rouge si on dépasse la quantité.
+>
+> La facture imprimée n'a **que trois colonnes** : Description, Carat,
+> Montant. Vérifiez la largeur du Montant — les largeurs sont posées par
+> rang, donc retirer une colonne les décale toutes.
+
+**La contre-épreuve** : ouvrez une facture **antérieure** à la bascule, qui
+portait de vrais poids. Sa colonne Poids doit **revenir**. La condition porte
+sur les lignes, pas sur le mode de la boutique.
+
+**Et le droit** : sous l'identité d'une propriétaire, `stock_par_poids` doit
+être refusé à l'écriture directe **et** son adresse doit toujours passer —
+sans ce second essai, le premier ne prouve rien.
 
 ### c sexies. Télécharger une sauvegarde, et la remettre
 

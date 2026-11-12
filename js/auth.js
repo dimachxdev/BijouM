@@ -286,7 +286,12 @@ console.log('KAYOR · auth.js', '2026-10-21b');
             + 'organisations(slug,nom,plan,actif,expire_le,devise,'
             + 'slogan,adresse,telephone,ninea,rccm,pied_facture,logo,'
             + 'presentation,repere,maps_url,horaires,whatsapp,email,'
-            + 'instagram,facebook,tiktok,site_web,couverture,lat,lng,gestion_stock)'
+            + 'instagram,facebook,tiktok,site_web,couverture,lat,lng,'
+            // `stock_par_poids` : l'inventaire se compte-t-il en grammes ou
+            // seulement en pieces (migration 044) ? Oublier une colonne ici
+            // la fait disparaitre de l'ecran sans rien signaler — c'est deja
+            // arrive, d'ou le commentaire ci-dessus.
+            + 'gestion_stock,stock_par_poids)'
             + '&user_id=eq.' + encodeURIComponent(uid)
             + '&actif=eq.true&limit=1';
 

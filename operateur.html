@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Console opérateur — Gestion Bijouterie</title>
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml" />
-  <link rel="stylesheet" href="css/style.css?v=2026-11-04b" />
+  <link rel="stylesheet" href="css/style.css?v=2026-11-12d" />
   <style>
     /* La console vit hors de l'application boutique : pas de sidebar. */
     .op-wrap { max-width: 1100px; margin: 0 auto; padding: 18px 16px 40px; }
@@ -181,14 +181,21 @@
         <div style="border-top:1px solid var(--border-light);margin-top:18px;padding-top:14px">
           <div class="card-title" style="margin-bottom:4px">Édition</div>
           <div class="page-sub" style="margin-bottom:10px">
-            L'édition simple retire les onglets Stock et Sorties : on facture
-            en décrivant le bijou, sans article à choisir. Caisse, épargne,
-            dépôts, décaissements et arrhes restent entiers.
+            <strong>Complète</strong> : l'inventaire se suit en grammes et en
+            pièces.<br />
+            <strong>Articles</strong> : l'inventaire ne se compte qu'en pièces —
+            aucun gramme, ni à la saisie ni sur la facture. Les poids déjà
+            enregistrés restent en base mais ne bougeront plus.<br />
+            <strong>Simple</strong> : pas d'inventaire du tout, les onglets
+            Stock et Sorties disparaissent et on facture en décrivant le bijou.
+            Caisse, épargne, dépôts, décaissements et arrhes restent entiers
+            dans les trois cas.
           </div>
           <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-            <select class="form-input" id="e-gestion-stock" style="max-width:260px">
-              <option value="oui">Complète — avec gestion de stock</option>
-              <option value="non">Simple — facturation seule</option>
+            <select class="form-input" id="e-gestion-stock" style="max-width:300px">
+              <option value="complet">Complète — grammes et pièces</option>
+              <option value="articles">Articles — comptage en pièces seulement</option>
+              <option value="aucun">Simple — facturation seule, sans stock</option>
             </select>
             <button class="btn" id="op-btn-edition">Appliquer</button>
           </div>
@@ -298,8 +305,8 @@
   </div>
 </div>
 
-<script src="js/verrou.js?v=2026-11-04b"></script>
-  <script src="js/supabase.js?v=2026-11-04b"></script>
-<script src="js/operateur.js?v=2026-11-04b"></script>
+<script src="js/verrou.js?v=2026-11-12d"></script>
+  <script src="js/supabase.js?v=2026-11-12d"></script>
+<script src="js/operateur.js?v=2026-11-12d"></script>
 </body>
 </html>
