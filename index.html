@@ -630,6 +630,29 @@
             La page construit le lien elle-même.
           </div>
         </div>
+
+        <!-- LE CODE QR DE LA VITRINE.
+             Il est en bas de cette carte, et c'est voulu : son centre porte
+             le logo enregistré plus haut, donc on le voit après l'avoir
+             choisi. L'adresse qu'il encode, elle, ne change jamais — le code
+             boutique est immuable. -->
+        <div style="margin-top:22px;border-top:1px solid var(--border-light);padding-top:16px">
+          <label class="form-label">Code QR de votre vitrine</label>
+          <div class="form-hint" style="margin-bottom:12px">
+            C'est ce code que vos clientes scannent : il est déjà sur vos factures.
+            Téléchargez-le pour une affiche, un autocollant, votre devanture.
+          </div>
+          <div style="display:flex;gap:18px;align-items:flex-start;flex-wrap:wrap">
+            <div id="b-qr-apercu"
+                 style="width:150px;height:150px;flex:none;display:flex;align-items:center;
+                        justify-content:center;background:#fff;border:0.5px solid var(--border-light);
+                        border-radius:var(--radius-md);overflow:hidden"></div>
+            <div style="flex:1;min-width:210px">
+              <button class="btn btn-primary" id="b-btn-qr" onclick="telechargerQrVitrine()">⤓ Télécharger le QR</button>
+              <div class="form-hint" style="margin-top:8px" id="b-qr-aide"></div>
+            </div>
+          </div>
+        </div>
       </div>
     </section>
 

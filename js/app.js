@@ -438,6 +438,146 @@ function _qrVitrine(taille) {
   }
 }
 
+/**
+ * Le code QR de la vitrine, dessiné sur un canevas, avec le logo au centre.
+ *
+ * TROIS CHOSES DÉCIDENT SI UN TÉLÉPHONE LIRA CE CODE, et aucune ne se voit
+ * à l'œil sur l'image finie :
+ *
+ * 1. **La zone de silence.** La norme exige quatre modules de blanc tout
+ *    autour. `_qrVitrine()` n'en met que deux sur la facture, faute de
+ *    place ; un code qu'on imprime en grand n'a pas cette excuse.
+ *
+ * 2. **Des modules de taille ENTIÈRE en pixels.** Avec un module de 7,3 px,
+ *    le navigateur lisse les bords et le lecteur hésite sur chaque
+ *    frontière. D'où le `Math.floor` : la taille demandée est un plafond,
+ *    pas une promesse.
+ *
+ * 3. **Le logo mange de la correction d'erreur.** L'encodeur travaille au
+ *    niveau M, qui récupère environ 15 % des mots de code. La pastille
+ *    couvre ici 22 % du côté, donc moins de 5 % de la surface — largement
+ *    sous le seuil. Ne pas l'agrandir « pour que le logo se voie mieux » :
+ *    on ne verrait pas la limite se franchir, le code deviendrait
+ *    simplement illisible chez certaines clientes et pas chez d'autres.
+ *
+ * Et la règle du § 3 vaut ici comme ailleurs : **un encodeur QR faux produit
+ * une image parfaitement plausible.** La seule vérification qui compte est
+ * un vrai téléphone, sur le code imprimé.
+ *
+ * Rend une promesse : le logo est une image à charger, et on ne dessine pas
+ * avant qu'elle soit là.
+ */
+function qrVitrineCanvas(cotePx) {
+  return new Promise(function (resolve, reject) {
+    var b = (typeof Auth !== 'undefined' && Auth.connecte()) ? Auth.boutique() : null;
+    var slug = b && b.slug;
+    if (!slug) { reject(new Error('Cette boutique n\'a pas de code — le QR ne peut pas être fabriqué.')); return; }
+    if (typeof QR === 'undefined') { reject(new Error('Encodeur QR indisponible.')); return; }
+
+    var m, n;
+    try {
+      m = QR.matrice(DOMAINE_VITRINE + '/boutique.html?b=' + encodeURIComponent(slug));
+      n = m.length;
+    } catch (e) { reject(e); return; }
+
+    var marge = 4;                              // la zone de silence de la norme
+    var total = n + marge * 2;
+    var px    = Math.max(1, Math.floor((cotePx || 600) / total));
+    var cote  = px * total;
+
+    var cv = document.createElement('canvas');
+    cv.width = cv.height = cote;
+    var ctx = cv.getContext('2d');
+    ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, cote, cote);
+    ctx.fillStyle = '#000';
+    for (var i = 0; i < n; i++) {
+      for (var j = 0; j < n; j++) {
+        if (m[i][j]) ctx.fillRect((j + marge) * px, (i + marge) * px, px, px);
+      }
+    }
+
+    // Sans logo, aucune image : la même règle que `_logoFacture()`. Un repli
+    // vers la marque du logiciel se confondrait avec un choix de la boutique.
+    var logo = b.logo || '';
+    if (!logo) { resolve(cv); return; }
+
+    var img = new Image();
+    img.onload = function () {
+      var d    = Math.round(cote * 0.22);       // la pastille blanche
+      var marg = Math.round(d * 0.12);          // le logo respire dedans
+      var x    = Math.round((cote - d) / 2);
+      // La pastille est posée sur une grille de modules : l'aligner dessus
+      // évite de couper un module en deux, ce qu'un lecteur interprète mal.
+      x = Math.round(x / px) * px;
+      var dAligne = Math.round(d / px) * px;
+
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(x, x, dAligne, dAligne);
+
+      // Le logo est un JPEG, donc sans transparence : son fond blanc se fond
+      // dans la pastille. On le contient dans le carré sans le déformer.
+      var r = Math.min(img.width, img.height) || 1;
+      var sx = (img.width  - r) / 2, sy = (img.height - r) / 2;
+      ctx.drawImage(img, sx, sy, r, r,
+                    x + marg, x + marg, dAligne - marg * 2, dAligne - marg * 2);
+      resolve(cv);
+    };
+    // Un logo illisible ne doit pas emporter le QR avec lui.
+    img.onerror = function () { resolve(cv); };
+    img.src = logo;
+  });
+}
+
+/** L'aperçu dans la carte « Vitrine publique ». */
+function rendreQrProfil() {
+  var hote = document.getElementById('b-qr-apercu');
+  var aide = document.getElementById('b-qr-aide');
+  if (!hote) return;
+  hote.innerHTML = '';
+  qrVitrineCanvas(300).then(function (cv) {
+    cv.style.width = '100%'; cv.style.height = 'auto';
+    // `pixelated` : sans lui le navigateur lisse la réduction et les modules
+    // bavent les uns sur les autres à l'écran.
+    cv.style.imageRendering = 'pixelated';
+    hote.appendChild(cv);
+    var b = Auth.boutique();
+    if (aide) {
+      aide.textContent = (b && b.logo)
+        ? 'Votre logo est au centre. Après impression, scannez-le une fois '
+          + 'avec un téléphone : c\'est la seule vérification qui compte.'
+        : 'Enregistrez un logo plus haut pour qu\'il apparaisse au centre du code.';
+    }
+  }).catch(function (e) {
+    hote.innerHTML = '<span style="font-size:11.5px;color:var(--text-tertiary);padding:8px;text-align:center">'
+                   + esc(e.message) + '</span>';
+    if (aide) aide.textContent = '';
+  });
+}
+
+/** Le télécharger, en grand, pour une affiche ou un autocollant. */
+function telechargerQrVitrine() {
+  var btn = document.getElementById('b-btn-qr');
+  if (btn) { btn.disabled = true; btn.textContent = 'Préparation…'; }
+  // 1200 px de côté : largement de quoi imprimer un A5 sans escalier, et
+  // le poids reste sous les 100 Ko — c'est du noir et blanc.
+  qrVitrineCanvas(1200).then(function (cv) {
+    cv.toBlob(function (blob) {
+      if (!blob) { showToast('Le code n\'a pas pu être produit.'); return; }
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      a.href = url;
+      a.download = 'qr-' + _slugFichier() + '.png';
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      setTimeout(function () { URL.revokeObjectURL(url); }, 2000);
+      showToast('✓ Code QR téléchargé — scannez-le une fois avant de l\'imprimer en nombre.');
+    }, 'image/png');
+  }).catch(function (e) {
+    showToast('⚠ ' + e.message);
+  }).finally(function () {
+    if (btn) { btn.disabled = false; btn.textContent = '⤓ Télécharger le QR'; }
+  });
+}
+
 /** Ligne d'identité pour un document : « Adresse · Tél · NINEA ». */
 function boutiqueLigneContact() {
   var b = boutiqueInfos();
@@ -479,6 +619,7 @@ function renderProfilBoutique() {
   COUVERTURE_TEMP    = null;
   afficherApercuLogo(b.logo || '');
   afficherApercuCouverture(b.couverture || '');
+  rendreQrProfil();
   messageBoutique('');
 }
 
@@ -698,6 +839,9 @@ async function enregistrerProfilBoutique() {
     var orgEl = document.getElementById('org-name');
     if (orgEl) orgEl.textContent = nom;
     appliquerIdentiteBoutique();   // logo, nom et slogan sans recharger la page
+    // Le QR porte le logo en son centre : si celui-ci vient de changer,
+    // l'aperçu doit le montrer sans qu'on ait à rouvrir l'écran.
+    rendreQrProfil();
     messageBoutique('✓ Profil enregistré. Vos prochaines factures porteront ces informations.');
   } catch (e) {
     messageBoutique('⚠ ' + e.message, true);
