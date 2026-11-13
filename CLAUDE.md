@@ -1683,12 +1683,52 @@ casserait le seul écran de correction. En attendant, cette fenêtre
 diverger de ses lignes, et la prochaine écriture serveur écraserait la
 correction sans rien dire.
 
+### La facture entière se règle sur l'épargne (migration 045)
+
+Demandé le 2026-11-13 ; c'était l'étape volontairement remise du 2026-11-12.
+
+**Pourquoi `enregistrer_vente()` et non `vente_sur_compte_epargne()`.** Les
+deux chemins existaient, et le mauvais était tentant : apprendre les
+**lignes** à la fonction d'épargne aurait recopié chez elle la validation des
+lignes, le mode de la boutique, la disponibilité agrégée et la déduction du
+stock — **deux endroits qui écrivent `vente_lignes`**, exactement « une
+table, trois fonctions d'écriture » (§ 2).
+
+Le risque miroir était pire : deux endroits qui **débitent un compte de
+cliente**, c'est-à-dire de l'argent qui ne nous appartient pas. D'où le
+débit extrait dans **`app.debiter_epargne()`** — un seul endroit écrit une
+ligne de vente, un seul retire de l'argent d'un compte.
+
+- **L'acompte se calcule, il ne se croit pas** : part sur le compte +
+  complément versé aujourd'hui. Le prendre du navigateur aurait permis
+  d'annoncer une vente soldée sans rien prélever. Vérifié : un `acompte: 1`
+  envoyé sur une facture de 75 000 F réglée en entier donne bien 75 000.
+- **Quand les deux sources d'identité divergent, on REFUSE.** La cliente de
+  la vente doit être celle du compte : prendre celle du compte masquerait une
+  erreur de compte, prendre celle de la vente débiterait l'épargne de
+  quelqu'un d'autre.
+- **Le couple compte / moyen de paiement est vérifié dans les deux sens** :
+  un code `compte…` sans compte écrirait une vente payée avec de l'argent
+  jamais prélevé ; un compte sans code `compte…` prélèverait sans que la
+  facture le dise.
+- Le solde est relu **sur l'historique**, côté serveur comme côté navigateur
+  (`app.solde_epargne()` / `soldeDepuisMouvements()`), jamais sur la colonne
+  rangée.
+
+**`vente_sur_compte_epargne()` n'est pas touchée, et garde deux appelants** —
+vérifié par `grep`, après avoir d'abord écrit le contraire :
+`cloturerCompteClient()` et `_validerAjustCC()`. Ces deux-là ne vendent
+**aucune marchandise** : ce sont des gestes comptables écrits dans `ventes`.
+Les faire passer par `enregistrer_vente()` obligerait à y rouvrir « toute
+ligne vient de l'inventaire » (§ 6 quater) pour deux cas sans article.
+
+Mesuré, transactions annulées : 75 000 F sur trois articles font **baisser le
+solde de 75 000**, pas du prix d'un article ; un **rejeu de la même clé ne
+débite qu'une fois** ; un solde insuffisant, un compte d'une autre cliente et
+un stock insuffisant ne laissent **ni vente, ni ligne, ni mouvement**.
+
 ### Ce qui n'est PAS fait
 
-- **La vente réglée sur l'épargne reste à un article.**
-  `enregistrer_vente()` refuse `paiement = 'compte'`, et l'écran refuse
-  l'épargne dès la deuxième ligne. Un refus clair vaut mieux qu'une facture
-  dont deux articles sur trois auraient disparu.
 - **Journal, tableau de bord, export CSV et portail cliente lisent encore le
   résumé**, pas les lignes. C'est voulu, et c'est exactement ce que le résumé
   sert à rendre possible.

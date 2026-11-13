@@ -90,8 +90,8 @@ déjà `migrations/`, les `*.md`, `config_backup.json` et `.claude/`.
 
 Repères de version, pour vérifier que le déploiement a bien pris :
 
-- `index.html` : `?v=2026-11-13a` · `operateur.html` : `?v=2026-11-12d`
-- `APP_VERSION` : `2026-11-13-qr-telechargeable`
+- `index.html` : `?v=2026-11-13b` · `operateur.html` : `?v=2026-11-12d`
+- `APP_VERSION` : `2026-11-13-epargne-multi-articles`
 - `client.html` : `?v=2026-11-04b`
 - `boutique.html` : `?v=2026-11-02a`
 
@@ -107,7 +107,7 @@ Repères de version, pour vérifier que le déploiement a bien pris :
 ## 3. Juste après le déploiement
 
 **Rechargez avec Ctrl + Maj + R**, puis regardez la version sous l'écran de
-connexion. Tant qu'elle n'affiche pas `2026-11-13-qr-telechargeable`, rien de ce
+connexion. Tant qu'elle n'affiche pas `2026-11-13-epargne-multi-articles`, rien de ce
 qui suit n'a de sens : c'est le cache, pas un bug. C'est la première chose à
 vérifier devant tout comportement incohérent.
 
@@ -293,8 +293,25 @@ une ligne sans article en édition complète, une ligne sans description en
 disparu de l'inventaire — et **l'épargne dès la deuxième ligne** (« une
 vente réglée sur l'épargne ne porte qu'un article pour l'instant »).
 
-**4. La vente sur épargne et la commande avec acompte** doivent continuer de
-fonctionner comme avant, à un article.
+**4. La vente sur épargne porte maintenant la facture entière** (migration
+045). Choisissez une cliente qui a un compte, mettez **deux ou trois
+articles**, puis la tuile **Épargne**.
+
+> Attendu : le solde baisse du **total de la facture**, pas du prix d'un
+> article. Le message le dit : « … déduit du compte de X (3 articles) ».
+>
+> Avec un solde **insuffisant**, la fenêtre de complément s'ouvre — et elle
+> porte désormais tous les articles. Versez une partie : l'acompte vaut
+> part du compte + complément, le reste devient un restant dû suivi dans
+> Arrhes & Commandes.
+>
+> **L'essai qui compte : rejouez le même enregistrement** (même fenêtre,
+> même clé de geste) et vérifiez que le solde **n'a baissé qu'une fois**.
+> C'est de l'argent de cliente.
+
+**4 bis. Clôture de compte et ajustement** passent encore par l'ancienne
+fonction, et c'est voulu : ces deux gestes ne vendent aucune marchandise.
+Vérifiez qu'ils fonctionnent toujours.
 
 > Et les ventes **antérieures** : ouvrez une facture de la semaine dernière.
 > La migration 041 leur a donné leur ligne n° 1 ; elle doit s'imprimer

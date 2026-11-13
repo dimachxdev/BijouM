@@ -20,7 +20,7 @@
  * qui « peut tout faire » alors que les droits sont restreints, c'est presque
  * toujours ça.
  */
-const APP_VERSION = '2026-11-13-qr-telechargeable';
+const APP_VERSION = '2026-11-13-epargne-multi-articles';
 
 /**
  * Domaine de la vitrine publique, pour le QR imprime sur les factures.
@@ -2206,65 +2206,35 @@ async function _enregistrerVente(){
   if(montant<=0){showToast('Le total de la facture doit être supérieur à zéro.');return;}
   if(acompte>montant){showToast('L\'acompte ne peut pas dépasser le total.');return;}
 
-  // La vente réglée sur l'épargne reste à UN article : `enregistrer_vente()`
-  // la refuse et `vente_sur_compte_epargne()` ne sait écrire qu'une ligne.
-  // Mieux vaut un refus clair qu'une facture dont deux articles sur trois
-  // auraient disparu.
-  if(paiement==='compte' && lignes.length>1){
-    showToast('Une vente réglée sur l\'épargne ne porte qu\'un article pour l\'instant.');
-    return;
-  }
-
   // Apres les validations, avant toute ecriture — y compris avant la
   // reservation du numero, qui est deja une ecriture serveur.
   if(!Verrou.confirmerRepetition('vente',
       client+' · '+empreinteLignesVente(lignes)+' · '+libellePaiement(paiement))) return;
 
-  // Le chemin épargne ne connaît qu'un article : on lui prépare ses champs
-  // plats depuis la ligne unique.
-  const l0        = lignes[0];
-  const stockItem = l0.stockRef ? getStockItem(l0.stockRef) : null;
-  const stockRef  = l0.stockRef || '';
-  const poids     = l0.poids;
-  const nbArticlesV = l0.nbArticles;
-  const desc      = stockItem ? (stockItem.nom||'') : l0.description;
-  const carat     = stockItem ? (stockItem.carat||'')     : (l0.carat||'');
-  const typeBijou = stockItem ? (stockItem.typeBijou||'') : (l0.typeBijou||'');
-  const prov0     = stockItem ? (stockItem.provenance||'') : (l0.provenance||'');
-  const local     = prov0==='local'   ? poids : 0;
-  const importe   = prov0==='importe' ? poids : 0;
-
   if(paiement==='compte'){
     const cc=STATE.comptesClients.find(c=>c.clientId===clientId&&c.actif!==false);
     if(!cc){showToast('Aucun compte epargne actif pour ce client.');return;}
-    if(montant>cc.solde){
-      // Solde insuffisant ou vide → ouvrir modal complément
-      ouvrirComplementCC(cc, montant, date, desc, carat, typeBijou,
-        { ref: stockRef, poids: poids, local: local, importe: importe,
-          nbArticles: nbArticlesV });
+    // Le solde se relit sur l'historique, jamais sur la colonne rangée —
+    // c'est ce que fait le serveur, et les deux doivent dire la même chose.
+    const solde = soldeDepuisMouvements(cc);
+    if(montant > solde){
+      // Solde insuffisant : la fenêtre de complément, avec LES LIGNES.
+      ouvrirComplementCC(cc, montant, date, lignes);
       return;
     }
-    // Vente + retrait en une seule transaction serveur : les enchaîner ici
-    // laissait passer le retrait quand la vente échouait.
+    // LA FACTURE ENTIÈRE SE DÉDUIT DU COMPTE (migration 045), plus un seul
+    // article. Une seule requête : vente, lignes, retrait et stock dans la
+    // même transaction serveur.
     {
-      // Numéros attribués par le serveur : le compteur local peut être en
-      // retard et refabriquer un identifiant déjà pris.
-      const num = await prochainsIdsVente();
-      const idCpt = num.id, facCpt = num.numFacture;
-      const res = await venteSurCompteEpargne({
-        id: idCpt, compteId: cc.id, date: date, description: desc,
-        montant: montant, montantCompte: montant,
-        paiement: 'compte', carat: carat, typeBijou: typeBijou, numFacture: facCpt,
-        // Le poids était calculé puis abandonné : la vente partait sans lui
-        // alors que `deduireStock()` retirait bien l'or juste après.
-        poids: poids, local: local, importe: importe
-      });
-      if(!res || res.ok===false){ showToast('⛔ '+((res&&res.erreur)||'Vente refusée.')); return; }
-      if(stockRef && (poids>0 || nbArticlesV>0)) await deduireStock(stockRef, poids, nbArticlesV);
+      const res = await enregistrerVenteServeur(
+        { date: date, clientId: clientId, paiement: 'compte',
+          compteId: cc.id, montantCompte: montant },
+        lignes);
       await chargerDonnees();
       closeModal('modal-nouvelle-vente');
-      renderJournal(); renderStocks();
-      showToast('Vente '+idCpt+' — '+fmt(montant)+' déduit du compte de '+client);
+      renderJournal(); renderDashboard(); renderStocks(); renderComptesClients();
+      showToast('Vente '+res.id+' — '+fmt(res.montant)+' déduit du compte de '+client
+              + (res.lignes>1 ? ' ('+res.lignes+' articles)' : ''));
     }
     // Le try/catch est parti : l'erreur remonte a `enregistrerVente()`, qui
     // l'affiche et laisse la modale ouverte. L'avaler ici fermait le geste
@@ -4400,24 +4370,26 @@ function syncPoidsOr(prefix) {
 // ============================================
 // COMPLEMENT COMPTE ÉPARGNE INSUFFISANT
 // ============================================
-function ouvrirComplementCC(cc, montantVente, date, desc, carat, typeBijou, stock) {
-  var manque = montantVente - cc.solde;
-  // `stock` porte l'article et son poids. Ils n'étaient pas transmis : la
-  // vente aboutissait, le bijou partait, et l'inventaire le comptait encore.
-  var s = stock || {};
-  document.getElementById('complement-cc-stock-ref').value   = s.ref || '';
-  document.getElementById('complement-cc-poids').value       = s.poids || 0;
-  document.getElementById('complement-cc-local').value       = s.local || 0;
-  document.getElementById('complement-cc-importe').value     = s.importe || 0;
-  document.getElementById('complement-cc-nb-articles').value = s.nbArticles || 0;
+/**
+ * La fenêtre de complément : une partie sur l'épargne, le reste autrement.
+ *
+ * Elle reçoit désormais LES LIGNES de la facture (migration 045), portées
+ * telles quelles jusqu'au serveur. Elle recevait cinq champs plats décrivant
+ * UN article — c'est ce qui limitait la vente sur épargne à un seul bijou.
+ */
+function ouvrirComplementCC(cc, montantVente, date, lignes) {
+  var solde  = soldeDepuisMouvements(cc);
+  var manque = montantVente - solde;
+  document.getElementById('complement-cc-lignes').value  = JSON.stringify(lignes || []);
   document.getElementById('complement-cc-id').value      = cc.id;
   document.getElementById('complement-cc-montant').value = montantVente;
   document.getElementById('complement-cc-date').value    = date;
-  document.getElementById('complement-cc-desc').value    = desc;
-  document.getElementById('complement-cc-carat').value   = carat;
-  document.getElementById('complement-cc-type').value    = typeBijou;
+  // Ce qui se lit dans la fenêtre de confirmation, et sur rien d'autre :
+  // la description de la facture est fabriquée par le serveur depuis ses
+  // lignes, elle ne se devine pas ici.
+  document.getElementById('complement-cc-desc').value    = empreinteLignesVente(lignes || []);
   document.getElementById('complement-cc-manque').textContent = fmt(manque);
-  document.getElementById('complement-cc-solde').textContent  = fmt(cc.solde);
+  document.getElementById('complement-cc-solde').textContent  = fmt(solde);
   document.getElementById('complement-cc-total').textContent  = fmt(montantVente);
   document.getElementById('complement-cc-client').textContent = cc.client;
   document.getElementById('complement-cc-montant-comp').value = manque;
@@ -4473,16 +4445,13 @@ function _validerComplementCC() {
   var montant     = parseInt(document.getElementById('complement-cc-montant').value)||0;
   var date        = document.getElementById('complement-cc-date').value;
   var desc        = document.getElementById('complement-cc-desc').value;
-  var carat       = document.getElementById('complement-cc-carat').value;
-  var typeBijou   = document.getElementById('complement-cc-type').value;
   var montantComp = parseInt(document.getElementById('complement-cc-montant-comp').value)||0;
   var paiementComp= document.getElementById('complement-cc-paiement').value;
-  // L'article et son poids, transmis depuis le formulaire de vente.
-  var cpRef     = document.getElementById('complement-cc-stock-ref').value || '';
-  var cpPoids   = parseFloat(document.getElementById('complement-cc-poids').value)||0;
-  var cpLocal   = parseFloat(document.getElementById('complement-cc-local').value)||0;
-  var cpImporte = parseFloat(document.getElementById('complement-cc-importe').value)||0;
-  var cpNb      = parseInt(document.getElementById('complement-cc-nb-articles').value)||0;
+  // LES LIGNES de la facture (migration 045), portées telles quelles.
+  var lignes = [];
+  try { lignes = JSON.parse(document.getElementById('complement-cc-lignes').value || '[]'); }
+  catch (e) { showToast('⚠ Les articles n\'ont pas pu être relus. Rouvrez la vente.'); return; }
+  if(!lignes.length){ showToast('⚠ Aucun article à facturer.'); return; }
   var cc = STATE.comptesClients.find(function(c){ return c.id===ccId; });
   if(!cc) return;
   // Le complément peut être partiel : le reste devient un restant dû et la
@@ -4493,41 +4462,29 @@ function _validerComplementCC() {
     showToast('⚠ Le total versé dépasse le prix du bijou.'); return;
   }
   var resteDu = montant - soldeUtilise - montantComp;
-  var id;
 
   if(!Verrou.confirmerRepetition('complement',
       cc.client+' ('+cc.id+') · '+desc+' · '+fmt(montant)
       +' dont '+fmt(montantComp)+' en '+paiementComp)) return;
 
-  // Une seule transaction serveur : la vente et le retrait aboutissent
-  // ensemble, ou aucun des deux. L'ancienne version les lançait en parallèle
-  // sans intercepter l'échec — le retrait passait, la vente non.
-  return prochainsIdsVente()
-  .then(function(num){
-    id = num.id;
-    return venteSurCompteEpargne({
-      id: id, compteId: cc.id, date: date, description: desc,
-      montant: montant, montantCompte: soldeUtilise, espece: montantComp,
-      paiement: 'compte+'+paiementComp, carat: carat, typeBijou: typeBijou,
-      numFacture: num.numFacture,
-      poids: cpPoids, local: cpLocal, importe: cpImporte,
+  // UNE SEULE REQUÊTE : vente, lignes, retrait d'épargne et stock dans la
+  // même transaction serveur (migration 045). Le stock était déduit ICI,
+  // après coup, par un second appel : un échec entre les deux laissait le
+  // bijou vendu et l'inventaire inchangé.
+  return enregistrerVenteServeur({
+      date: date, clientId: cc.clientId, paiement: 'compte+'+paiementComp,
+      compteId: cc.id, montantCompte: soldeUtilise, espece: montantComp,
       noteComplement: 'Compte: '+fmt(soldeUtilise)+' + '+paiementComp+': '+fmt(montantComp)
                     + (resteDu > 0 ? ' — restant dû : '+fmt(resteDu) : '')
-    });
-  })
-  .then(async function(res){
-    if(!res || res.ok===false){ showToast('⛔ '+((res&&res.erreur)||'Vente refusée.')); return; }
-    // Le stock n'était pas déduit sur ce chemin : le bijou sortait du magasin
-    // et l'inventaire le comptait toujours. Après la vente, comme sur le
-    // chemin ordinaire — jamais avant, sinon un refus laisserait un trou.
-    if (cpRef && (cpPoids > 0 || cpNb > 0)) await deduireStock(cpRef, cpPoids, cpNb);
+    }, lignes)
+  .then(function(res){
     // On relit depuis le serveur plutôt que de reconstituer l'état à la main.
     return chargerDonnees().then(function(){
       closeModal('modal-complement-cc'); closeModal('modal-nouvelle-vente');
-      renderJournal(); renderBijouxArr(); renderComptesClients(); renderDashboard();
+      renderJournal(); renderBijouxArr(); renderComptesClients(); renderDashboard(); renderStocks();
       showToast(res.restant > 0
-        ? 'Vente '+id+' — reste '+fmt(res.restant)+' dû. Suivi dans Arrhes & Commandes.'
-        : 'Vente '+id+' — Compte : '+fmt(soldeUtilise)+' + '+paiementComp+' : '+fmt(montantComp));
+        ? 'Vente '+res.id+' — reste '+fmt(res.restant)+' dû. Suivi dans Arrhes & Commandes.'
+        : 'Vente '+res.id+' — Compte : '+fmt(res.paye_par_compte)+' + '+paiementComp+' : '+fmt(montantComp));
     });
   });
 }
