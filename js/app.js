@@ -20,7 +20,7 @@
  * qui « peut tout faire » alors que les droits sont restreints, c'est presque
  * toujours ça.
  */
-const APP_VERSION = '2026-11-12-paiement-marques';
+const APP_VERSION = '2026-11-13-qr-telechargeable';
 
 /**
  * Domaine de la vitrine publique, pour le QR imprime sur les factures.
@@ -503,23 +503,45 @@ function qrVitrineCanvas(cotePx) {
 
     var img = new Image();
     img.onload = function () {
-      var d    = Math.round(cote * 0.22);       // la pastille blanche
-      var marg = Math.round(d * 0.12);          // le logo respire dedans
-      var x    = Math.round((cote - d) / 2);
-      // La pastille est posée sur une grille de modules : l'aligner dessus
-      // évite de couper un module en deux, ce qu'un lecteur interprète mal.
-      x = Math.round(x / px) * px;
-      var dAligne = Math.round(d / px) * px;
+      // LA PASTILLE SE MESURE EN MODULES, ET DE PARITÉ IMPAIRE comme la
+      // grille. `total` est toujours impair (une version de QR fait 21, 25,
+      // 29… modules, plus deux fois quatre de marge) : une pastille impaire
+      // laisse donc `(total - pastille) / 2` entier, et elle tombe au centre
+      // exact, sans le moindre arrondi. Avec une parité différente elle
+      // serait décalée d'un demi-module — assez pour mordre une colonne de
+      // modules d'un côté et laisser un blanc de l'autre.
+      var modPastille = Math.round(total * 0.24);
+      if ((total - modPastille) % 2 !== 0) modPastille += 1;
+      var dPx = modPastille * px;
+      var o   = ((total - modPastille) / 2) * px;   // le même décalage en x et en y
 
       ctx.fillStyle = '#fff';
-      ctx.fillRect(x, x, dAligne, dAligne);
+      ctx.fillRect(o, o, dPx, dPx);
 
-      // Le logo est un JPEG, donc sans transparence : son fond blanc se fond
-      // dans la pastille. On le contient dans le carré sans le déformer.
-      var r = Math.min(img.width, img.height) || 1;
-      var sx = (img.width  - r) / 2, sy = (img.height - r) / 2;
-      ctx.drawImage(img, sx, sy, r, r,
-                    x + marg, x + marg, dAligne - marg * 2, dAligne - marg * 2);
+      // LE LOGO EST CONTENU, PAS RECADRÉ.
+      //
+      // `drawImage` recevait auparavant le plus grand carré centré de la
+      // source, étiré à la taille de la pastille : un recadrage, qui
+      // **coupait les côtés** de tout logo qui n'est pas carré — le haut et
+      // le bas d'un logo large, la gauche et la droite d'un logo haut.
+      //
+      // On met donc l'image ENTIÈRE à l'échelle du plus petit des deux
+      // rapports, et on la centre dans les deux sens. Le vide qui reste est
+      // blanc, comme la pastille : il ne se voit pas.
+      //
+      // Le logo est un JPEG, donc sans transparence : son propre fond blanc
+      // se fond lui aussi dans la pastille.
+      var marg  = Math.round(dPx * 0.14);           // il respire de tous les côtés
+      var dispo = dPx - marg * 2;
+      var lw = img.naturalWidth  || img.width  || 1;
+      var lh = img.naturalHeight || img.height || 1;
+      var ech = Math.min(dispo / lw, dispo / lh);
+      var w = Math.round(lw * ech), h = Math.round(lh * ech);
+
+      ctx.drawImage(img,
+                    o + marg + Math.round((dispo - w) / 2),
+                    o + marg + Math.round((dispo - h) / 2),
+                    w, h);
       resolve(cv);
     };
     // Un logo illisible ne doit pas emporter le QR avec lui.

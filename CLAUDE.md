@@ -861,6 +861,53 @@ rien.** Les contrôles qui ont servi sont ceux adossés à une autorité
 extérieure : la table des mots de format de l'ISO/IEC 18004, la nullité des
 syndromes — et, seul verdict final, un vrai téléphone.
 
+### Le QR téléchargeable, avec le logo au centre
+
+Demandé le 2026-11-13. `qrVitrineCanvas()` dessine le code sur un canevas ;
+l'écran « Vitrine publique » en montre un aperçu et le télécharge en PNG de
+1200 px. L'adresse encodée ne change jamais — le code boutique est immuable —
+**seul le centre change**, d'où la place du bloc sous le champ du logo.
+
+Quatre choses décident si un téléphone lira ce code, et **aucune ne se voit à
+l'œil sur l'image finie** :
+
+- **La zone de silence** : quatre modules de blanc tout autour, comme l'exige
+  la norme. `_qrVitrine()` n'en met que deux sur la facture, faute de place ;
+  un code qu'on imprime en grand n'a pas cette excuse.
+- **Des modules de taille ENTIÈRE en pixels.** Avec un module de 7,3 px, le
+  navigateur lisse les bords et le lecteur hésite sur chaque frontière. D'où
+  le `Math.floor` : la taille demandée est un plafond, pas une promesse.
+- **La pastille se mesure EN MODULES, et de parité impaire comme la grille.**
+  `total` est toujours impair (21, 25, 29… modules, plus deux fois quatre de
+  marge), donc une pastille impaire laisse `(total - pastille) / 2` entier :
+  elle tombe au centre exact, sans le moindre arrondi. Avec une parité
+  différente elle serait décalée d'un demi-module — assez pour mordre une
+  colonne de modules d'un côté et laisser un blanc de l'autre. Mesuré :
+  9 modules de pastille, **14 modules de chaque côté**, 224 px des deux bords.
+- **Le logo est CONTENU, jamais recadré.** `drawImage` recevait d'abord le
+  plus grand carré centré de la source, étiré à la pastille : un recadrage,
+  qui **coupait les côtés** de tout logo non carré — deux tiers de la largeur
+  d'un logo 3:1. L'image entière est désormais mise à l'échelle du plus petit
+  des deux rapports et centrée dans les deux sens ; le vide restant est blanc
+  comme la pastille, donc invisible.
+
+**Le coût en correction d'erreur est mesuré, pas supposé** : la pastille
+couvre **43 modules sur 841, soit 5,1 %**, là où le niveau M en récupère
+environ 15 %. Les trois motifs de position sont intacts — s'ils étaient
+touchés, le lecteur ne cadrerait plus du tout. Ne pas agrandir la pastille
+« pour que le logo se voie mieux » : on ne verrait pas la limite se franchir,
+le code deviendrait simplement illisible chez certaines clientes et pas chez
+d'autres.
+
+**La vérification du rendu a été faite contre la matrice de l'encodeur**, pas
+à l'œil : on relit les pixels du canevas, on reconstruit la matrice, on
+compare — **zéro écart**. C'est le bon périmètre, puisque c'est le dessin qui
+était neuf ; l'encodeur, lui, a été éprouvé ailleurs et autrement.
+
+Et la règle ci-dessus vaut entière : **un encodeur QR faux produit une image
+parfaitement plausible.** Le texte sous le bouton le dit à la propriétaire —
+scanner une fois avant d'imprimer en nombre.
+
 ### Aucune identité de boutique en dur
 
 Jamais « KAYOR », « Dakar », ni un logo écrit dans le code. Tout document

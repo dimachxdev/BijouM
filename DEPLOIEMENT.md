@@ -90,8 +90,8 @@ déjà `migrations/`, les `*.md`, `config_backup.json` et `.claude/`.
 
 Repères de version, pour vérifier que le déploiement a bien pris :
 
-- `index.html` : `?v=2026-11-12f` · `operateur.html` : `?v=2026-11-12d`
-- `APP_VERSION` : `2026-11-12-paiement-marques`
+- `index.html` : `?v=2026-11-13a` · `operateur.html` : `?v=2026-11-12d`
+- `APP_VERSION` : `2026-11-13-qr-telechargeable`
 - `client.html` : `?v=2026-11-04b`
 - `boutique.html` : `?v=2026-11-02a`
 
@@ -107,7 +107,7 @@ Repères de version, pour vérifier que le déploiement a bien pris :
 ## 3. Juste après le déploiement
 
 **Rechargez avec Ctrl + Maj + R**, puis regardez la version sous l'écran de
-connexion. Tant qu'elle n'affiche pas `2026-11-12-paiement-marques`, rien de ce
+connexion. Tant qu'elle n'affiche pas `2026-11-13-qr-telechargeable`, rien de ce
 qui suit n'a de sens : c'est le cache, pas un bug. C'est la première chose à
 vérifier devant tout comportement incohérent.
 
@@ -354,6 +354,28 @@ téléphone.
 **Sur la facture imprimée, le paiement reste du texte** — pas de pictogramme.
 Un code composé (`compte+wave`) n'a pas d'icône unique, et une facture
 s'imprime souvent en noir et blanc.
+
+### c undecies. Télécharger le QR de la vitrine
+
+*Profil de la boutique → carte **Vitrine publique**, tout en bas.*
+
+Un aperçu du code apparaît, avec le logo de la boutique en son centre, et un
+bouton le télécharge en PNG.
+
+> Attendu : après avoir changé le logo et enregistré, **l'aperçu montre le
+> nouveau logo sans qu'on rouvre l'écran**. Sans logo enregistré, le code
+> s'affiche nu — jamais avec la marque du logiciel.
+>
+> Le logo doit être **entier et centré**, quelle que soit sa forme : un logo
+> large garde ses bords gauche et droit, un logo haut ses bords haut et bas.
+> Vérifié sur trois formes (3:1, 1:3, carré) — rapport conservé, écart au
+> centre nul ou d'un demi-pixel.
+
+**Et l'essai qui compte, celui qu'aucune mesure ne remplace : imprimez-le et
+scannez-le avec un vrai téléphone.** La pastille du logo couvre 5,1 % des
+modules là où le niveau M en récupère environ 15 %, et les trois motifs de
+position sont intacts — mais un encodeur QR faux produit une image
+parfaitement plausible (§ 3). Scanner une fois avant d'imprimer en nombre.
 
 ### c sexies. Télécharger une sauvegarde, et la remettre
 
