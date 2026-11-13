@@ -626,6 +626,54 @@ action pour un rôle, la carte doit lire la même condition — idéalement la
 même fonction (`etatSortieCaisse()`, `peutVoirCaisse()`, `isAdmin()`), jamais
 une copie de la règle.
 
+### Une liste ne montre pas tout : elle a une fiche à côté
+
+Demandé le 2026-11-13 pour les reprises. **Cinq champs enregistrés
+n'apparaissaient nulle part** — la référence, le type de bijou, la
+provenance de l'or, la date d'enregistrement et, le plus coûteux, la
+**note** : on la saisit au comptoir (« bracelet tordu », « rachat famille »)
+et elle disparaissait sans retour.
+
+La réponse n'est pas d'élargir le tableau. Il portait déjà dix colonnes ; à
+quinze, c'est le défilement horizontal à l'aveugle que cette règle combat.
+**La liste reste lisible, et `detailReprise()` dit tout** dans une fiche —
+une ligne par champ, les champs vides simplement absents plutôt qu'affichés
+avec un tiret.
+
+Deux choses remontent quand même dans la liste, parce qu'elles décident
+qu'on ouvre la fiche : la **référence** et un **📝 quand une note existe**.
+Elles sont dans les deux vues, pas une seule.
+
+**Et une colonne qu'on ne mappe pas n'existe pas pour l'écran** :
+`provenance` et `created_at` étaient lues de la base et jetées par
+`mapReprise()`. Avant d'ajouter un champ à une fiche, vérifier qu'il
+survit au mapping.
+
+### Le tableau était le maillon oublié de l'échappement
+
+Trouvé le 2026-11-13 en touchant ces lignes. La vue en **cartes** passait
+bien par `esc()` et `escJs()` — `carteListe()` l'impose. Le **tableau**, lui,
+injectait `a.client`, `a.description`, `a.carat` et `a.saisiPar` bruts dans
+`innerHTML`, et posait `a.id` dans un `onclick` sans `escJs()`.
+
+Une cliente nommée `<img src=x onerror=…>` se serait donc exécutée dans la
+session de qui ouvre la liste. Vérifié par un essai : avec la correction,
+le script ne part pas et `<b>gras</b>` s'affiche en toutes lettres.
+
+**Le gabarit protège la carte ; le tableau s'écrit à la main.** En relire un
+avant de le modifier.
+
+### `fmtDate()` n'accepte qu'une date seule
+
+Elle concatène `'T00:00:00'` — ce qui fixe la date à minuit **local**, sans
+quoi `new Date('2026-11-01')` est lue en UTC et s'affiche le 31 octobre.
+
+Mais un **horodatage complet** y devenait `…ZT00:00:00`, et la vendeuse
+lisait **« Invalid Date »** au milieu d'une liste. Vu sur le `created_at`
+d'une reprise, corrigé le 2026-11-13 : repli sur une lecture directe, puis
+« — » si même celle-là échoue. Pour un horodatage, utiliser
+**`fmtHorodate()`** — « 10/11/2026 à 14h22 ».
+
 Le bouton flottant suit la même discipline : il ne connaît aucune action, il
 recopie le bouton « + … » de l'en-tête de la section ouverte et lui relaie le
 clic. Un bouton masqué par le rôle masque donc le bouton flottant, sans une

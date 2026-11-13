@@ -864,6 +864,16 @@ tbody tr:hover td { background: #f3eedf; }
 .paiement-livraison{background:var(--bg-secondary);color:var(--text-secondary);border:0.5px solid var(--border-light)}
 .paiement-compte{background:var(--local-bg);color:var(--local-text)}
 
+/* ===== FICHE DE DÉTAIL — clé à gauche, valeur à droite =====
+   Les lignes alternent sur `--bg-muted`, le troisième plan du § 3 : sur un
+   fond uni, quinze lignes se lisent comme un bloc et l'œil perd sa ligne. */
+.detail-liste { border: 1px solid var(--border-light); border-radius: var(--radius-md); overflow: hidden; }
+.detail-ligne { display: flex; gap: 12px; padding: 8px 12px; font-size: 13px; align-items: baseline; }
+.detail-ligne:nth-child(odd) { background: var(--bg-muted); }
+.detail-cle { flex: 0 0 42%; color: var(--text-secondary); font-size: 12px; }
+.detail-val { flex: 1; color: var(--text-primary); font-weight: 500; overflow-wrap: anywhere; }
+@media (min-width: 560px) { .detail-cle { flex-basis: 34%; } }
+
 /* ===== CHOIX DU PAIEMENT — tuiles, plus de liste déroulante =====
    Six moyens repliés derrière un menu, c'est un geste de plus et un coup
    d'œil de moins au comptoir. Les tuiles réutilisent les couleurs des

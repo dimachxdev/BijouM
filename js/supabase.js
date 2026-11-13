@@ -624,9 +624,14 @@ function mapCompte(cc) {
     solde:cc.solde||0, actif:cc.actif!==false, mouvements:cc.mouvements||[] };
 }
 function mapReprise(r) {
+  // `provenance` et `created_at` étaient lus de la base et jetés ici : la
+  // fiche de détail ne pouvait donc pas les montrer, alors qu'ils sont
+  // enregistrés. Une colonne qu'on ne mappe pas est une colonne qui n'existe
+  // pas pour l'écran.
   return { id:r.id, date:r.date, client:r.client, description:r.description, clientId:r.client_id||null,
     typeBijou:r.type_bijou||r.typeBijou, carat:r.carat, poids:r.poids||0,
     local:r.local||0, importe:r.importe||0, prixPropose:r.prix||r.prixPropose||0,
+    provenance:r.provenance||null, creeLe:r.created_at||null,
     note:r.note, photo:r.photo, creePar:r.created_by||null };
 }
 

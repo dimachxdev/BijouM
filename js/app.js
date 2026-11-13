@@ -20,7 +20,7 @@
  * qui « peut tout faire » alors que les droits sont restreints, c'est presque
  * toujours ça.
  */
-const APP_VERSION = '2026-11-13-epargne-multi-articles';
+const APP_VERSION = '2026-11-13-fiche-reprise';
 
 /**
  * Domaine de la vitrine publique, pour le QR imprime sur les factures.
@@ -1370,7 +1370,32 @@ function ini(nom){return nom.trim().split(' ').slice(0,2).map(p=>p[0]).join('').
 function today(){return new Date().toISOString().split('T')[0];}
 function isToday(d){return d===today();}
 function isMois(d){const n=new Date(),dt=new Date(d+'T00:00:00');return dt.getFullYear()===n.getFullYear()&&dt.getMonth()===n.getMonth();}
-function fmtDate(d){if(!d)return'—';return new Date(d+'T00:00:00').toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit',year:'numeric'});}
+/**
+ * Une date SEULE (`AAAA-MM-JJ`). Le `T00:00:00` la fixe à minuit LOCAL : sans
+ * lui, `new Date('2026-11-01')` est lue en UTC et s'affiche le 31 octobre.
+ *
+ * Deux garde-fous ajoutés le 2026-11-13. Un horodatage complet passé ici
+ * produisait `…ZT00:00:00`, donc **« Invalid Date » affiché à la vendeuse** —
+ * vu sur `created_at` d'une reprise. On retombe alors sur une lecture
+ * directe, et sur « — » si même celle-là échoue : jamais un message d'erreur
+ * anglais au milieu d'une liste.
+ */
+function fmtDate(d){
+  if(!d) return '—';
+  var t = new Date(d + 'T00:00:00');
+  if (isNaN(t)) t = new Date(d);
+  return isNaN(t) ? '—'
+       : t.toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit',year:'numeric'});
+}
+
+/** Un horodatage complet : « 10/11/2026 à 14h22 ». */
+function fmtHorodate(d){
+  if(!d) return '—';
+  var t = new Date(d);
+  if (isNaN(t)) return '—';
+  return t.toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit',year:'numeric'})
+       + ' à ' + ('0'+t.getHours()).slice(-2) + 'h' + ('0'+t.getMinutes()).slice(-2);
+}
 function getCarat(code){return CARATS_LIST.find(c=>c.code===code);}
 function statutStock(i){
   var enRuptPoids=(i.poidsTotalG||0)<=0;
@@ -3525,25 +3550,40 @@ function renderAchatsClients(){
   document.getElementById('achats-clients-body').innerHTML=triees.map(a=>{
     const c=getCarat(a.carat);
     const dot=c?`<span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${c.couleur};margin-right:4px;vertical-align:middle"></span>`:'';
-    const btnSuppr=isAdmin()?`<button class="btn small btn-danger" onclick="supprimerAchatClient('${a.id}')">✕</button>`:'<span class="perm-lock" title="Admin uniquement">🔒</span>';
+    // ÉCHAPPEMENT. Le nom de la cliente, la description, le carat et le rôle
+    // entraient bruts dans `innerHTML` — une cliente nommée
+    // `<img src=x onerror=…>` se serait exécutée dans la session de qui
+    // ouvre cette liste (§ 3). La vue en cartes, elle, échappait déjà : le
+    // tableau était le maillon oublié.
+    const btnSuppr=isAdmin()
+      ?`<button class="btn small btn-danger" onclick="supprimerAchatClient('${escJs(a.id)}')">✕</button>`
+      :'<span class="perm-lock" title="Admin uniquement">🔒</span>';
     return`<tr>
       <td style="white-space:nowrap;font-size:12px;color:var(--text-secondary)">${fmtDate(a.date)}</td>
       <td><div style="display:flex;align-items:center;gap:7px">
-        <div style="width:26px;height:26px;border-radius:50%;background:var(--info-bg);color:var(--info-text);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:600;flex-shrink:0">${ini(a.client)}</div>
-        <span>${a.client}</span>
+        <div style="width:26px;height:26px;border-radius:50%;background:var(--info-bg);color:var(--info-text);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:600;flex-shrink:0">${esc(ini(a.client))}</div>
+        <span>${esc(a.client)}</span>
       </div></td>
-      <td style="font-size:12px;color:var(--text-secondary)">${a.description}</td>
+      <td style="font-size:12px;color:var(--text-secondary)">
+        ${esc(a.description||'')}
+        <div style="font-size:11px;color:var(--text-tertiary);margin-top:2px">
+          ${esc(a.id)}${a.note ? ' · 📝 note' : ''}
+        </div>
+      </td>
       <td style="text-align:center">
         ${a.photo
-          ? `<img src="${a.photo}" alt="Photo" style="width:44px;height:44px;object-fit:cover;border-radius:6px;border:0.5px solid var(--border-light);cursor:pointer" onclick="agrandirPhotoReprise('${a.id}')" title="Cliquer pour agrandir" />`
+          ? `<img src="${esc(a.photo)}" alt="Photo" style="width:44px;height:44px;object-fit:cover;border-radius:6px;border:0.5px solid var(--border-light);cursor:pointer" onclick="agrandirPhotoReprise('${escJs(a.id)}')" title="Cliquer pour agrandir" />`
           : '<span style="color:var(--text-tertiary);font-size:12px">—</span>'}
       </td>
-      <td><span class="carat-pill">${dot}${(a.carat||'—').toUpperCase()}</span></td>
+      <td><span class="carat-pill">${dot}${esc((a.carat||'—').toUpperCase())}</span></td>
       <td style="text-align:center">${a.poids}g</td>
       <td style="font-weight:500;color:var(--success-text)">${fmt(a.prixPropose)}</td>
       <td>${celluleSortieCaisse(a)}</td>
-      <td><span class="role-pill role-${a.saisiPar}">${a.saisiPar}</span></td>
-      <td>${btnSuppr}</td>
+      <td><span class="role-pill role-${esc(a.saisiPar||'')}">${esc(a.saisiPar||'')}</span></td>
+      <td style="white-space:nowrap">
+        <button class="btn small" onclick="detailReprise('${escJs(a.id)}')" title="Tout ce qui a été enregistré">Détail</button>
+        ${btnSuppr}
+      </td>
     </tr>`;
   }).join('');
   rendreReprisesCartes(triees);
@@ -3566,7 +3606,7 @@ function renderAchatsClients(){
 function rendreReprisesCartes(triees){
   rendreCartes('ac-cartes', triees, function(a){
     const e = etatSortieCaisse(a);
-    var actions = [];
+    var actions = [{ texte:'Détail', onclick:"detailReprise('"+escJs(a.id)+"')" }];
     if (a.photo) actions.push({ texte:'🖼 Photo', onclick:"agrandirPhotoReprise('"+escJs(a.id)+"')" });
     // Même règle que le tableau : seul un rôle qui voit la caisse peut
     // rattacher le décaissement, et seul l'administrateur peut supprimer.
@@ -3584,7 +3624,10 @@ function rendreReprisesCartes(triees){
       titre: a.client,
       valeur: fmt(a.prixPropose),
       desc: a.description,
-      meta: [fmtDate(a.date), a.poids + 'g', a.saisiPar],
+      // La référence et la présence d'une note se lisent ici comme dans le
+      // tableau : les deux vues disent la même chose, jamais deux vérités.
+      meta: [a.id, fmtDate(a.date), a.poids + 'g', a.saisiPar,
+             a.note ? '📝 note' : null].filter(Boolean),
       badges: [
         { texte:(a.carat||'—').toUpperCase(), classe:'carat-pill' },
         e.masque ? null
@@ -4007,6 +4050,76 @@ function supprimerPhotoReprise() {
   document.getElementById('ac-photo').value = '';
   document.getElementById('ac-photo-preview').style.display = 'none';
   document.getElementById('ac-photo-img').src = '';
+}
+
+/**
+ * La fiche d'une reprise : TOUT ce qui a été enregistré.
+ *
+ * Cinq champs n'apparaissaient nulle part — la référence, le type de bijou,
+ * la provenance de l'or, la **note** et la date d'enregistrement. La note
+ * était le plus coûteux : on la saisit au comptoir (« bracelet tordu »,
+ * « rachat famille ») et elle disparaissait sans retour.
+ *
+ * Ils ne vont pas dans le tableau : il porte déjà dix colonnes, et § 3 dit
+ * ce qu'un tableau de quinze colonnes devient sur un téléphone. La liste
+ * reste lisible, la fiche dit tout.
+ *
+ * Tout passe par `esc()` — c'est de la saisie de comptoir qui entre dans
+ * `innerHTML`.
+ */
+function detailReprise(id) {
+  var a = STATE.achatsClients.find(function (x) { return x.id === id; });
+  if (!a) { showToast('Reprise introuvable.'); return; }
+
+  var c   = getCarat(a.carat);
+  var t   = TYPES_BIJOUX.find(function (x) { return x.code === a.typeBijou; });
+  var dec = decaissementDeLaPiece('reprise', a.id);
+  var cl  = a.clientId ? clientParId(a.clientId) : null;
+
+  // Les écrans de gestion gardent le libellé COMPLET du carat (provenance
+  // comprise) : c'est la facture, et elle seule, qui l'abrège (§ 3).
+  var lignes = [
+    ['Date de la reprise', fmtDate(a.date)],
+    // Seulement si elle diffère du jour de la reprise : sinon c'est du bruit.
+    // Et par `fmtHorodate()`, pas `fmtDate()` — c'est un horodatage complet.
+    ['Enregistrée le',     (a.creeLe && String(a.creeLe).slice(0,10) !== a.date)
+                             ? fmtHorodate(a.creeLe) : null],
+    ['Cliente',            a.client + (a.clientId ? ' (' + a.clientId + ')' : '')],
+    ['Téléphone',          cl && cl.tel ? cl.tel : null],
+    ['Description',        a.description],
+    ['Type de bijou',      t ? t.label : (a.typeBijou || null)],
+    ['Carat',              c ? c.label + ' · ' + c.purete : (a.carat || null)],
+    ['Provenance',         a.provenance === 'local' ? 'Or local'
+                         : a.provenance === 'importe' ? 'Or importé' : null],
+    ['Poids',              (a.poids || 0) + ' g'],
+    ['dont or local',      (a.local || 0)   > 0 ? a.local + ' g'   : null],
+    ['dont or importé',    (a.importe || 0) > 0 ? a.importe + ' g' : null],
+    ['Prix de reprise',    fmt(a.prixPropose)],
+    ['Note',               a.note || null],
+    ['Saisi par',          a.saisiPar || null],
+    ['Sortie de caisse',   peutVoirCaisse()
+                             ? (dec ? dec.id + ' — ' + fmt(dec.montant) + ' le ' + fmtDate(dec.date)
+                                    : 'Aucune — cet argent est sorti du tiroir sans être déduit de la caisse.')
+                             : null]
+  ];
+
+  document.getElementById('dr-ref').textContent = a.id;
+  document.getElementById('dr-corps').innerHTML =
+      '<div class="detail-liste">'
+    + lignes.filter(function (l) { return l[1] !== null && l[1] !== undefined && l[1] !== ''; })
+            .map(function (l) {
+              return '<div class="detail-ligne"><span class="detail-cle">' + esc(l[0]) + '</span>'
+                   + '<span class="detail-val">' + esc(String(l[1])) + '</span></div>';
+            }).join('')
+    + '</div>'
+    + (a.photo
+        ? '<div style="margin-top:14px"><img src="' + esc(a.photo) + '" alt="Photo de la reprise" '
+          + 'style="width:100%;max-height:240px;object-fit:contain;border-radius:var(--radius-md);'
+          + 'background:var(--bg-muted);cursor:zoom-in" '
+          + 'onclick="agrandirPhotoReprise(\'' + escJs(a.id) + '\')" /></div>'
+        : '');
+
+  document.getElementById('modal-detail-reprise').classList.add('show');
 }
 
 function agrandirPhotoReprise(id) {

@@ -90,8 +90,8 @@ déjà `migrations/`, les `*.md`, `config_backup.json` et `.claude/`.
 
 Repères de version, pour vérifier que le déploiement a bien pris :
 
-- `index.html` : `?v=2026-11-13b` · `operateur.html` : `?v=2026-11-12d`
-- `APP_VERSION` : `2026-11-13-epargne-multi-articles`
+- `index.html` : `?v=2026-11-13c` · `operateur.html` : `?v=2026-11-12d`
+- `APP_VERSION` : `2026-11-13-fiche-reprise`
 - `client.html` : `?v=2026-11-04b`
 - `boutique.html` : `?v=2026-11-02a`
 
@@ -107,7 +107,7 @@ Repères de version, pour vérifier que le déploiement a bien pris :
 ## 3. Juste après le déploiement
 
 **Rechargez avec Ctrl + Maj + R**, puis regardez la version sous l'écran de
-connexion. Tant qu'elle n'affiche pas `2026-11-13-epargne-multi-articles`, rien de ce
+connexion. Tant qu'elle n'affiche pas `2026-11-13-fiche-reprise`, rien de ce
 qui suit n'a de sens : c'est le cache, pas un bug. C'est la première chose à
 vérifier devant tout comportement incohérent.
 
@@ -371,6 +371,26 @@ téléphone.
 **Sur la facture imprimée, le paiement reste du texte** — pas de pictogramme.
 Un code composé (`compte+wave`) n'a pas d'icône unique, et une facture
 s'imprime souvent en noir et blanc.
+
+### c duodecies. La fiche d'une reprise
+
+*Reprises de bijoux → bouton **Détail** sur une ligne (ou sur une carte).*
+
+> Attendu : une fiche qui porte **tout** ce qui a été enregistré — référence,
+> date de la reprise, cliente et son identifiant, téléphone, description,
+> type de bijou, carat complet avec son titre, provenance, poids et sa
+> répartition or local / or importé, prix, **note**, qui a saisi, et le
+> décaissement rattaché (ou l'avertissement s'il manque).
+>
+> Les champs **vides n'apparaissent pas** : une reprise sans note ni
+> provenance montre une fiche plus courte, pas une liste de tirets.
+>
+> Dans la liste, sous la description : la **référence**, et un **📝** quand
+> une note existe. C'est ce qui donne envie d'ouvrir la fiche.
+
+**Et une vérification qui ne se voit pas** : une cliente dont le nom contient
+`<b>gras</b>` doit s'afficher **en toutes lettres**, balises comprises, et non
+en gras. Le tableau injectait ces champs sans les échapper.
 
 ### c undecies. Télécharger le QR de la vitrine
 
