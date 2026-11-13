@@ -626,6 +626,58 @@ action pour un rôle, la carte doit lire la même condition — idéalement la
 même fonction (`etatSortieCaisse()`, `peutVoirCaisse()`, `isAdmin()`), jamais
 une copie de la règle.
 
+### Une modale qui bouge sous le doigt n'est pas un détail de confort
+
+Signalé le 2026-11-13 : « ça bouge et cela facilite pas le remplissage sur
+mobile ». Mesuré sur un écran de 375 × 812, modale ouverte — et deux
+hypothèses sont tombées : la frappe ne provoque **aucun** décalage de mise en
+page (0 px), et rien ne déborde horizontalement. Ce n'était ni l'un ni
+l'autre.
+
+Quatre défauts réels, chacun avec sa mesure :
+
+- **La page défilait derrière la modale.** `body { overflow: visible }` :
+  500 → 900 px pendant qu'une fenêtre était ouverte. On touchait un champ, le
+  navigateur faisait défiler la page pour « l'amener à l'écran », et on
+  ressortait ailleurs qu'on était entré.
+- **Le défilement se propageait** (`overscroll-behavior: auto`) : arrivé au
+  bout de la modale, c'est la page qui prenait le relais.
+- **`max-height: 92vh`** ne suit pas la hauteur visible. Clavier ouvert, le
+  bas de la feuille — donc « Enregistrer » — passait dessous.
+- **La modale rouvrait à son ancien défilement** : 400 px, inchangés d'une
+  ouverture à l'autre. Rouvrir « Nouvelle vente » posait la vendeuse au
+  milieu du formulaire.
+
+Les corrections, et pourquoi elles sont écrites ainsi :
+
+- **`dvh` avec `vh` gardé en repli** — la déclaration précédente sert aux
+  navigateurs qui ignorent `dvh`, elle ne se supprime pas.
+- **`overflow: hidden` ne suffit pas** à figer la page : iOS rebondit quand
+  même. C'est `body.modale-ouverte { position: fixed }` avec un `top` négatif
+  qui fige, et `deverrouillerPage()` qui **repose la page à la même
+  hauteur** — sans ce retour, fermer une fenêtre renvoie en haut de liste.
+- **Le déverrouillage compte les modales encore ouvertes.** Le complément
+  d'épargne s'ouvre **par-dessus** la vente ; refermer celui-là ne doit pas
+  rendre son défilement à la page. Vérifié : deux ouvertes → verrouillé,
+  la première refermée → toujours verrouillé.
+- **Un seul point surveille l'ouverture : la classe `show`.** `detailReprise()`,
+  `afficherFacture()`, `ouvrirComplementCC()`, `ouvrirAjustCC()`, le clic sur
+  le fond et la touche Échap **ne passent pas** par `openModal()` /
+  `closeModal()`. Poser le verrou chez chaque appelant, c'est la garantie
+  qu'il manquera au treizième — d'où un `MutationObserver` sur
+  `attributeFilter: ['class']`. Vérifié sur les quatre chemins, Échap et clic
+  de fond compris, et sur un `classList.add('show')` posé à la main.
+- **« Enregistrer » est collé en bas sous 768 px.** Le formulaire de vente
+  fait 1 223 px de contenu dans une feuille de 746 : le bouton vivait à deux
+  écrans du dernier champ rempli. `bottom: -20px` et les marges négatives
+  rattrapent le `padding: 20px` du panneau, sans quoi le bouton flotte
+  au-dessus d'une bande vide.
+
+**La leçon de méthode est la même qu'au § 3 sur les tuiles de paiement :**
+« ça bouge » ne dit pas ce qui bouge. Les deux causes supposées (la frappe,
+le débordement) ne bougeaient pas ; les quatre vraies ne se voyaient qu'en
+lisant `scrollY`, `body.overflow` et `scrollTop` dans le navigateur.
+
 ### Une liste ne montre pas tout : elle a une fiche à côté
 
 Demandé le 2026-11-13 pour les reprises. **Cinq champs enregistrés

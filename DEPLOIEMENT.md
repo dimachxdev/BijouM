@@ -1,6 +1,6 @@
 # Déploiement — vitrine publique, QR, CGU et verrou des gestes
 
-Mis à jour le 2026-11-02. À suivre dans l'ordre.
+Mis à jour le 2026-11-13. À suivre dans l'ordre.
 
 > **Ce déploiement porte quatre lots.** La vitrine et les CGU, prêts depuis le
 > 2026-10-31 et jamais mis en ligne ; le verrou des gestes ; les sauvegardes
@@ -90,8 +90,8 @@ déjà `migrations/`, les `*.md`, `config_backup.json` et `.claude/`.
 
 Repères de version, pour vérifier que le déploiement a bien pris :
 
-- `index.html` : `?v=2026-11-13c` · `operateur.html` : `?v=2026-11-12d`
-- `APP_VERSION` : `2026-11-13-fiche-reprise`
+- `index.html` : `?v=2026-11-13d` · `operateur.html` : `?v=2026-11-12d`
+- `APP_VERSION` : `2026-11-13-modale-mobile`
 - `client.html` : `?v=2026-11-04b`
 - `boutique.html` : `?v=2026-11-02a`
 
@@ -107,7 +107,7 @@ Repères de version, pour vérifier que le déploiement a bien pris :
 ## 3. Juste après le déploiement
 
 **Rechargez avec Ctrl + Maj + R**, puis regardez la version sous l'écran de
-connexion. Tant qu'elle n'affiche pas `2026-11-13-fiche-reprise`, rien de ce
+connexion. Tant qu'elle n'affiche pas `2026-11-13-modale-mobile`, rien de ce
 qui suit n'a de sens : c'est le cache, pas un bug. C'est la première chose à
 vérifier devant tout comportement incohérent.
 
@@ -391,6 +391,32 @@ s'imprime souvent en noir et blanc.
 **Et une vérification qui ne se voit pas** : une cliente dont le nom contient
 `<b>gras</b>` doit s'afficher **en toutes lettres**, balises comprises, et non
 en gras. Le tableau injectait ces champs sans les échapper.
+
+### c terdecies. La modale sur un téléphone
+
+*Un vrai téléphone, ou le navigateur réduit à 375 px de large.*
+
+Ouvrez **Nouvelle vente** et remplissez-la.
+
+> Attendu, quatre choses :
+>
+> 1. **La page ne bouge plus derrière.** Touchez un champ du bas : la modale
+>    défile, la page non. Refermez : vous revenez **exactement** où vous
+>    étiez dans la liste, pas en haut.
+> 2. **« Enregistrer » reste visible**, collé au bas de la feuille, quel que
+>    soit l'endroit du formulaire où vous êtes.
+> 3. **Arrivé au bout du défilement de la modale**, continuer à tirer ne fait
+>    pas partir la page.
+> 4. **Rouvrez la fenêtre** après l'avoir fait défiler : elle s'ouvre à son
+>    début, pas au milieu du formulaire.
+>
+> Le clavier ouvert, le bas de la feuille ne doit pas passer dessous —
+> c'est ce que `dvh` corrige, et ça ne se voit que sur un vrai téléphone.
+
+**Puis la même chose sur une modale qui ne passe pas par `openModal()`** :
+le **Détail** d'une reprise, la **facture**, et surtout le **complément
+d'épargne** ouvert PAR-DESSUS la vente. Refermer le complément doit laisser
+la page toujours figée — la vente est encore ouverte dessous.
 
 ### c undecies. Télécharger le QR de la vitrine
 

@@ -20,7 +20,7 @@
  * qui « peut tout faire » alors que les droits sont restreints, c'est presque
  * toujours ça.
  */
-const APP_VERSION = '2026-11-13-fiche-reprise';
+const APP_VERSION = '2026-11-13-modale-mobile';
 
 /**
  * Domaine de la vitrine publique, pour le QR imprime sur les factures.
@@ -1350,11 +1350,73 @@ function openModal(id) {
   if(id==='modal-add-decaiss')      { prepDecaiss(); }
   if(id==='modal-add-compte-client'){ peuplerClientSelect('cc-client'); document.getElementById('cc-date').value=today(); }
   // (modale 'modal-add-bijou-arr' supprimée : les arrhes sont pilotées par le journal des ventes)
-  document.getElementById(id).classList.add('show');
+  var bd = document.getElementById(id);
+  bd.classList.add('show');
+  // LA MODALE S'OUVRE À SON DÉBUT. Elle gardait le défilement de la fois
+  // d'avant : rouvrir « Nouvelle vente » après avoir fait défiler posait la
+  // vendeuse au milieu du formulaire. Mesuré le 2026-11-13 : 400 px, inchangés
+  // d'une ouverture à l'autre.
+  var panneau = bd.querySelector('.modal');
+  if (panneau) panneau.scrollTop = 0;
+  verrouillerPage();
 }
-function closeModal(id) { document.getElementById(id)?.classList.remove('show'); }
+function closeModal(id) {
+  document.getElementById(id)?.classList.remove('show');
+  deverrouillerPage();
+}
+
+/**
+ * Figer la page tant qu'une modale est ouverte — et la reposer où elle était.
+ *
+ * Sans cela, toucher un champ fait défiler la PAGE derrière pour « amener le
+ * champ à l'écran », et on ressort ailleurs qu'on était entré. Avec le
+ * verrou, c'est la modale elle-même qui défile — ce qu'on veut.
+ *
+ * Le déverrouillage compte les modales encore ouvertes : la fenêtre de
+ * complément s'ouvre PAR-DESSUS celle de vente, et refermer la première ne
+ * doit pas rendre son défilement à la page.
+ */
+var _pageY = 0;
+function verrouillerPage() {
+  if (document.body.classList.contains('modale-ouverte')) return;
+  _pageY = window.scrollY || window.pageYOffset || 0;
+  document.body.style.top = (-_pageY) + 'px';
+  document.body.classList.add('modale-ouverte');
+}
+function deverrouillerPage() {
+  if (document.querySelectorAll('.modal-backdrop.show').length) return;
+  if (!document.body.classList.contains('modale-ouverte')) return;
+  document.body.classList.remove('modale-ouverte');
+  document.body.style.top = '';
+  window.scrollTo(0, _pageY);
+}
 document.querySelectorAll('.modal-backdrop').forEach(m=>{m.addEventListener('click',e=>{if(e.target===m)m.classList.remove('show');});});
 document.addEventListener('keydown',e=>{if(e.key==='Escape')document.querySelectorAll('.modal-backdrop.show').forEach(m=>m.classList.remove('show'));});
+
+/**
+ * UN SEUL POINT surveille l'ouverture des modales : la classe `show`.
+ *
+ * Toutes ne passent pas par `openModal()` / `closeModal()` — la fiche d'une
+ * reprise, la facture, le complément d'épargne et l'ajustement posent
+ * `classList.add('show')` en direct, et le clic sur le fond comme la touche
+ * Échap l'enlèvent de même. Poser le verrou chez chacun, c'est la garantie
+ * qu'il manquera au treizième. On observe donc l'état réel.
+ */
+(function () {
+  var obs = new MutationObserver(function (mutations) {
+    mutations.forEach(function (mu) {
+      if (mu.target.classList.contains('show')) {
+        var p = mu.target.querySelector('.modal');
+        if (p) p.scrollTop = 0;
+      }
+    });
+    if (document.querySelectorAll('.modal-backdrop.show').length) verrouillerPage();
+    else deverrouillerPage();
+  });
+  document.querySelectorAll('.modal-backdrop').forEach(function (m) {
+    obs.observe(m, { attributes: true, attributeFilter: ['class'] });
+  });
+})();
 
 // ============================================
 // TOAST

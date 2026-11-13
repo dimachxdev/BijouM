@@ -647,10 +647,28 @@ tbody tr:hover td { background: #f3eedf; }
   border-radius: var(--radius-xl) var(--radius-xl) 0 0;
   padding: 20px 16px;
   width: 100%; max-width: 100vw;
-  max-height: 92vh; overflow-y: auto;
+  /* `dvh` suit la hauteur VISIBLE : sur un téléphone, `vh` reste calculé sur
+     l'écran entier quand la barre d'adresse ou le clavier mange la moitié de
+     la place, et le bas de la feuille passe alors sous le clavier. L'ancienne
+     valeur reste en premier comme repli pour un navigateur qui ignore `dvh`. */
+  max-height: 92vh;
+  max-height: 92dvh;
+  overflow-y: auto;
+  /* Sans cela, arriver au bout du défilement de la modale fait défiler LA
+     PAGE derrière — mesuré le 2026-11-13 : 500 → 900 px pendant que la
+     modale était ouverte. C'est la moitié du « ça bouge ». */
+  overscroll-behavior: contain;
   box-shadow: var(--shadow-md);
   animation: modal-slide-up 0.2s ease;
 }
+
+/* LA PAGE NE BOUGE PLUS DERRIÈRE UNE MODALE.
+   `overflow:hidden` seul ne suffit pas sur iOS : le document rebondit quand
+   même. Le `position:fixed` avec un `top` négatif fige la page là où elle
+   était, et `js/app.js` la repose à la même hauteur en refermant. Sans ce
+   verrou, toucher un champ fait défiler la page derrière pour « amener le
+   champ à l'écran », et on se retrouve ailleurs en sortant. */
+body.modale-ouverte { position: fixed; width: 100%; overflow: hidden; }
 .modal-large { width: 100%; }
 @keyframes modal-slide-up { from { transform: translateY(40px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
 .modal-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; flex-wrap: wrap; gap: 8px; }
@@ -659,6 +677,21 @@ tbody tr:hover td { background: #f3eedf; }
 .modal-close:hover { background: var(--bg-secondary); }
 .modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; flex-wrap: wrap; }
 .modal-actions .btn { flex: 1; justify-content: center; }
+
+/* « ENREGISTRER » RESTE À PORTÉE DU POUCE.
+   Le formulaire de vente fait 1 211 px de contenu dans une feuille de 747 :
+   le bouton vivait à deux écrans du dernier champ rempli. Collé en bas, il
+   est toujours là — et c'est le geste qu'on cherche.
+   `bottom: -20px` et les marges négatives rattrapent le `padding: 20px` du
+   panneau : sans eux, le bouton flotterait au-dessus d'une bande vide. */
+@media (max-width: 767px) {
+  .modal-actions {
+    position: sticky; bottom: -20px; z-index: 2;
+    margin-bottom: -20px; padding: 12px 0 20px;
+    background: var(--bg-primary);
+    box-shadow: 0 -10px 14px -10px rgba(26,25,22,0.18);
+  }
+}
 
 /* ============================================================
    TICKET
