@@ -90,8 +90,8 @@ déjà `migrations/`, les `*.md`, `config_backup.json` et `.claude/`.
 
 Repères de version, pour vérifier que le déploiement a bien pris :
 
-- `index.html` : `?v=2026-11-13d` · `operateur.html` : `?v=2026-11-12d`
-- `APP_VERSION` : `2026-11-13-modale-mobile`
+- `index.html` : `?v=2026-11-13f` · `operateur.html` : `?v=2026-11-12d`
+- `APP_VERSION` : `2026-11-13-facture-sans-aplat`
 - `client.html` : `?v=2026-11-04b`
 - `boutique.html` : `?v=2026-11-02a`
 
@@ -107,7 +107,7 @@ Repères de version, pour vérifier que le déploiement a bien pris :
 ## 3. Juste après le déploiement
 
 **Rechargez avec Ctrl + Maj + R**, puis regardez la version sous l'écran de
-connexion. Tant qu'elle n'affiche pas `2026-11-13-modale-mobile`, rien de ce
+connexion. Tant qu'elle n'affiche pas `2026-11-13-facture-sans-aplat`, rien de ce
 qui suit n'a de sens : c'est le cache, pas un bug. C'est la première chose à
 vérifier devant tout comportement incohérent.
 
@@ -494,6 +494,55 @@ passe à « des lignes manquent » → **Examiner**.
 doit porter une ligne par geste, avec qui l'a fait. Il n'a ni `UPDATE` ni
 `DELETE` : personne ne peut l'effacer, pas même l'opérateur qu'il enregistre.
 C'est la contrepartie de l'export, pas une décoration.
+
+### c quaterdecies. L'aperçu de la facture et le PDF
+
+*Journal des ventes → **Facture** sur une ligne.*
+
+> Attendu : l'aperçu montre la facture **telle qu'elle s'imprimera** —
+> en-tête en rangée, « FACTURE » et le numéro alignés à droite, le numéro en
+> **noir** (il était doré à l'écran et noir sur le papier), pas de zébrure
+> une ligne sur deux, un filet sous la dernière ligne du tableau.
+>
+> Le bouton **« Taille réelle »** bascule entre la vue qui tient en entier et
+> la lecture au format réel, avec défilement. Sur un téléphone, c'est lui
+> qui permet de relire le nom de la cliente.
+
+**Puis imprimez en PDF et posez les deux côte à côte.** Même disposition,
+mêmes corps de texte, mêmes largeurs de colonnes. La seule différence
+attendue est la marge : l'aperçu garde son encart, le papier prend celle de
+la page.
+
+**Et le test qui compte vraiment : imprimez la même facture depuis un
+poste, puis depuis un téléphone.** Les deux PDF doivent être identiques.
+Avant le 2026-11-13 ils ne l'étaient pas — le téléphone produisait un
+document aux corps de 10 px et aux colonnes resserrées, sans que rien ne le
+signale.
+
+### c quindecies. La facture à l'impression : lisible et sobre
+
+*Imprimez une facture **sans cocher** « Graphiques d'arrière-plan » — c'est
+le réglage par défaut, celui que vos boutiques auront.*
+
+> Attendu : l'en-tête du tableau se lit en **noir sur blanc, souligné d'un
+> trait**. Avant le 2026-11-13 il était blanc sur une bande noire : le
+> navigateur ne sortant pas les fonds, il s'imprimait **blanc sur blanc**.
+>
+> Aucune bande colorée nulle part — ni derrière la cliente, ni sous le total
+> des articles. Trois aplats retirés, soit **10,9 % de la page**.
+>
+> La ligne du bas — « FAC-0003 · 13/11/2026 · Vendu par … » — doit se lire
+> sans effort. Elle était à 2,32:1, donc invisible sur beaucoup
+> d'imprimantes.
+
+**Et la contre-épreuve** : imprimez la même facture **en cochant** les
+graphiques d'arrière-plan. Le résultat doit être identique — s'il apparaît
+une bande colorée, c'est qu'un aplat est revenu dans la feuille.
+
+> La date en haut à gauche et le titre au centre de votre PDF **ne viennent
+> pas de la facture** : c'est l'en-tête d'impression du navigateur. Pour les
+> retirer, décochez « En-têtes et pieds de page » dans la fenêtre
+> d'impression. Aucune feuille de style ne peut agir dessus.
 
 ### d. **Scanner le code avec un vrai téléphone**
 

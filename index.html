@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>KAYOR — Brillez sans effort</title>
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml" />
-  <link rel="stylesheet" href="css/style.css?v=2026-11-13d" />
+  <link rel="stylesheet" href="css/style.css?v=2026-11-13f" />
 </head>
 <body>
 
@@ -1452,11 +1452,21 @@
     <div class="modal-header">
       <div class="modal-title">Facture</div>
       <div style="display:flex;gap:8px">
+        <button class="btn btn-secondary" id="btn-zoom-facture" onclick="basculerZoomFacture()">Taille réelle</button>
         <button class="btn btn-primary" onclick="imprimerFacture()">🖨 Imprimer / PDF</button>
         <button class="modal-close" onclick="closeModal('modal-facture')">✕</button>
       </div>
     </div>
-    <div id="facture-content" style="background:#fff;border-radius:8px;padding:0"></div>
+    <!-- L'APERCU EST LE DOCUMENT LUI-MEME, pas une copie de ses classes :
+         un iframe recoit exactement la chaine envoyee a l'impression. Dans la
+         page, style.css lui ajoutait un interligne, un numero dore, une
+         zebrure — rien de cela n'atteignait le papier. Hauteur posee par
+         afficherFacture() apres le rendu : un iframe n'en a pas de naturelle. -->
+    <div id="facture-cadre" style="overflow:hidden;background:#fff;border-radius:8px">
+      <iframe id="facture-apercu" title="Aperçu de la facture"
+              style="display:block;border:0;background:#fff;width:760px;height:300px;
+                     transform-origin:top left"></iframe>
+    </div>
   </div>
 </div>
 
@@ -1669,15 +1679,15 @@
 
 <div class="toast" id="toast"></div>
   <!-- Supabase SDK -->
-  <script src="js/verrou.js?v=2026-11-13d"></script>
-  <script src="js/security.js?v=2026-11-13d"></script>
-  <script src="js/auth.js?v=2026-11-13d"></script>
-  <script src="js/data.js?v=2026-11-13d"></script>
-  <script src="js/supabase.js?v=2026-11-13d"></script>
+  <script src="js/verrou.js?v=2026-11-13f"></script>
+  <script src="js/security.js?v=2026-11-13f"></script>
+  <script src="js/auth.js?v=2026-11-13f"></script>
+  <script src="js/data.js?v=2026-11-13f"></script>
+  <script src="js/supabase.js?v=2026-11-13f"></script>
   <!-- Encodeur QR local : la regle 6 interdit un CDN, et ce code est lu par
        la page ou vit le jeton de session. Doit precéder app.js. -->
-  <script src="js/qr.js?v=2026-11-13d"></script>
-  <script src="js/app.js?v=2026-11-13d"></script>
+  <script src="js/qr.js?v=2026-11-13f"></script>
+  <script src="js/app.js?v=2026-11-13f"></script>
 
 <!-- MODAL AJUSTER STOCK -->
 <div class="modal-backdrop" id="modal-ajust-stock">

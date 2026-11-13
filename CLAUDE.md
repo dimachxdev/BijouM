@@ -715,6 +715,13 @@ le script ne part pas et `<b>gras</b>` s'affiche en toutes lettres.
 **Le gabarit protège la carte ; le tableau s'écrit à la main.** En relire un
 avant de le modifier.
 
+**Et `document.write` n'est pas plus clément qu'`innerHTML`.** Trouvé le
+2026-11-13 en repassant à côté : `agrandirPhotoReprise()` ouvrait une fenêtre
+en y écrivant `a.client`, `a.description` et `a.id` bruts. Le même défaut que
+le tableau, à deux fonctions de là, dans la seule forme qu'on ne pense pas à
+relire. Vérifié après correction : la balise injectée s'affiche en toutes
+lettres, une seule image dans le document, et la photo en base64 intacte.
+
 ### `fmtDate()` n'accepte qu'une date seule
 
 Elle concatène `'T00:00:00'` — ce qui fixe la date à minuit **local**, sans
@@ -738,6 +745,12 @@ fenêtre d'impression. Elles avaient divergé jusqu'à l'absurde : les classes
 `.facture-*` n'existaient que dans la fenêtre d'impression, donc l'aperçu
 affichait du HTML brut — on validait une facture sans mise en page avant d'en
 imprimer une autre. Ne pas réintroduire de second jeu de règles.
+
+**Une feuille unique ne suffisait pas : il fallait un document unique.**
+`FACTURE_CSS` était bien seule, mais elle s'appliquait dans deux cascades
+différentes — voir « L'aperçu EST le document » plus bas, où la mesure est
+faite. Depuis le 2026-11-13, l'aperçu vit dans un `iframe` et reçoit la même
+chaîne que l'impression.
 
 Deux pièges, tous deux rencontrés le 2026-10-21 :
 
@@ -777,6 +790,136 @@ la table des libellés ne connaît pas, et la facture afficherait le code brut.
 2026-11-12, en même temps que les tuiles de saisie). Deux raisons : un code
 composé comme `compte+wave` n'a pas d'icône unique, et la facture s'imprime
 souvent en noir et blanc, où un pictogramme coloré devient une tache grise.
+
+### L'aperçu EST le document, il ne lui ressemble pas
+
+Signalé le 2026-11-13 : « la mise en forme du PDF n'est pas la même que le
+premier fichier ouvert ». C'était vrai, et la cause n'était pas celle que la
+règle précédente avait fermée. `FACTURE_CSS` était bien l'unique feuille —
+mais elle servait **deux cascades** : dans l'application elle s'empilait sur
+`style.css`, dans la fenêtre d'impression elle était seule.
+
+Mesuré, aperçu contre fenêtre d'impression, 56 éléments :
+
+| Ce que `style.css` ajoutait à l'aperçu | Sur le papier |
+|---|---|
+| interligne **1,5** | `normal` (~1,2) — chaque bloc 25 % plus court |
+| numéro de facture **doré** | noir |
+| en-têtes de colonne insécables | repliables |
+| **zébrure** une ligne sur deux | aucune |
+| pas de filet sous la dernière ligne | filet |
+
+Aucune de ces règles ne nommait la facture : elles visaient `td`, `th`,
+`tbody tr:nth-child(even)`. **On ne les trouve pas en relisant
+`FACTURE_CSS`** — elle est juste, c'est son contexte qui changeait. Les
+neutraliser une à une aurait laissé le piège entier pour la prochaine règle
+ajoutée à `style.css`.
+
+**L'aperçu est donc rendu dans un `iframe`, qui reçoit exactement la chaîne
+envoyée à l'impression.** `_documentFacture()` la bâtit, `_factureDoc` la
+garde, `imprimerFacture()` la réécrit telle quelle — elle la reconstruisait
+auparavant depuis `zone.outerHTML` plus un second jeu de règles de page.
+Un document, un assemblage, deux fenêtres.
+
+Vérifié par mesure, 56 éléments × 16 propriétés : **aperçu dans
+l'application ≡ même document isolé, zéro écart.**
+
+### Aucun aplat ne porte une information sur une facture
+
+Signalé le 2026-11-13, facture réelle à l'appui : « DESCRIPTION / CARAT /
+POIDS / MONTANT » sortait en blanc fantôme. Cause : l'en-tête du tableau
+était du **blanc sur une bande noire**, et **le navigateur n'imprime pas les
+fonds par défaut.** Le fond saute, la couleur du texte reste — blanc sur
+papier blanc.
+
+Ce réglage est l'économie d'encre du navigateur, et personne ne le change.
+Les deux issues étaient :
+
+- **forcer les fonds** (`print-color-adjust: exact`) — une bande noire pleine
+  largeur à chaque facture, soit exactement ce qu'on cherchait à éviter ;
+- **ne plus rien faire dépendre d'un aplat.**
+
+C'est la seconde, et elle sert les deux demandes du même geste. Sur papier
+comme à l'écran, la hiérarchie se dit par le **trait** et la **graisse**,
+jamais par une couleur de fond. Trois bandes ont disparu — en-tête du
+tableau, bande cliente, pied de tableau — mesurées à **79 101 px², soit
+10,9 % de la boîte de page A4**, dont un aplat noir plein.
+
+**Les gris pâles disparaissaient avec elles.** Mesuré sur la feuille, quatre
+textes sous le seuil, dont la ligne de référence de la facture à **2,32:1**
+— le numéro, la date et le nom de la vendeuse, pratiquement invisibles.
+`#888` est passé à `#555` (7,46:1) et `#aaa` à `#666` (5,74:1). Après
+correction, le plus faible contraste du document est **5,74:1** et plus rien
+n'est sous le seuil. Un gris qui va bien sur un écran rétroéclairé n'est pas
+un gris qui s'imprime.
+
+**Ces corrections ne sont PAS dans `@media print`, et c'est le point.** Les y
+mettre aurait rouvert le défaut fermé le matin même : un document à l'écran,
+un autre sur le papier. Le document est sobre et lisible en lui-même, et
+l'aperçu le montre tel quel. Ne descendre dans `@media print` que ce qui n'a
+aucun sens à l'écran : la boîte de page, les sauts de page, les ombres.
+
+Vérifié après coup : **aperçu ≡ papier** à la seule marge près, et **PDF
+depuis un poste ≡ PDF depuis un téléphone**.
+
+Deux choses ajoutées au passage, invisibles sur une facture d'une page :
+`thead` en `table-header-group` pour que l'en-tête se répète, et
+`break-inside: avoid` sur les lignes, les totaux et le pied — une facture de
+quinze articles ne coupe plus une ligne en deux.
+
+**Ce qui ne vient pas de nous** : la date en haut à gauche et le titre au
+centre sont l'en-tête d'impression du navigateur, pas la facture. Ils se
+retirent dans la fenêtre d'impression, en décochant « En-têtes et pieds de
+page » — aucune feuille de style ne peut les enlever.
+
+### Une facture n'a pas de version téléphone
+
+Corollaire, et c'est le deuxième défaut : `FACTURE_CSS` portait un bloc
+`@media (max-width:640px)` — en-têtes empilés, corps de 10 px, colonnes à
+36/25/16/23 %. Il n'existait que pour rendre l'aperçu lisible dans une modale
+étroite. C'était **un second document**, et `@media print` n'en annulait que
+sept règles sur dix-neuf.
+
+Conséquence mesurée : **un PDF imprimé depuis un téléphone n'était pas le
+même fichier que depuis un poste** — corps, interlettrage, marges internes et
+largeurs de colonnes différaient, pendant que le bloc `print` remettait
+seulement la rangée. Et l'aperçu ne montrait ni l'un ni l'autre.
+
+Le bloc est supprimé. Il n'en reste **aucune** règle d'écran, donc plus de
+liste de contre-ordres à tenir à jour :
+
+```css
+@media print{ .facture{max-width:100%;padding:0} }   /* tout le bloc */
+```
+
+Mesuré : **PDF depuis un poste ≡ PDF depuis un téléphone, zéro écart.** Et
+entre l'aperçu et le papier il ne reste **qu'une** différence, voulue :
+`.facture` garde son encart de 16 px à l'écran et le cède à `@page{margin:12mm}`
+sur la feuille. Une marge, pas une mise en page.
+
+**La largeur du document est fixe** (`FACTURE_LARGEUR = 760`), et l'aperçu la
+réduit à l'échelle du cadre. Laisser l'`iframe` prendre la largeur disponible
+aurait rendu la disposition dépendante du cadre : mesuré, un cadre de 617 px
+passait sous le seuil et affichait une mise en page que le papier n'aurait
+jamais eue — le même défaut, déplacé d'un cran.
+
+Trois choses à ne pas défaire dans `_ajusterApercuFacture()` :
+
+- **La hauteur se prend après le rendu.** Un `iframe` n'en a pas de
+  naturelle ; sans cela l'aperçu tombe à 300 px avec son propre ascenseur,
+  imbriqué dans une modale qui défile déjà.
+- **Deux passes.** Poser la hauteur fait apparaître l'ascenseur de la modale,
+  qui rétrécit le cadre **après** la mesure : 621 px calculés pour 617
+  disponibles, soit le bord droit de la facture rogné de 4 px.
+- **On ne grandit jamais au-delà de 1.** Une facture affichée plus grande que
+  nature donnerait une fausse idée des corps de texte.
+
+**Et la fidélité se paie, d'où la bascule « Taille réelle ».** Sur un
+téléphone le facteur tombe à 0,44 : le corps de 13 px s'affiche à 5,7 px, on
+ne lit plus le nom de la cliente. La vue fidèle reste le défaut — c'est elle
+qu'on vérifie avant d'imprimer — et la lecture est à un geste.
+**Ne pas répondre à ce problème en rétablissant une mise en page pour petits
+écrans :** c'était elle, le défaut d'origine.
 
 ### Le paiement se choisit à vue, plus dans une liste déroulante
 

@@ -20,7 +20,7 @@
  * qui « peut tout faire » alors que les droits sont restreints, c'est presque
  * toujours ça.
  */
-const APP_VERSION = '2026-11-13-modale-mobile';
+const APP_VERSION = '2026-11-13-facture-sans-aplat';
 
 /**
  * Domaine de la vitrine publique, pour le QR imprime sur les factures.
@@ -4187,13 +4187,17 @@ function detailReprise(id) {
 function agrandirPhotoReprise(id) {
   const a = STATE.achatsClients.find(x=>x.id===id);
   if (!a?.photo) return;
-  // Ouvrir dans une nouvelle fenêtre
+  // Ouvrir dans une nouvelle fenêtre.
+  // TOUT EST ÉCHAPPÉ : c'est le même défaut que le tableau des reprises,
+  // corrigé le matin même à deux fonctions d'ici. `document.write` n'est pas
+  // plus clément qu'`innerHTML` — une cliente nommée <img src=x onerror=…>
+  // s'exécutait dans une fenêtre ouverte depuis la session de la vendeuse.
   const win = window.open('','_blank','width=700,height=600');
-  win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Photo reprise ${a.id}</title>
+  win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Photo reprise ${esc(a.id)}</title>
   <style>body{margin:0;background:#111;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;gap:12px}
   img{max-width:95vw;max-height:90vh;object-fit:contain;border-radius:8px}
   p{color:#fff;font-family:sans-serif;font-size:13px;opacity:0.7}</style></head>
-  <body><img src="${a.photo}" alt="Photo reprise" /><p>${a.client} — ${a.description} — ${fmtDate(a.date)}</p></body></html>`);
+  <body><img src="${esc(a.photo)}" alt="Photo reprise" /><p>${esc(a.client)} — ${esc(a.description)} — ${fmtDate(a.date)}</p></body></html>`);
   win.document.close();
 }
 
@@ -5502,7 +5506,12 @@ function genNumFacture(ventId){
  * l'application ne peut rien déborder ailleurs.
  */
 const FACTURE_CSS = `
-.facture{max-width:720px;margin:0 auto;font-family:'Segoe UI',Arial,sans-serif;font-size:13px;color:#111;background:#fff;padding:16px}
+/* AUTOSUFFISANTE : cette feuille sert AUSSI une fenetre d'impression vierge,
+   ou style.css n'existe pas. Tout ce qu'elle laissait hériter de
+   l'application manquait donc sur le papier — l'interligne en premier
+   (1,5 dans l'apercu, ~1,2 sur le PDF : chaque bloc de texte 25 % plus
+   court). Ne rien retirer d'ici en pensant que la page le fournit. */
+.facture{max-width:720px;margin:0 auto;font-family:'Segoe UI',Arial,sans-serif;font-size:13px;line-height:1.5;color:#111;background:#fff;padding:16px}
 .facture-header{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;margin-bottom:14px;padding-bottom:12px;border-bottom:1.5px solid #e0e0e0}
 .facture-logo-zone{display:flex;align-items:center;gap:14px;min-width:0}
 .facture-shop-texte{min-width:0}
@@ -5514,33 +5523,39 @@ const FACTURE_CSS = `
 .facture-qr{flex-shrink:0;width:70px}
 .facture-qr svg{display:block;width:70px;height:70px}
 .facture-logo-icon{font-size:40px;line-height:1}
-.facture-shop-name{font-size:20px;font-weight:700;letter-spacing:1px}
+.facture-shop-name{font-size:20px;font-weight:700;letter-spacing:1px;color:#111}
 .facture-shop-info{font-size:12px;color:#666;margin-top:2px}
 .facture-num-zone{text-align:right;flex-shrink:0}
-.facture-num-label{font-size:10px;font-weight:700;letter-spacing:2px;color:#888;text-transform:uppercase}
+.facture-num-label{font-size:10px;font-weight:700;letter-spacing:2px;color:#555;text-transform:uppercase}
 .facture-num{font-size:22px;font-weight:700;margin:4px 0}
 .facture-num-date{font-size:11px;color:#666}
 .facture-client{display:flex;align-items:baseline;flex-wrap:wrap;gap:4px 10px;
-                 background:#f7f6f3;border-radius:6px;padding:8px 12px;margin-bottom:12px}
-.facture-client-label{font-size:9.5px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#888}
+                 padding:8px 0;margin-bottom:12px;border-bottom:1px solid #e0e0e0}
+.facture-client-label{font-size:9.5px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#555}
 .facture-client-nom{font-size:14px;font-weight:700}
 .facture-client-info{font-size:11.5px;color:#555;overflow-wrap:anywhere}
 .facture-parties{display:flex;gap:16px;margin:20px 0}
-.facture-partie{flex:1;min-width:0;background:#f7f6f3;border-radius:8px;padding:14px}
-.facture-partie-label{font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#888;margin-bottom:6px}
+.facture-partie{flex:1;min-width:0;padding:0}
+.facture-partie-label{font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#555;margin-bottom:6px}
 .facture-partie-nom{font-size:15px;font-weight:700;margin-bottom:4px;overflow-wrap:anywhere}
 .facture-partie-info{font-size:12px;color:#555;margin-top:2px;overflow-wrap:anywhere}
 .facture-sep{border-top:1.5px solid #e0e0e0;margin:12px 0}
-.facture-section-title{font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#888;margin-bottom:10px}
+.facture-section-title{font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#555;margin-bottom:10px}
 /* min-width:0 est indispensable dans l'aperçu : la feuille de l'application
    impose min-width:520px à TOUTE table, pour le défilement horizontal des
    listes. La facture héritait donc de 520 px dans une modale de 330 px. */
 .facture-table{width:100%;min-width:0;border-collapse:collapse;font-size:13px;table-layout:fixed}
-.facture-table th{background:#1a1916;color:#fff;padding:9px 10px;text-align:left;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px}
-.facture-table td{padding:10px;border-bottom:1px solid #f0f0f0;vertical-align:top;overflow-wrap:anywhere}
+/* NI ICI NI AILLEURS UN APLAT NE PORTE UNE INFORMATION.
+   Cet en-tete etait du blanc sur une bande noire. Le navigateur n imprime
+   pas les fonds par defaut — son economie d encre — donc sur le papier il
+   sortait blanc sur blanc. Vu sur une facture reelle le 2026-11-13.
+   Le trait fait le meme travail pour a peu pres rien d encre, et il sort
+   a l identique a l ecran comme sur la feuille. */
+.facture-table th{background:transparent;color:#1a1916;padding:9px 10px;text-align:left;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;border-bottom:1.5px solid #1a1916}
+.facture-table td{padding:10px;border-bottom:1px solid #f0f0f0;vertical-align:top;overflow-wrap:anywhere;color:#111}
 /* Le pied ne parait qu'au-dela d'un article : sur une facture d'une ligne il
    repeterait le total, qui figure deja dans le bloc des totaux. */
-.facture-table tfoot td{border-top:1.5px solid #1a1916;border-bottom:0;background:#faf9f6}
+.facture-table tfoot td{border-top:1.5px solid #1a1916;border-bottom:0;color:#111}
 /* Largeurs explicites : sans elles, table-layout:fixed donne quatre colonnes
    égales, et la description — seule colonne vraiment longue — se replie sur
    six lignes pendant que « Poids » garde la même place qu'elle. */
@@ -5567,60 +5582,138 @@ const FACTURE_CSS = `
 .facture .solde-ok{color:#3b6d11}
 .facture-footer{margin-top:14px;padding-top:12px;border-top:1.5px solid #e0e0e0;text-align:center}
 .facture-merci{font-size:14px;font-weight:600;margin-bottom:6px}
-.facture-conditions{font-size:10.5px;color:#888;line-height:1.5;margin-bottom:5px}
-.facture-footer-ref{font-size:10.5px;color:#aaa;margin-top:4px}
+.facture-conditions{font-size:10.5px;color:#555;line-height:1.5;margin-bottom:5px}
+.facture-footer-ref{font-size:10.5px;color:#666;margin-top:4px}
 
-/* Téléphone : les deux bandeaux en vis-à-vis s'empilent, sinon le numéro de
-   facture et l'adresse de la cliente se écrasent sur trois caractères. */
-@media (max-width:640px){
-  .facture{padding:14px;font-size:12.5px}
-  .facture-header{flex-direction:column;gap:12px;margin-bottom:18px}
-  /* A 330 px, le QR coince le nom de la boutique sur trois lignes. On le
-     laisse passer a la ligne : c'est l'APERCU qui s'allonge un peu, pas la
-     feuille imprimee — le bloc @media print juste dessous remet la rangee. */
-  .facture-logo-zone{flex-wrap:wrap}
-  .facture-qr{margin-left:auto}
-  .facture-num-zone{text-align:left}
-  .facture-num{font-size:19px}
-  .facture-parties{flex-direction:column;gap:10px}
-  .facture-table{font-size:12px}
-  .facture-table th,.facture-table td{padding:7px 6px}
-  /* L'interlettrage des en-têtes coûte une dizaine de pixels sur « MONTANT »,
-     soit exactement ce qui manquait pour qu'il tienne. */
-  .facture-table th{font-size:10px;letter-spacing:0}
-  .facture-table th:nth-child(1){width:36%}
-  .facture-table th:nth-child(2){width:25%}
-  .facture-table th:nth-child(3){width:16%}
-  .facture-table th:nth-child(4){width:23%}
-  .facture-table.sans-poids th:nth-child(1){width:45%}
-  .facture-table.sans-poids th:nth-child(2){width:25%}
-  .facture-table.sans-poids th:nth-child(3){width:30%}
-  .facture-totaux{align-items:stretch}
-  .facture-total-row{width:100%}
-}
+/* PAS DE SECONDE MISE EN PAGE POUR LES PETITS ECRANS.
+   Il y en avait une — en-tetes empiles, corps de 10 px, colonnes a 36/25/16/23 %.
+   Elle ne servait qu a rendre l apercu lisible dans une modale etroite, et
+   c etait donc un second document : mesure le 2026-11-13, un PDF imprime
+   depuis un telephone n etait pas le meme fichier que depuis un poste, et
+   l apercu ne montrait ni l un ni l autre.
+   L apercu rend maintenant CE document, reduit a l echelle du cadre
+   (voir _ajusterApercuFacture). Une facture a une seule mise en page. */
 
-/* Sur papier, on reprend la mise en page large quelle que soit la machine
-   qui imprime — un téléphone imprime sur du A4 comme les autres. */
+/* SUR PAPIER : seulement ce qui appartient A LA FEUILLE.
+
+   Les reparations d'encre ne sont PAS ici, et c'est voulu. Mises dans ce
+   bloc, elles auraient rouvert le defaut ferme le matin meme : un document
+   a l'ecran, un autre sur le papier. Le document est deja sans aplat et
+   ses gris sont deja lisibles — l’apercu le montre tel quel.
+
+   Ne descendre ici que ce qui n'a pas de sens a l'ecran : la boite de page
+   et les sauts de page. */
 @media print{
   .facture{max-width:100%;padding:0}
-  .facture-header{flex-direction:row}
-  .facture-logo-zone{flex-wrap:nowrap}
-  .facture-qr{margin-left:0}
-  .facture-num-zone{text-align:right}
-  .facture-parties{flex-direction:row}
-  .facture-totaux{align-items:flex-end}
-  .facture-total-row{width:300px}
+
+  /* Une facture de plusieurs articles peut tomber sur deux pages :
+     l’en-tete du tableau se repete, et aucune ligne ne se coupe en deux. */
+  thead{display:table-header-group}
+  tfoot{display:table-footer-group}
+  .facture-table tr{break-inside:avoid;page-break-inside:avoid}
+  .facture-totaux,.facture-footer{break-inside:avoid;page-break-inside:avoid}
+
+  /* Une ombre est de l’encre pour rien sur du papier. */
+  *{box-shadow:none!important}
 }
 `;
 
-/** Pose la feuille dans la page, une seule fois, pour l'aperçu. */
-function _styleFacture() {
-  if (document.getElementById('style-facture')) return;
-  var st = document.createElement('style');
-  st.id = 'style-facture';
-  st.textContent = FACTURE_CSS;
-  document.head.appendChild(st);
+/**
+ * LE DOCUMENT COMPLET — un seul, pour l'aperçu COMME pour le PDF.
+ *
+ * L'aperçu vivait dans la page de l'application, le PDF dans une fenêtre
+ * vierge. Même feuille, deux cascades : `style.css` ajoutait à l'aperçu un
+ * interligne de 1,5, le numéro de facture en DORÉ, des en-têtes insécables,
+ * une zébrure une ligne sur deux et pas de filet sous la dernière ligne —
+ * rien de tout cela n'atteignait le papier. On validait donc à l'écran un
+ * document que l'imprimante ne rendait pas.
+ *
+ * Les neutraliser une à une aurait laissé le piège entier pour la prochaine
+ * règle ajoutée à `style.css`. L'aperçu est donc rendu dans un `iframe`, qui
+ * reçoit CETTE chaîne — exactement celle qu'on envoie à l'impression.
+ * Il n'y a plus deux rendus à tenir d'accord : il n'y en a qu'un.
+ */
+function _documentFacture(corps, titre) {
+  return '<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8">'
+    + '<meta name="viewport" content="width=device-width, initial-scale=1">'
+    + '<title>' + esc(titre) + '</title><style>'
+    + '*{box-sizing:border-box;margin:0;padding:0}'
+    // Pas de marge de page a l'ecran : l'encart de .facture est le meme des
+    // deux cotes, et sur papier c'est @page qui donne la marge.
+    + 'body{background:#fff}'
+    + '@media print{@page{margin:12mm}}'
+    + FACTURE_CSS
+    + '</style></head><body>' + corps + '</body></html>';
 }
+
+/** Le document de la facture affichée, gardé pour l'impression. */
+var _factureDoc = '', _factureTitre = 'Facture';
+
+/** Largeur du document, en pixels CSS. Un A4 a 12 mm de marge fait ~700 px ;
+ *  760 laisse l'encart de .facture par-dessus, et c'est la largeur a laquelle
+ *  la facture a ete dessinee. Elle ne depend d'aucun ecran. */
+var FACTURE_LARGEUR = 760;
+
+/**
+ * Apercu ajuste (defaut) ou a taille reelle.
+ *
+ * Ajuste, la facture entiere tient dans la modale — c'est la vue qui dit la
+ * MISE EN PAGE, celle qu'on verifie avant d'imprimer. Mais sur un telephone
+ * le facteur tombe a 0,44 : mesure, le corps de 13 px s'affiche a 5,7 px, on
+ * ne lit plus le nom de la cliente. D'ou la bascule : la fidelite reste le
+ * defaut, la lecture est a un geste. On ne revient PAS a une seconde mise en
+ * page pour petits ecrans — c'etait elle le defaut d'origine.
+ */
+var _apercuZoom = false;
+function basculerZoomFacture() {
+  _apercuZoom = !_apercuZoom;
+  var b = document.getElementById('btn-zoom-facture');
+  if (b) b.textContent = _apercuZoom ? 'Ajuster' : 'Taille réelle';
+  _ajusterApercuFacture();
+}
+
+/**
+ * Mettre l'apercu a l'echelle du cadre, sans jamais recomposer le document.
+ *
+ * L'iframe est rendu a FACTURE_LARGEUR px puis reduit : ce qu'on voit est,
+ * au facteur pres, ce qui sortira de l'imprimante. L'alternative — laisser
+ * l'iframe prendre la largeur disponible — rendait la disposition dependante
+ * du cadre : mesure le 2026-11-13, un cadre de 617 px passait sous le seuil
+ * telephone et montrait une mise en page que le papier n'aurait jamais.
+ *
+ * On ne grandit jamais au-dela de 1 : une facture affichee plus grande que
+ * nature sur un grand ecran donnerait une fausse idee des corps de texte.
+ */
+function _ajusterApercuFacture() {
+  var ifr = document.getElementById('facture-apercu');
+  var cadre = ifr && ifr.parentElement;
+  if (!ifr || !cadre) return;
+  var h = 900;
+  try { h = ifr.contentDocument.documentElement.scrollHeight; } catch (e) {}
+  ifr.style.width  = FACTURE_LARGEUR + 'px';
+  ifr.style.height = h + 'px';
+  // DEUX PASSES, et ce n'est pas une precaution de style : poser la hauteur
+  // fait apparaitre l'ascenseur de la modale, qui retrecit le cadre apres
+  // la mesure. Mesure le 2026-11-13 : 621 px calcules pour 617 disponibles,
+  // soit le bord droit de la facture rogne de 4 px. On remesure tant que la
+  // largeur bouge, trois fois au plus.
+  cadre.style.overflowX = _apercuZoom ? 'auto' : 'hidden';
+  var dispo = 0;
+  for (var essai = 0; essai < 3; essai++) {
+    var large = cadre.clientWidth || FACTURE_LARGEUR;
+    if (large === dispo) break;
+    dispo = large;
+    var k = _apercuZoom ? 1 : Math.min(1, dispo / FACTURE_LARGEUR);
+    ifr.style.transform = 'scale(' + k + ')';
+    // Le cadre porte la hauteur REDUITE : sans cela il garde celle du
+    // document a taille reelle et laisse un grand vide sous la facture.
+    cadre.style.height = Math.ceil(h * k) + 'px';
+  }
+}
+// Tourner le telephone change la place disponible, pas le document.
+window.addEventListener('resize', function () {
+  if (document.getElementById('modal-facture').classList.contains('show')) _ajusterApercuFacture();
+});
 
 /**
  * Le carat tel qu'il se lit sur une facture : « 18 carats », rien de plus.
@@ -5660,7 +5753,6 @@ function lignesFacture(v) {
 }
 
 function afficherFacture(id) {
-  _styleFacture();
   calculerCumuls();
   const v=STATE.ventes.find(x=>x.id===id); if(!v)return;
   const numFac=genNumFacture(v.id);
@@ -5699,7 +5791,7 @@ function afficherFacture(id) {
   // Le QR de la vitrine. Calcule une seule fois : l'encodage coute quelques
   // millisecondes et le gabarit est relu a chaque ouverture de la facture.
   const _qrFac = _qrVitrine(70);
-  document.getElementById('facture-content').innerHTML=`
+  const corpsFacture_ = `
 <div class="facture" id="facture-print-zone" data-numfac="${esc(numFac)}" data-client="${esc(v.client)}" data-date="${fmtDate(v.date)}">
   <!-- L'identité de la boutique figurait DEUX fois : ici et dans un bloc
        « VENDEUR » juste en dessous, sa ligne de contact aussi, et le numéro
@@ -5756,27 +5848,36 @@ function afficherFacture(id) {
     <div class="facture-footer-ref">${esc(numFac)} · ${fmtDate(v.date)} · Vendu par ${esc(STATE.currentUser?.nom||'—')}</div>
   </div>
 </div>`;
+
+  // Le nom du PDF, decide ici : la fenetre d'impression ne lit plus le DOM.
+  _factureTitre = numFac + (v.client ? ' - ' + v.client : '') + ' - ' + fmtDate(v.date);
+  _factureDoc   = _documentFacture(corpsFacture_, _factureTitre);
+
+  // L'APERCU EST LE DOCUMENT, pas une copie de ses classes.
+  _apercuZoom = false;   // chaque facture s'ouvre sur la vue fidele
+  var _bz = document.getElementById('btn-zoom-facture');
+  if (_bz) _bz.textContent = 'Taille réelle';
+  const ifr = document.getElementById('facture-apercu');
+  // La hauteur se prend APRES le rendu : un iframe n'a pas de hauteur
+  // naturelle, et sans cela l'apercu se reduit a 150 px avec son propre
+  // ascenseur — deux ascenseurs imbriques dans une modale qui defile deja.
+  // La largeur du DOCUMENT est fixe : une facture ne se recompose pas selon
+  // la fenetre qui la montre. L'apercu la reduit pour tenir dans la modale.
+  ifr.onload = function () { _ajusterApercuFacture(); };
+  ifr.srcdoc = _factureDoc;
   document.getElementById('modal-facture').classList.add('show');
 }
 
 function imprimerFacture() {
-  const zone=document.getElementById('facture-print-zone');
-  const numFac=zone&&zone.dataset.numfac||'Facture';
-  const client=zone&&zone.dataset.client||'';
-  const date=zone&&zone.dataset.date||'';
-  const pdfTitle=numFac+(client?' - '+client:'')+(date?' - '+date:'');
+  if (!_factureDoc) { showToast("Ouvrez une facture avant de l'imprimer"); return; }
   const win=window.open('','_blank','width=800,height=1000');
-  // Même feuille que l'aperçu (FACTURE_CSS) : il n'y a plus deux mises en
-  // page à tenir d'accord. Seules les règles du document lui-même — celles
-  // qui ne peuvent pas vivre dans la page de l'application — restent ici.
-  win.document.write(`<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>${esc(pdfTitle)}</title>
-<style>*{box-sizing:border-box;margin:0;padding:0}
-body{background:#fff;padding:20px}
-@media (max-width:640px){body{padding:8px}}
-@media print{body{padding:10px}@page{margin:12mm}}
-${FACTURE_CSS}</style></head><body>${zone.outerHTML}</body></html>`);
+  // LE MEME DOCUMENT QUE L'APERCU, mot pour mot.
+  //
+  // Il etait rebati ici depuis 'zone.outerHTML' PLUS une seconde feuille de
+  // regles de page. Deux assemblages pour un seul document : voila par ou ils
+  // divergeaient. Il n'y en a plus qu'un, bati par _documentFacture() et
+  // servi aux deux — le PDF ne peut donc plus differer de ce qui a ete valide.
+  win.document.write(_factureDoc);
   win.document.close();
   setTimeout(()=>{win.focus();win.print();win.close();},500);
 }
